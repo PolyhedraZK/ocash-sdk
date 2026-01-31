@@ -1,0 +1,19 @@
+{
+  "name": "@ocash/sdk-node-demo",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@ocash/sdk": "workspace:*",
+    "viem": "2.33.2"
+  },
+  "scripts": {
+    "build": "../env/node_modules/.bin/tsc -p tsconfig.json",
+    "dev": "pnpm --filter @ocash/sdk build && pnpm run build && node dist/index.js",
+    "dev:tsx": "pnpm --filter @ocash/sdk build && ../env/node_modules/.bin/tsx src/index.ts",
+    "start": "pnpm --filter @ocash/sdk build && node dist/index.js",
+    "type-check": "pnpm --filter @ocash/sdk build && ../env/node_modules/.bin/tsc --noEmit -p tsconfig.json"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  }
+}
