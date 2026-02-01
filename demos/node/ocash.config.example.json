@@ -1,7 +1,7 @@
 {
   "seed": "demo-seed-please-replace",
-  "storageDir": ".ocash-demo",
-  "cacheDir": ".ocash-demo/cache",
+  "storageDir": "demos/node/.ocash-demo",
+  "cacheDir": "demos/node/.ocash-demo/cache",
   "chains": [
     {
       "chainId": 11155111,

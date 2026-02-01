@@ -1,8 +1,8 @@
 import type { DemoContext } from './_types.js';
-import { getChain, getToken } from '../runtime/utils/ocash.js';
-import { parseAmount } from '../runtime/utils/format.js';
-import { getClients } from '../runtime/utils/clients.js';
-import { c } from '../runtime/utils/color.js';
+import { getChain, getToken } from '../domain/ocash.js';
+import { parseAmount } from '../domain/format.js';
+import { getClients } from '../io/clients.js';
+import { c } from '../cli/color.js';
 
 export async function demoDeposit(ctx: DemoContext) {
   const chain = getChain(ctx.config.chains, ctx.flags.chainId ? Number(ctx.flags.chainId) : undefined);
@@ -15,7 +15,7 @@ export async function demoDeposit(ctx: DemoContext) {
 
   const privateKey = (ctx.flags.privateKey ? String(ctx.flags.privateKey) : undefined) as `0x${string}` | undefined;
   const signerPrivateKey = privateKey ?? ctx.config.signerPrivateKey ?? (process.env.OCASH_DEMO_PRIVATE_KEY as `0x${string}` | undefined);
-  if (!signerPrivateKey) throw new Error('missing signer private key (set ocash.config.json signerPrivateKey or --privateKey)');
+  if (!signerPrivateKey) throw new Error('missing signer private key (set demos/node/ocash.config.json signerPrivateKey or --privateKey)');
 
   const { publicClient, walletClient, account } = getClients(chain, signerPrivateKey);
   if (!walletClient || !account) throw new Error('wallet client not available');

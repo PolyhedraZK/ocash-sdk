@@ -1,7 +1,7 @@
 import type { DemoContext } from './_types.js';
 import { App_ABI } from '@ocash/sdk';
-import { getChain } from '../runtime/utils/ocash.js';
-import { getClients } from '../runtime/utils/clients.js';
+import { getChain } from '../domain/ocash.js';
+import { getClients } from '../io/clients.js';
 
 export async function demoMerkleListen(ctx: DemoContext) {
   const chain = getChain(ctx.config.chains, ctx.flags.chainId ? Number(ctx.flags.chainId) : undefined);

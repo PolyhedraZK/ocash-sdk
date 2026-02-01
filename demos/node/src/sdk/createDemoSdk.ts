@@ -1,7 +1,7 @@
 import OcashSdk from '@ocash/sdk';
 import type { OCashSdk, OCashSdkConfig, SdkEvent, StorageAdapter } from '@ocash/sdk';
-import type { DemoConfig } from './config.js';
-import { c } from './utils/color.js';
+import type { DemoConfig } from '../config/demoConfig.js';
+import { c } from '../cli/color.js';
 
 const safeJson = (value: unknown) => {
   try {

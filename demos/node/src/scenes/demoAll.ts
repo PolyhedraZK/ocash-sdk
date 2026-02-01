@@ -1,10 +1,11 @@
-import { loadDemoConfig } from '../runtime/config.js';
+import { loadDemoConfig } from '../config/demoConfig.js';
 import { KeyManager } from '@ocash/sdk';
 import { stdin as input, stdout as output } from 'node:process';
 import * as readline from 'node:readline/promises';
 import { fork } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { c } from '../runtime/utils/color.js';
+import path from 'node:path';
+import { c } from '../cli/color.js';
 
 type Hex = `0x${string}`;
 
@@ -65,28 +66,29 @@ export async function demoAll(options: { flags: Record<string, string | boolean 
 
   const pub = KeyManager.getPublicKeyBySeed(config.seed, config.accountNonce != null ? String(config.accountNonce) : undefined);
   const selfViewingAddress = KeyManager.userPkToAddress(pub.user_pk) as Hex;
-  const baseDir = `${config.storageDir ?? '.ocash-demo'}/demoAll`;
+  const baseDir = path.join(config.storageDir ?? '.ocash-demo', 'demoAll');
 
   // Fork a background worker process to run SDK sync/watch without spamming the interactive terminal.
   const ext = import.meta.url.endsWith('.ts') ? '.ts' : '.js';
-  const workerUrl = new URL(`../runtime/demoAllWorker${ext}`, import.meta.url);
+  const workerUrl = new URL(`../workers/demoAllWorker${ext}`, import.meta.url);
   const workerPath = fileURLToPath(workerUrl);
 
-  const child = fork(
-    workerPath,
-    [
-      `configPath=${typeof options.flags.config === 'string' ? options.flags.config : 'ocash.config.json'}`,
-      `baseDir=${baseDir}`,
-      `chainId=${chainId ?? ''}`,
-      `pollMs=${pollMs ?? ''}`,
-      `streamLogs=1`,
-      `streamSync=${streamSync ? '1' : '0'}`,
-    ],
-    {
-      execArgv: process.execArgv,
-      stdio: ['inherit', 'ignore', 'inherit', 'ipc'],
-    },
-  );
+  const configPath = typeof options.flags.config === 'string' ? options.flags.config : undefined;
+  const childArgs = [
+    `baseDir=${baseDir}`,
+    `chainId=${chainId ?? ''}`,
+    `pollMs=${pollMs ?? ''}`,
+    `streamLogs=1`,
+    `streamSync=${streamSync ? '1' : '0'}`,
+  ];
+  if (configPath) {
+    childArgs.unshift(`configPath=${configPath}`);
+  }
+
+  const child = fork(workerPath, childArgs, {
+    execArgv: process.execArgv,
+    stdio: ['inherit', 'ignore', 'inherit', 'ipc'],
+  });
 
   const pending = new Map<string, { resolve: (v: any) => void; reject: (e: any) => void }>();
   let showDebugLogs = false;

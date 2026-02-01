@@ -1,26 +1,26 @@
-import { loadDemoConfig } from './runtime/config.js';
-import { createDemoSdk } from './runtime/sdk.js';
+import { loadDemoConfig } from '../config/demoConfig.js';
+import { createDemoSdk } from '../sdk/createDemoSdk.js';
 import { KeyManager } from '@ocash/sdk';
 import { FileStore } from '@ocash/sdk/node';
-import { parseArgs } from './runtime/utils/args.js';
-import { demoAssets } from './scenes/assets.js';
-import { demoBalance } from './scenes/balance.js';
-import { demoBalanceDetails } from './scenes/balanceDetails.js';
-import { demoDeposit } from './scenes/deposit.js';
-import { demoAll } from './scenes/demoAll.js';
-import { demoHistory } from './scenes/history.js';
-import { demoInit } from './scenes/init.js';
-import { demoMerkleListen } from './scenes/merkleListen.js';
-import { demoSync } from './scenes/sync.js';
-import { demoTransfer } from './scenes/transfer.js';
-import { demoTransferDebug } from './scenes/transferDebug.js';
-import { demoWithdraw } from './scenes/withdraw.js';
+import { parseArgs } from './args.js';
+import { demoAssets } from '../scenes/assets.js';
+import { demoBalance } from '../scenes/balance.js';
+import { demoBalanceDetails } from '../scenes/balanceDetails.js';
+import { demoDeposit } from '../scenes/deposit.js';
+import { demoAll } from '../scenes/demoAll.js';
+import { demoHistory } from '../scenes/history.js';
+import { demoInit } from '../scenes/init.js';
+import { demoMerkleListen } from '../scenes/merkleListen.js';
+import { demoSync } from '../scenes/sync.js';
+import { demoTransfer } from '../scenes/transfer.js';
+import { demoTransferDebug } from '../scenes/transferDebug.js';
+import { demoWithdraw } from '../scenes/withdraw.js';
 
 const helpText = `
-@ocash/sdk-node-demo
+@ocash/sdk Node demo
 
 Usage:
-  pnpm --filter @ocash/sdk-node-demo dev -- <command> [--flags]
+  pnpm run demo:node -- <command> [--flags]
 
 Commands:
   init
@@ -38,7 +38,7 @@ Commands:
 
 Flags:
   --help
-  --config <path>               config file path (default: ./ocash.config.json)
+  --config <path>               config file path (default: demos/node/ocash.config.json)
   --chainId <number>
   --token <symbol|tokenId>      (assets/deposit/transfer/withdraw) token selector
   --amount <number>             (deposit/transfer/withdraw) amount in token units
@@ -60,7 +60,7 @@ Flags:
   --streamSync                    (demoAll) stream live sync logs
 
 Config:
-  Uses ./ocash.config.json (see ./ocash.config.example.json)
+  Uses demos/node/ocash.config.json (see demos/node/ocash.config.example.json)
 
 Notes:
   transfer-debug defaults: --token 1, --to self viewing address, --amount = ceil(relayerFee * 1.01)

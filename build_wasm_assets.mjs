@@ -10,8 +10,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const OUTPUT_DIR = path.resolve(__dirname, process.env.OUTPUT_DIR || 'assets');
-const metadataBaseUrl = process.env.R2_BASE_URL || 'https://pub-0510cc4d530a4fa996e01b0e7f15994a.r2.dev';
-const METADATA_KEY = process.env.HASH || process.env.BRANCH || 'batrider';
+const metadataBaseUrl = process.env.R2_BASE_URL;
+const METADATA_KEY = process.env.HASH || process.env.BRANCH;
 const LOCAL_ASSETS_DIR = process.env.LOCAL_ASSETS_DIR;
 
 const FILES_TO_DOWNLOAD = [

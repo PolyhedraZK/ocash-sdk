@@ -8,8 +8,7 @@
     "skipLibCheck": true,
     "noEmitOnError": true,
     "outDir": "./dist",
-    "types": ["node"],
-    "typeRoots": ["../env/node_modules/@types"]
+    "types": ["node"]
   },
   "include": ["src"]
 }

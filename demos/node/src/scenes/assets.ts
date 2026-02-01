@@ -1,5 +1,5 @@
 import type { DemoContext } from './_types.js';
-import { getChain, getToken, tokenHexId } from '../runtime/utils/ocash.js';
+import { getChain, getToken, tokenHexId } from '../domain/ocash.js';
 
 export async function demoAssets(ctx: DemoContext) {
   const chain = getChain(ctx.config.chains, ctx.flags.chainId ? Number(ctx.flags.chainId) : undefined);

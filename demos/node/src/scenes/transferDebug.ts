@@ -1,8 +1,8 @@
 import type { DemoContext } from './_types.js';
-import { getChain, getToken } from '../runtime/utils/ocash.js';
-import { formatAmount, parseAmount } from '../runtime/utils/format.js';
-import { getClients } from '../runtime/utils/clients.js';
-import { c } from '../runtime/utils/color.js';
+import { getChain, getToken } from '../domain/ocash.js';
+import { formatAmount, parseAmount } from '../domain/format.js';
+import { getClients } from '../io/clients.js';
+import { c } from '../cli/color.js';
 
 type Hex = `0x${string}`;
 

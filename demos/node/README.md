@@ -12,27 +12,28 @@
 
 ## 运行
 
-先构建 SDK（生成 `client/packages/sdk/dist`），再运行 demo：
+先构建 SDK，再运行 demo：
 
 ```bash
-pnpm --filter @ocash/sdk build
-pnpm --filter @ocash/sdk-node-demo dev -- --help
+pnpm install
+pnpm run build
+pnpm run demo:node -- --help
 ```
 
 如需跳过 `tsc`（更快的热运行）可用：
 
 ```bash
-pnpm --filter @ocash/sdk-node-demo dev:tsx -- --help
+pnpm run demo:node:tsx -- --help
 ```
 
-注意：`@ocash/sdk-node-demo` 通过 `workspace:*` 依赖 `@ocash/sdk`，Node 会加载 `client/packages/sdk/dist`。如果你改了 SDK 源码（比如 witness JSON 结构），需要先跑一遍 `pnpm --filter @ocash/sdk build`；`dev`/`dev:tsx`/`start` 已内置这个步骤。
+注意：`demo:node`/`demo:node:tsx` 会先构建 SDK；如果你改了 SDK 源码（比如 witness JSON 结构），不用单独跑 build。
 
 ## 配置
 
-复制示例配置并修改（默认读取当前工作目录下的 `./ocash.config.json`；可用 `--config` 指定路径）：
+复制示例配置并修改（默认读取 `demos/node/ocash.config.json`；可用 `--config` 指定路径）：
 
 ```bash
-cp client/packages/sdk-node-demo/ocash.config.example.json client/packages/sdk-node-demo/ocash.config.json
+cp demos/node/ocash.config.example.json demos/node/ocash.config.json
 ```
 
 建议配置项：
@@ -49,7 +50,7 @@ deposit 需要 signer 私钥（建议只在本地 demo 使用）：
 - `ocash.config.json` 里设置 `signerPrivateKey`，或运行时传 `--privateKey 0x...`
 - 也可设置环境变量：`OCASH_DEMO_PRIVATE_KEY=0x...`
 
-demo 会把本地数据写到 `client/packages/sdk-node-demo/.ocash-demo/`（已加入 `.gitignore`）。
+demo 会把本地数据写到 `demos/node/.ocash-demo/`（已加入 `.gitignore`）。
 
 注意：部分 RPC（如 `rpc.ankr.com`）需要 API Key 才能调用 `eth_chainId`/合约读写。若遇到 `Unauthorized`，请把 `chains[].rpcUrl` 换成带 key 的地址（例如 `https://rpc.ankr.com/eth_sepolia/<ANKR_API_KEY>`）或换用其它可用的 Sepolia RPC。
 
@@ -58,14 +59,14 @@ demo 会把本地数据写到 `client/packages/sdk-node-demo/.ocash-demo/`（已
 通用：
 
 ```bash
-pnpm --filter @ocash/sdk-node-demo dev -- init
-pnpm --filter @ocash/sdk-node-demo dev -- sync
-pnpm --filter @ocash/sdk-node-demo dev -- demoAll
-pnpm --filter @ocash/sdk-node-demo dev -- assets --relayerConfig
-pnpm --filter @ocash/sdk-node-demo dev -- balance
-pnpm --filter @ocash/sdk-node-demo dev -- balance-details
-pnpm --filter @ocash/sdk-node-demo dev -- history --limit 50
-pnpm --filter @ocash/sdk-node-demo dev -- merkle-listen
+pnpm run demo:node -- init
+pnpm run demo:node -- sync
+pnpm run demo:node -- demoAll
+pnpm run demo:node -- assets --relayerConfig
+pnpm run demo:node -- balance
+pnpm run demo:node -- balance-details
+pnpm run demo:node -- history --limit 50
+pnpm run demo:node -- merkle-listen
 ```
 
 `demoAll` 会启动完整流程（后台进程负责初始化 SDK / 背景同步 memos+nullifiers / 监听 `ArrayMergedToTree` / 构建本地 Merkle），并在前台提供一个交互式命令行界面（避免后台日志打断输入）：
@@ -83,26 +84,26 @@ pnpm --filter @ocash/sdk-node-demo dev -- merkle-listen
 
 ```bash
 # deposit
-pnpm --filter @ocash/sdk-node-demo dev -- deposit --token SepoliaETH --amount 0.001
+pnpm run demo:node -- deposit --token SepoliaETH --amount 0.001
 
 # transfer（--to 是 OCash viewing address）
-pnpm --filter @ocash/sdk-node-demo dev -- transfer --token SepoliaETH --amount 0.0001 --to 0x...
+pnpm run demo:node -- transfer --token SepoliaETH --amount 0.0001 --to 0x...
 
 # withdraw（--recipient 是 EVM address）
-pnpm --filter @ocash/sdk-node-demo dev -- withdraw --token SepoliaETH --amount 0.0001 --recipient 0x...
+pnpm run demo:node -- withdraw --token SepoliaETH --amount 0.0001 --recipient 0x...
 ```
 
 ## history 过滤/分页
 
 ```bash
 # 指定链 + 类型 + 状态
-pnpm --filter @ocash/sdk-node-demo dev -- history --chainId 11155111 --type transfer --status confirmed
+pnpm run demo:node -- history --chainId 11155111 --type transfer --status confirmed
 
 # 分页
-pnpm --filter @ocash/sdk-node-demo dev -- history --limit 20 --offset 20
+pnpm run demo:node -- history --limit 20 --offset 20
 
 # 旧到新
-pnpm --filter @ocash/sdk-node-demo dev -- history --sort asc
+pnpm run demo:node -- history --sort asc
 ```
 
 ## sync 参数
@@ -116,5 +117,5 @@ pnpm --filter @ocash/sdk-node-demo dev -- history --sort asc
 示例：
 
 ```bash
-pnpm --filter @ocash/sdk-node-demo dev -- sync --watch --pollMs 5000
+pnpm run demo:node -- sync --watch --pollMs 5000
 ```

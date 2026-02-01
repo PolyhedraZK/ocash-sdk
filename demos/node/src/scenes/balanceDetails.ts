@@ -1,6 +1,6 @@
 import type { DemoContext } from './_types.js';
-import { getChain } from '../runtime/utils/ocash.js';
-import { formatAmount } from '../runtime/utils/format.js';
+import { getChain } from '../domain/ocash.js';
+import { formatAmount } from '../domain/format.js';
 
 export async function demoBalanceDetails(ctx: DemoContext) {
   const chain = getChain(ctx.config.chains, ctx.flags.chainId ? Number(ctx.flags.chainId) : undefined);

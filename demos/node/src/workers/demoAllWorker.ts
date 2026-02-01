@@ -1,13 +1,14 @@
-import { createDemoSdk } from './sdk.js';
-import { loadDemoConfig } from './config.js';
+import { createDemoSdk } from '../sdk/createDemoSdk.js';
+import { loadDemoConfig } from '../config/demoConfig.js';
 import { KeyManager } from '@ocash/sdk';
 import { FileStore } from '@ocash/sdk/node';
-import { getChain, getToken } from './utils/ocash.js';
-import { formatAmount, parseAmount } from './utils/format.js';
-import { getClients } from './utils/clients.js';
+import { getChain, getToken } from '../domain/ocash.js';
+import { formatAmount, parseAmount } from '../domain/format.js';
+import { getClients } from '../io/clients.js';
 import { App_ABI } from '@ocash/sdk';
 import { getAddress, isAddress } from 'viem';
 import type { ChainConfigInput, SdkEvent } from '@ocash/sdk';
+import path from 'node:path';
 
 type Hex = `0x${string}`;
 
@@ -59,15 +60,15 @@ async function main() {
     args.set(k, v);
   }
 
-  const configPath = args.get('configPath');
+  const configPath = args.get('configPath') || undefined;
   const chainId = args.get('chainId') ? Number(args.get('chainId')) : undefined;
   const pollMs = args.get('pollMs') ? Number(args.get('pollMs')) : 5000;
-  const baseDir = args.get('baseDir') ?? '.ocash-demo/demoAll';
   const rebuildMerkle = args.get('rebuildMerkle') === '1' || args.get('rebuildMerkle') === 'true';
   const streamLogs = args.get('streamLogs') === '1' || args.get('streamLogs') === 'true';
   const streamSync = args.get('streamSync') === '1' || args.get('streamSync') === 'true';
 
-  const config = await loadDemoConfig({ configPath: configPath ?? 'ocash.config.json' });
+  const config = await loadDemoConfig({ configPath });
+  const baseDir = args.get('baseDir') ?? path.join(config.storageDir ?? '.ocash-demo', 'demoAll');
   const chain: ChainConfigInput = getChain(config.chains, chainId);
 
   const pub = KeyManager.getPublicKeyBySeed(config.seed, config.accountNonce != null ? String(config.accountNonce) : undefined);

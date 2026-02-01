@@ -1,6 +1,6 @@
 import type { DemoContext } from './_types.js';
-import { getChain } from '../runtime/utils/ocash.js';
-import { c } from '../runtime/utils/color.js';
+import { getChain } from '../domain/ocash.js';
+import { c } from '../cli/color.js';
 
 export async function demoSync(ctx: DemoContext) {
   const chain = getChain(ctx.config.chains, ctx.flags.chainId ? Number(ctx.flags.chainId) : undefined);

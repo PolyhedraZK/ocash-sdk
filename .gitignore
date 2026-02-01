@@ -1,4 +1,6 @@
 node_modules/
 dist/
+.ocash-demo/
+demos/node/.ocash-demo/
 .env
 .DS_Store

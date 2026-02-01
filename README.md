@@ -17,8 +17,16 @@ OCash ZKP SDK 的 TypeScript 版本，面向浏览器 / 混合容器 / Node 环�
 
 ```bash
 pnpm install
-pnpm --filter @ocash/sdk build
+pnpm run build
 ```
+
+## 开发脚本
+
+- `pnpm run dev`：启动浏览器 demo（Vite）
+- `pnpm run dev:sdk`：监听 SDK 构建（tsup）
+- `pnpm run demo:node -- <command>`：运行 Node demo
+
+所有 demo 位于 `demos/`，仅用于展示与调试，不包含在发布产物中。
 
 ## M1：资产产出 / 托管 / 集成（集成就绪）
 
@@ -27,16 +35,16 @@ SDK 本体不内置 wasm/电路文件；宿主必须提供这些运行时资产�
 
 ### 资产构建（离线/本地）
 
-如果你已经有本地的 `app.wasm/transfer*/withdraw*/wasm_exec.js`，可以用离线模式生成 `client/packages/sdk/assets/manifest.json`（并将大文件自动切片）：
+如果你已经有本地的 `app.wasm/transfer*/withdraw*/wasm_exec.js`，可以用离线模式生成 `assets/manifest.json`（并将大文件自动切片）：
 
 ```bash
-LOCAL_ASSETS_DIR=/absolute/path/to/wasm-and-circuits pnpm --filter @ocash/sdk build:assets:local
+LOCAL_ASSETS_DIR=/absolute/path/to/wasm-and-circuits pnpm run build:assets:local
 ```
 
 生成目录：
 
-- `client/packages/sdk/assets/manifest.json`
-- `client/packages/sdk/assets/<hashed files or shard dirs>`
+- `assets/manifest.json`
+- `assets/<hashed files or shard dirs>`
 
 ## 最小用法（示例）
 
@@ -177,7 +185,7 @@ const sdk = createSdk({
 
 #### 使用 manifest 生成 `assetsOverride`（推荐）
 
-配合 `pnpm --filter @ocash/sdk build:assets` 生成 `client/packages/sdk/assets/manifest.json`（脚本会把大文件切片并写入 sha256），
+配合 `pnpm run build:assets` 生成 `assets/manifest.json`（脚本会把大文件切片并写入 sha256），
 宿主可以直接从 manifest 构造 `assetsOverride + assetsIntegrity`：
 
 ```ts
@@ -185,7 +193,7 @@ import { createSdk } from '@ocash/sdk';
 import { loadAssetsFromManifestSync } from '@ocash/sdk/node';
 
 const { assetsOverride, assetsIntegrity } = loadAssetsFromManifestSync({
-  manifestPath: './client/packages/sdk/assets/manifest.json',
+  manifestPath: './assets/manifest.json',
 });
 
 const sdk = createSdk({
@@ -210,13 +218,18 @@ const sdk = createSdk({ chains: [...], runtime: 'browser', assetsOverride, asset
 
 Node 20+ 需要原生 `fetch/WebAssembly` 支持；混合容器请确保 `globalThis.crypto.getRandomValues` 可用。
 
-### Node 最小可运行示例
+### Demo
 
-先生成本地 manifest（见上面的“离线/本地”），再构建 SDK 并运行示例：
+浏览器 demo：
 
 ```bash
-pnpm --filter @ocash/sdk build
-node client/packages/sdk/examples/node-minimal.js
+pnpm run dev
+```
+
+Node demo：
+
+```bash
+pnpm run demo:node -- --help
 ```
 
 ### runtime 选择
@@ -313,4 +326,4 @@ const ops = store.listOperations({
 
 ## Demo
 
-- Node.js 可运行 demo：`client/packages/sdk-node-demo/README.md:1`
+- Node.js 可运行 demo：`demos/node/README.md:1`

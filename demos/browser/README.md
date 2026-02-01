@@ -5,8 +5,9 @@ This demo runs the OCash SDK in the browser and connects wallets via wagmi + vie
 ## Quick start
 
 ```bash
-pnpm --filter @ocash/sdk build
-pnpm --filter @ocash/sdk-browser-demo dev
+pnpm install
+pnpm run build
+pnpm run dev
 ```
 
 ## Notes
