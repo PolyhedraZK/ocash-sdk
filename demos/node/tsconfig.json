@@ -3,12 +3,20 @@
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
+    "baseUrl": ".",
     "lib": ["ES2022"],
     "strict": true,
     "skipLibCheck": true,
     "noEmitOnError": true,
+    "rootDir": "./src",
     "outDir": "./dist",
-    "types": ["node"]
+    "types": ["node"],
+    "paths": {
+      "@ocash/sdk": ["../../dist/index.d.ts"],
+      "@ocash/sdk/browser": ["../../dist/browser.d.ts"],
+      "@ocash/sdk/node": ["../../dist/node.d.ts"],
+      "@ocash/sdk/*": ["../../dist/*"]
+    }
   },
   "include": ["src"]
 }

@@ -44,7 +44,7 @@
     "demo:node": "pnpm run build && tsc -p demos/node/tsconfig.json && node demos/node/dist/index.js",
     "demo:node:tsx": "pnpm run build && tsx demos/node/src/index.ts",
     "type-check:demo:browser": "tsc -p demos/browser/tsconfig.json --noEmit",
-    "type-check:demo:node": "tsc -p demos/node/tsconfig.json --noEmit",
+    "type-check:demo:node": "pnpm run build && tsc -p demos/node/tsconfig.json --noEmit",
     "test": "vitest run",
     "prepublishOnly": "pnpm run build"
   },

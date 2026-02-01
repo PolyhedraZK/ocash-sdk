@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import OcashSdk, { ERC20_ABI, IndexedDbStore } from '@ocash/sdk/browser';
 import type { AssetsOverride, ChainConfigInput, Hex, PlannerEstimateTransferResult, PlannerEstimateWithdrawResult, StoredOperation, TokenMetadata, UtxoRecord } from '@ocash/sdk';
 import { defineChain, getAddress, isAddress } from 'viem';
+import type { Chain } from 'viem';
 import { createConfig, http, useAccount, useChainId, useConnect, useDisconnect, usePublicClient, useSwitchChain, useWalletClient, WagmiProvider } from 'wagmi';
 import { injected } from 'wagmi/connectors';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -106,6 +107,10 @@ const formatTokenAmount = (value: bigint, token: TokenMetadata | null | undefine
   return formatAmount(value, decimals);
 };
 
+const assertNonEmpty: <T>(value: T[]) => asserts value is [T, ...T[]] = (value) => {
+  if (value.length === 0) throw new Error('Expected non-empty array');
+};
+
 const formatNativeAmount = (value: bigint) => formatAmount(value, 18);
 
 const formatFeeRows = (rows: FeeRow[]) => rows.filter((row) => row.value !== '');
@@ -142,6 +147,7 @@ const buildWagmiConfig = (config: DemoConfig) => {
     return createConfig({ chains: [fallback], connectors: [injected()], transports });
   }
 
+  assertNonEmpty(chains);
   const transports = Object.fromEntries(chains.map((chain) => [chain.id, http(chain.rpcUrls.default.http[0])])) as Record<number, ReturnType<typeof http>>;
   return createConfig({ chains, connectors: [injected()], transports });
 };
@@ -284,7 +290,7 @@ function App({ config, setConfig }: { config: DemoConfig; setConfig: (next: Demo
     try {
       const nonce = config.accountNonce != null ? String(config.accountNonce) : undefined;
       const pub = sdk.keys.getPublicKeyBySeed(config.seed, nonce);
-      return sdk.keys.userPkToAddress(pub);
+      return sdk.keys.userPkToAddress(pub.user_pk);
     } catch {
       return null;
     }
