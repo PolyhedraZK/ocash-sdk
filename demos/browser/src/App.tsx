@@ -1,156 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import OcashSdk, { ERC20_ABI, IndexedDbStore } from '@ocash/sdk/browser';
-import type { AssetsOverride, ChainConfigInput, Hex, PlannerEstimateTransferResult, PlannerEstimateWithdrawResult, StoredOperation, TokenMetadata, UtxoRecord } from '@ocash/sdk';
-import { defineChain, getAddress, isAddress } from 'viem';
+import type { Hex, StorageAdapter, StoredOperation, TokenMetadata, UtxoRecord } from '@ocash/sdk';
+import { getAddress, isAddress } from 'viem';
 import type { Chain } from 'viem';
-import { createConfig, http, useAccount, useChainId, useConnect, useDisconnect, usePublicClient, useSwitchChain, useWalletClient, WagmiProvider } from 'wagmi';
-import { injected } from 'wagmi/connectors';
+import { useAccount, useChainId, useConnect, useDisconnect, usePublicClient, useSwitchChain, useWalletClient, WagmiProvider } from 'wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { formatAmount, parseAmount } from './utils/format';
+import { parseAmount } from './utils/format';
 import './styles.css';
-
-type DemoConfig = {
-  seed: string;
-  accountNonce?: number;
-  chains: ChainConfigInput[];
-  assetsOverride?: AssetsOverride;
-};
-
-type BalanceRow = {
-  token: TokenMetadata;
-  value: bigint;
-};
-
-type LogEntry = {
-  time: string;
-  label: string;
-  message: string;
-  level: 'info' | 'warn' | 'error';
-};
-
-type FeeRow = { label: string; value: string };
-type DepositEstimate = {
-  protocolFee: bigint;
-  depositRelayerFee: bigint;
-  payAmount: bigint;
-  value: bigint;
-  approveNeeded: boolean;
-};
-
-const NATIVE_ADDRESS = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
-
-const DEFAULT_CONFIG: DemoConfig = {
-  seed: 'demo-seed-please-replace',
-  accountNonce: 0,
-  chains: [
-    {
-      chainId: 11155111,
-      rpcUrl: 'https://sepolia.drpc.org',
-      entryUrl: 'https://batrider.api.o.cash',
-      ocashContractAddress: '0x6e867888d731c2b02f1466a9916656e4ae0f7e43',
-      relayerUrl: 'https://batrider.relayer.sepolia.o.cash',
-      merkleProofUrl: 'https://batrider.merkle.sepolia.o.cash',
-      tokens: [
-        {
-          id: '1597926149423906336818683031823679313666371576738115454886730516203513418507',
-          symbol: 'SepoliaETH',
-          decimals: 18,
-          wrappedErc20: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
-          viewerPk: ['15427800331731605767509081567773831702494549120156100775953327498972353997316', '4594254759776032429725497597312133515458271658807168187390598332866032906292'],
-          freezerPk: ['4224390570119711710057096089379658798272279480371959814853894477885065716429', '21722402525823844618662313438395170901845286803631020833835665861415293538245'],
-          depositFeeBps: 0,
-          withdrawFeeBps: 25,
-          transferMaxAmount: '340282366920938463463374607431768211455',
-          withdrawMaxAmount: '340282366920938463463374607431768211455',
-        },
-      ],
-    },
-  ],
-  assetsOverride: {
-    'wasm_exec.js': 'https://testnet-app.o.cash/wasm_exec.js',
-    'app.wasm': [
-      'https://testnet-app.o.cash/wasm/app_wasm_6_11328f2b/00',
-      'https://testnet-app.o.cash/wasm/app_wasm_6_11328f2b/01',
-      'https://testnet-app.o.cash/wasm/app_wasm_6_11328f2b/02',
-      'https://testnet-app.o.cash/wasm/app_wasm_6_11328f2b/03',
-      'https://testnet-app.o.cash/wasm/app_wasm_6_11328f2b/04',
-      'https://testnet-app.o.cash/wasm/app_wasm_6_11328f2b/05',
-    ],
-    'transfer.r1cs': [
-      'https://testnet-app.o.cash/wasm/transfer_r1cs_3_27e55c1f/00',
-      'https://testnet-app.o.cash/wasm/transfer_r1cs_3_27e55c1f/01',
-      'https://testnet-app.o.cash/wasm/transfer_r1cs_3_27e55c1f/02',
-    ],
-    'transfer.pk': [
-      'https://testnet-app.o.cash/wasm/transfer_pk_8_a2f49c4d/00',
-      'https://testnet-app.o.cash/wasm/transfer_pk_8_a2f49c4d/01',
-      'https://testnet-app.o.cash/wasm/transfer_pk_8_a2f49c4d/02',
-      'https://testnet-app.o.cash/wasm/transfer_pk_8_a2f49c4d/03',
-      'https://testnet-app.o.cash/wasm/transfer_pk_8_a2f49c4d/04',
-      'https://testnet-app.o.cash/wasm/transfer_pk_8_a2f49c4d/05',
-      'https://testnet-app.o.cash/wasm/transfer_pk_8_a2f49c4d/06',
-      'https://testnet-app.o.cash/wasm/transfer_pk_8_a2f49c4d/07',
-    ],
-    'withdraw.r1cs': 'https://testnet-app.o.cash/wasm/withdraw_13dc54c7.r1cs',
-    'withdraw.pk': [
-      'https://testnet-app.o.cash/wasm/withdraw_pk_3_ba3d9460/00',
-      'https://testnet-app.o.cash/wasm/withdraw_pk_3_ba3d9460/01',
-      'https://testnet-app.o.cash/wasm/withdraw_pk_3_ba3d9460/02',
-    ],
-  },
-};
+import { DepositForm, TransferForm, WithdrawForm } from './app/components';
+import { DEFAULT_CONFIG, NATIVE_ADDRESS, type BalanceRow, type DemoConfig, type DepositEstimate, type LogEntry } from './app/constants';
+import { buildWagmiConfig, formatFeeRows, formatNativeAmount, formatTokenAmount, useDebouncedValue } from './app/utils';
 
 const queryClient = new QueryClient();
 
-const formatTokenAmount = (value: bigint, token: TokenMetadata | null | undefined) => {
-  const decimals = token?.decimals ?? 18;
-  return formatAmount(value, decimals);
-};
-
-const assertNonEmpty: <T>(value: T[]) => asserts value is [T, ...T[]] = (value) => {
-  if (value.length === 0) throw new Error('Expected non-empty array');
-};
-
-const formatNativeAmount = (value: bigint) => formatAmount(value, 18);
-
-const formatFeeRows = (rows: FeeRow[]) => rows.filter((row) => row.value !== '');
-
-const useDebouncedValue = <T,>(value: T, delayMs: number) => {
-  const [debounced, setDebounced] = useState(value);
-  useEffect(() => {
-    const timer = setTimeout(() => setDebounced(value), delayMs);
-    return () => clearTimeout(timer);
-  }, [value, delayMs]);
-  return debounced;
-};
-
-const buildWagmiConfig = (config: DemoConfig) => {
-  const chains = (config.chains ?? [])
-    .filter((chain) => Boolean(chain.rpcUrl))
-    .map((chain) =>
-      defineChain({
-        id: chain.chainId,
-        name: `OCash ${chain.chainId}`,
-        nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-        rpcUrls: { default: { http: [chain.rpcUrl as string] } },
-      }),
-    );
-
-  if (!chains.length) {
-    const fallback = defineChain({
-      id: 11155111,
-      name: 'Sepolia',
-      nativeCurrency: { name: 'Ether', symbol: 'ETH', decimals: 18 },
-      rpcUrls: { default: { http: ['https://sepolia.drpc.org'] } },
-    });
-    const transports = { [fallback.id]: http(fallback.rpcUrls.default.http[0]) };
-    return createConfig({ chains: [fallback], connectors: [injected()], transports });
-  }
-
-  assertNonEmpty(chains);
-  const transports = Object.fromEntries(chains.map((chain) => [chain.id, http(chain.rpcUrls.default.http[0])])) as Record<number, ReturnType<typeof http>>;
-  return createConfig({ chains, connectors: [injected()], transports });
-};
 
 function AppShell() {
   const [config, setConfig] = useState<DemoConfig>(DEFAULT_CONFIG);
@@ -505,8 +367,7 @@ function App({ config, setConfig }: { config: DemoConfig; setConfig: (next: Demo
 
   const refreshOperations = () => {
     if (!sdk) return;
-    const store = sdk.storage.getAdapter() as { listOperations?: () => StoredOperation[] };
-    if (!store.listOperations) return;
+    const store = sdk.storage.getAdapter() as StorageAdapter;
     setOperations(store.listOperations());
   };
 
@@ -534,13 +395,11 @@ function App({ config, setConfig }: { config: DemoConfig; setConfig: (next: Demo
     }
     if (walletChainId && selectedChainId && walletChainId !== selectedChainId) {
       setActionError(`Wallet chain ${walletChainId} does not match target chain ${selectedChainId}`);
-      if (switchChain) {
-        setActionMessage('Switching wallet chain…');
-        try {
-          await switchChain({ chainId: selectedChainId });
-        } catch (error) {
-          setActionError(error instanceof Error ? error.message : String(error));
-        }
+      setActionMessage('Switching wallet chain…');
+      try {
+        await switchChain({ chainId: selectedChainId });
+      } catch (error) {
+        setActionError(error instanceof Error ? error.message : String(error));
       }
       return;
     }
@@ -765,7 +624,7 @@ function App({ config, setConfig }: { config: DemoConfig; setConfig: (next: Demo
           {chainMismatch && (
             <div className="notice">
               Wallet chain {walletChainId} does not match target chain {selectedChainId}.
-              {switchChain && selectedChainId ? (
+              {selectedChainId ? (
                 <div className="row">
                   <button className="secondary" onClick={() => switchChain({ chainId: selectedChainId })}>
                     Switch Wallet Chain
@@ -873,7 +732,7 @@ function App({ config, setConfig }: { config: DemoConfig; setConfig: (next: Demo
               <div key={row.token.id} className="list-item">
                 <div className="row">
                   <strong>{row.token.symbol}</strong>
-                  <span className="mono">{formatAmount(row.value, row.token.decimals)}</span>
+                  <span className="mono">{formatTokenAmount(row.value, row.token)}</span>
                 </div>
               </div>
             ))}
@@ -898,7 +757,7 @@ function App({ config, setConfig }: { config: DemoConfig; setConfig: (next: Demo
               <div key={`${utxo.chainId}-${utxo.commitment}`} className="list-item">
                 <div className="row">
                   <strong>{tokenInfoById.get(utxo.assetId)?.symbol ?? utxo.assetId}</strong>
-                  <span className="mono">{formatAmount(utxo.amount, tokenInfoById.get(utxo.assetId)?.decimals ?? 18)}</span>
+                  <span className="mono">{formatTokenAmount(utxo.amount, tokenInfoById.get(utxo.assetId))}</span>
                 </div>
                 <div className="mono">commitment: {utxo.commitment}</div>
                 <div className="mono">nullifier: {utxo.nullifier}</div>
@@ -947,165 +806,6 @@ function App({ config, setConfig }: { config: DemoConfig; setConfig: (next: Demo
           </div>
         </section>
       </div>
-    </div>
-  );
-}
-
-function FeePanel({ rows, loading, error, ok, okWithMerge }: { rows: FeeRow[]; loading: boolean; error: string; ok?: boolean; okWithMerge?: boolean }) {
-  return (
-    <div className="stack">
-      {loading && <div className="notice">Estimating fees...</div>}
-      {error && <div className="notice">{error}</div>}
-      {ok === false && <div className="notice">Insufficient balance for this amount.</div>}
-      {okWithMerge === true && ok === false && <div className="notice">Merge required: transfer will need a merge step.</div>}
-      <div className="list">
-        {rows.length === 0 ? <div className="notice">No fee data yet.</div> : null}
-        {rows.map((row) => (
-          <div key={row.label} className="list-item">
-            <div className="row">
-              <strong>{row.label}</strong>
-              <span className="mono">{row.value}</span>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function DepositForm({
-  amount,
-  onAmountChange,
-  onMax,
-  onSubmit,
-  disabled,
-  feeRows,
-  feeLoading,
-  feeError,
-  notice,
-}: {
-  amount: string;
-  onAmountChange: (value: string) => void;
-  onMax: () => void;
-  onSubmit: () => void;
-  disabled: boolean;
-  feeRows: FeeRow[];
-  feeLoading: boolean;
-  feeError: string;
-  notice?: string;
-}) {
-  return (
-    <div className="stack">
-      {notice ? <div className="notice">{notice}</div> : null}
-      <label className="label">Amount</label>
-      <div className="row">
-        <input value={amount} onChange={(event) => onAmountChange(event.target.value)} placeholder="0.0" />
-        <button className="secondary" type="button" onClick={onMax} disabled={disabled}>
-          Max
-        </button>
-      </div>
-      <button onClick={onSubmit} disabled={disabled}>
-        Deposit
-      </button>
-      <FeePanel rows={feeRows} loading={feeLoading} error={feeError} />
-    </div>
-  );
-}
-
-function TransferForm({
-  amount,
-  to,
-  onAmountChange,
-  onToChange,
-  onMax,
-  onSubmit,
-  disabled,
-  feeRows,
-  feeLoading,
-  feeError,
-  feeOk,
-  feeOkWithMerge,
-  notice,
-}: {
-  amount: string;
-  to: string;
-  onAmountChange: (value: string) => void;
-  onToChange: (value: string) => void;
-  onMax: () => void;
-  onSubmit: () => void;
-  disabled: boolean;
-  feeRows: FeeRow[];
-  feeLoading: boolean;
-  feeError: string;
-  feeOk?: boolean;
-  feeOkWithMerge?: boolean;
-  notice?: string;
-}) {
-  return (
-    <div className="stack">
-      {notice ? <div className="notice">{notice}</div> : null}
-      <label className="label">Amount</label>
-      <div className="row">
-        <input value={amount} onChange={(event) => onAmountChange(event.target.value)} placeholder="0.0" />
-        <button className="secondary" type="button" onClick={onMax} disabled={disabled}>
-          Max
-        </button>
-      </div>
-      <label className="label">Recipient (Viewing Address)</label>
-      <input value={to} onChange={(event) => onToChange(event.target.value)} placeholder="0x..." />
-      <button onClick={onSubmit} disabled={disabled}>
-        Transfer
-      </button>
-      <FeePanel rows={feeRows} loading={feeLoading} error={feeError} ok={feeOk} okWithMerge={feeOkWithMerge} />
-    </div>
-  );
-}
-
-function WithdrawForm({
-  amount,
-  recipient,
-  onAmountChange,
-  onRecipientChange,
-  onMax,
-  onSubmit,
-  disabled,
-  feeRows,
-  feeLoading,
-  feeError,
-  feeOk,
-  feeOkWithMerge,
-  notice,
-}: {
-  amount: string;
-  recipient: string;
-  onAmountChange: (value: string) => void;
-  onRecipientChange: (value: string) => void;
-  onMax: () => void;
-  onSubmit: () => void;
-  disabled: boolean;
-  feeRows: FeeRow[];
-  feeLoading: boolean;
-  feeError: string;
-  feeOk?: boolean;
-  feeOkWithMerge?: boolean;
-  notice?: string;
-}) {
-  return (
-    <div className="stack">
-      {notice ? <div className="notice">{notice}</div> : null}
-      <label className="label">Amount</label>
-      <div className="row">
-        <input value={amount} onChange={(event) => onAmountChange(event.target.value)} placeholder="0.0" />
-        <button className="secondary" type="button" onClick={onMax} disabled={disabled}>
-          Max
-        </button>
-      </div>
-      <label className="label">Recipient (EVM Address)</label>
-      <input value={recipient} onChange={(event) => onRecipientChange(event.target.value)} placeholder="0x..." />
-      <button onClick={onSubmit} disabled={disabled}>
-        Withdraw
-      </button>
-      <FeePanel rows={feeRows} loading={feeLoading} error={feeError} ok={feeOk} okWithMerge={feeOkWithMerge} />
     </div>
   );
 }
