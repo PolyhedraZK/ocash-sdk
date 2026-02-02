@@ -40,6 +40,7 @@ export {
   createAssetsIntegrityFromManifest,
   loadAssetsFromManifestUrl,
 } from './runtime/assetsManifest';
+export { defaultAssetsOverride } from './assets/defaultAssetsOverride';
 export { MemoKit } from './memo/memoKit';
 export { CryptoToolkit } from './crypto/cryptoToolkit';
 export { KeyManager } from './crypto/keyManager';
@@ -78,6 +79,7 @@ export {
 } from './store/operationTypes';
 
 import type { AssetsApi, CommitmentData, CommitmentFn, Hex, OCashSdk, OCashSdkConfig, SdkEvent, StorageAdapter } from './types';
+import { defaultAssetsOverride } from './assets/defaultAssetsOverride';
 import { UniversalWasmBridge } from './runtime/wasmBridge';
 import { SdkCore } from './core/sdk-core';
 import { ProofEngine } from './proof/proofEngine';
@@ -104,19 +106,23 @@ function commitment(ro: CommitmentData, format?: 'hex' | 'bigint') {
 }
 
 export const createSdk = (config: OCashSdkConfig): OCashSdk => {
+  const normalizedConfig: OCashSdkConfig = {
+    ...config,
+    assetsOverride: config.assetsOverride ?? defaultAssetsOverride,
+  };
   const bridge = new UniversalWasmBridge({
-    assetsOverride: config.assetsOverride,
-    assetsIntegrity: config.assetsIntegrity,
-    cacheDir: config.cacheDir,
-    runtime: config.runtime,
+    assetsOverride: normalizedConfig.assetsOverride,
+    assetsIntegrity: normalizedConfig.assetsIntegrity,
+    cacheDir: normalizedConfig.cacheDir,
+    runtime: normalizedConfig.runtime,
   });
 
-  const core = new SdkCore(config, bridge);
+  const core = new SdkCore(normalizedConfig, bridge);
   const zkp = new ProofEngine(bridge, core);
   const dummy = new DummyFactory(bridge);
-  const ledger = new LedgerInfo(config.chains ?? []);
-  const memoWorker = new MemoWorker(config.memoWorker);
-  const store: StorageAdapter = config.storage ?? new MemoryStore();
+  const ledger = new LedgerInfo(normalizedConfig.chains ?? []);
+  const memoWorker = new MemoWorker(normalizedConfig.memoWorker);
+  const store: StorageAdapter = normalizedConfig.storage ?? new MemoryStore();
   const assetsApi: AssetsApi = {
     getChains: () => ledger.getChains(),
     getChain: (chainId: number) => ledger.getChain(chainId),
@@ -133,8 +139,8 @@ export const createSdk = (config: OCashSdkConfig): OCashSdk => {
   const emit = (evt: SdkEvent) => core.emit(evt);
 
   const walletService = new WalletService(assetsApi, store, emit);
-  const merkle = new MerkleEngine((chainId) => assetsApi.getChain(chainId), bridge, config.merkle, store);
-  const syncEngine = new SyncEngine(assetsApi, store, walletService, emit, merkle, config.sync);
+  const merkle = new MerkleEngine((chainId) => assetsApi.getChain(chainId), bridge, normalizedConfig.merkle, store);
+  const syncEngine = new SyncEngine(assetsApi, store, walletService, emit, merkle, normalizedConfig.sync);
   const planner = new Planner(assetsApi, walletService, bridge);
   const tx = new TxBuilder();
   const ops = new Ops(assetsApi, planner, merkle, zkp, tx, walletService, store, emit);
