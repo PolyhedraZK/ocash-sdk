@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Source+Code+Pro:wght@400;500&display=swap');
-
 :root {
   color-scheme: light;
   --bg: #f5efe6;
@@ -20,11 +18,8 @@
 
 body {
   margin: 0;
-  font-family: 'Space Grotesk', sans-serif;
   color: var(--ink);
-  background: radial-gradient(1200px 900px at 10% -10%, #fff6e8, transparent),
-    radial-gradient(900px 800px at 90% 0%, #fce0c2, transparent),
-    linear-gradient(135deg, var(--bg), var(--bg-2));
+  background: radial-gradient(1200px 900px at 10% -10%, #fff6e8, transparent), radial-gradient(900px 800px at 90% 0%, #fce0c2, transparent), linear-gradient(135deg, var(--bg), var(--bg-2));
 }
 
 code,
@@ -154,7 +149,9 @@ button {
   background: var(--ink);
   color: #fff;
   cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
   box-shadow: 0 6px 16px rgba(17, 17, 17, 0.14);
 }
 

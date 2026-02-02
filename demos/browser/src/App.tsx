@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import OcashSdk, { ERC20_ABI, IndexedDbStore } from '@ocash/sdk/browser';
-import type { Hex, StorageAdapter, StoredOperation, TokenMetadata, UtxoRecord } from '@ocash/sdk';
+import type {
+  Hex,
+  PlannerEstimateTransferResult,
+  PlannerEstimateWithdrawResult,
+  StorageAdapter,
+  StoredOperation,
+  TokenMetadata,
+  UtxoRecord,
+} from '@ocash/sdk';
 import { getAddress, isAddress } from 'viem';
 import type { Chain } from 'viem';
 import { useAccount, useChainId, useConnect, useDisconnect, usePublicClient, useSwitchChain, useWalletClient, WagmiProvider } from 'wagmi';

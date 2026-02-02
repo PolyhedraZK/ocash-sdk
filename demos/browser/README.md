@@ -12,5 +12,4 @@ pnpm run dev
 
 ## Notes
 
-- The demo expects `assetsOverride` URLs to be accessible from the browser.
 - Use the config editor in the UI to update chain/token settings.
