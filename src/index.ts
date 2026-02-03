@@ -14,7 +14,6 @@ export type {
   TransactionReceipt,
   AssetsOverride,
   AssetOverrideEntry,
-  AssetsIntegrity,
   StorageAdapter,
   ListUtxosQuery,
   EntryMemoRecord,
@@ -37,7 +36,6 @@ export {
   type SdkAssetsManifest,
   type SdkAssetManifestEntry,
   createAssetsOverrideFromManifest,
-  createAssetsIntegrityFromManifest,
   loadAssetsFromManifestUrl,
 } from './runtime/assetsManifest';
 export { defaultAssetsOverride } from './assets/defaultAssetsOverride';
@@ -112,7 +110,6 @@ export const createSdk = (config: OCashSdkConfig): OCashSdk => {
   };
   const bridge = new UniversalWasmBridge({
     assetsOverride: normalizedConfig.assetsOverride,
-    assetsIntegrity: normalizedConfig.assetsIntegrity,
     cacheDir: normalizedConfig.cacheDir,
     runtime: normalizedConfig.runtime,
   });

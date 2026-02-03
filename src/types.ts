@@ -73,16 +73,9 @@ export interface AssetsOverride {
   [filename: string]: AssetOverrideEntry;
 }
 
-/**
- * Optional sha256 integrity map for runtime assets (hex string, lowercase/uppercase accepted).
- * Key is the logical filename in `assetsOverride` (e.g. `app.wasm`, `transfer.pk`).
- */
-export type AssetsIntegrity = Record<string, string>;
-
 export interface OCashSdkConfig {
   chains: ChainConfigInput[];
   assetsOverride?: AssetsOverride;
-  assetsIntegrity?: AssetsIntegrity;
   memoWorker?: MemoWorkerConfig;
   cacheDir?: string;
   runtime?: 'auto' | 'browser' | 'node' | 'hybrid';

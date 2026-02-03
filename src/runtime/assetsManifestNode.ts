@@ -1,8 +1,7 @@
-import type { AssetsIntegrity, AssetsOverride } from '../types';
+import type { AssetsOverride } from '../types';
 import type { SdkAssetsManifest } from './assetsManifest';
-import { createAssetsIntegrityFromManifest, createAssetsOverrideFromManifest } from './assetsManifest';
+import { createAssetsOverrideFromManifest } from './assetsManifest';
 import { SdkError } from '../errors';
-import fs from 'node:fs';
 import path from 'node:path';
 
 const shardName = (index: number) => String(index).padStart(2, '0');
@@ -31,26 +30,3 @@ export const createAssetsOverrideFromManifestLocal = (manifest: SdkAssetsManifes
   }
   return out;
 };
-
-export const loadAssetsFromManifestSync = (input: {
-  manifestPath: string;
-  baseDir?: string;
-  baseUrl?: string;
-}): { manifest: SdkAssetsManifest; assetsOverride: AssetsOverride; assetsIntegrity: AssetsIntegrity } => {
-  const raw = fs.readFileSync(input.manifestPath, 'utf8');
-  const manifest = JSON.parse(raw) as SdkAssetsManifest;
-  const assetsOverride = input.baseUrl
-    ? createAssetsOverrideFromManifest(manifest, { baseUrl: input.baseUrl })
-    : createAssetsOverrideFromManifestLocal(manifest, { baseDir: input.baseDir ?? path.dirname(input.manifestPath) });
-  const assetsIntegrity = createAssetsIntegrityFromManifest(manifest);
-  return { manifest, assetsOverride, assetsIntegrity };
-};
-
-export const loadAssetsFromManifest = async (input: {
-  manifestPath: string;
-  baseDir?: string;
-  baseUrl?: string;
-}): Promise<{ manifest: SdkAssetsManifest; assetsOverride: AssetsOverride; assetsIntegrity: AssetsIntegrity }> => {
-  return loadAssetsFromManifestSync(input);
-};
-

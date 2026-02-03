@@ -1,11 +1,9 @@
-import type { CommitmentData, InputSecret, ProofBridge, AssetOverrideEntry, AssetsOverride, AssetsIntegrity, OCashSdkConfig } from '../types';
+import type { CommitmentData, InputSecret, ProofBridge, AssetOverrideEntry, AssetsOverride, OCashSdkConfig } from '../types';
 import { MemoKit } from '../memo/memoKit';
 import { CryptoToolkit } from '../crypto/cryptoToolkit';
 import { toCommitmentData } from '../crypto/records';
 import { CacheController } from './cache';
 import { SdkError } from '../errors';
-import { sha256 } from '@noble/hashes/sha256';
-import { bytesToHex, utf8ToBytes } from '@noble/hashes/utils';
 
 const arrayBufferToHex = (buffer: ArrayBuffer): string => {
   const view = new Uint8Array(buffer);
@@ -14,7 +12,6 @@ const arrayBufferToHex = (buffer: ArrayBuffer): string => {
 
 export interface WasmBridgeConfig {
   assetsOverride?: AssetsOverride;
-  assetsIntegrity?: AssetsIntegrity;
   cacheDir?: string;
   runtime?: 'auto' | 'browser' | 'node' | 'hybrid';
 }
@@ -68,9 +65,7 @@ export class UniversalWasmBridge implements ProofBridge {
     if (!override) {
       throw new SdkError('ASSETS', `Missing assetsOverride for ${filename}`, { filename });
     }
-    const buffer = await this.fetchOverride(filename, override);
-    this.verifyIntegrity(filename, buffer);
-    return buffer;
+    return this.fetchOverride(filename, override);
   }
 
   private async fetchOverride(key: string, override: AssetOverrideEntry): Promise<ArrayBuffer> {
@@ -170,7 +165,6 @@ export class UniversalWasmBridge implements ProofBridge {
       try {
         const fs = await import('node:fs/promises');
         const text = await fs.readFile(source.filePath, 'utf8');
-        this.verifyTextIntegrity(filename, text);
         return text;
       } catch (error) {
         throw new SdkError('ASSETS', `Failed to read local text asset: ${filename}`, { filename, filePath: source.filePath }, error);
@@ -180,12 +174,7 @@ export class UniversalWasmBridge implements ProofBridge {
     const cached = await this.cache.load(cacheKey);
     if (cached) {
       const text = this.textDecoder.decode(cached);
-      try {
-        this.verifyTextIntegrity(filename, text);
-        return text;
-      } catch {
-        // cache may be corrupted; fallthrough to refetch
-      }
+      return text;
     }
 
     const response = await fetch(source.url);
@@ -194,37 +183,8 @@ export class UniversalWasmBridge implements ProofBridge {
     }
     const buffer = await response.arrayBuffer();
     const text = this.textDecoder.decode(buffer);
-    this.verifyTextIntegrity(filename, text);
     await this.cache.save(cacheKey, buffer);
     return text;
-  }
-
-  private verifyIntegrity(filename: string, buffer: ArrayBuffer) {
-    const expected = this.config.assetsIntegrity?.[filename];
-    if (!expected) return;
-    const digest = sha256(new Uint8Array(buffer));
-    const got = bytesToHex(digest);
-    if (got.toLowerCase() !== expected.toLowerCase()) {
-      throw new SdkError('ASSETS', `Asset integrity check failed for ${filename}`, {
-        filename,
-        expected: expected.toLowerCase(),
-        got: got.toLowerCase(),
-      });
-    }
-  }
-
-  private verifyTextIntegrity(filename: string, text: string) {
-    const expected = this.config.assetsIntegrity?.[filename];
-    if (!expected) return;
-    const digest = sha256(utf8ToBytes(text));
-    const got = bytesToHex(digest);
-    if (got.toLowerCase() !== expected.toLowerCase()) {
-      throw new SdkError('ASSETS', `Asset integrity check failed for ${filename}`, {
-        filename,
-        expected: expected.toLowerCase(),
-        got: got.toLowerCase(),
-      });
-    }
   }
 
   private async ensureGoRuntime() {

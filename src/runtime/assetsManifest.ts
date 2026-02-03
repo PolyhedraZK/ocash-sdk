@@ -1,4 +1,4 @@
-import type { AssetsIntegrity, AssetsOverride } from '../types';
+import type { AssetsOverride } from '../types';
 import { SdkError } from '../errors';
 
 export type SdkAssetManifestEntry =
@@ -60,24 +60,10 @@ export const createAssetsOverrideFromManifest = (manifest: SdkAssetsManifest, op
   return out;
 };
 
-export const createAssetsIntegrityFromManifest = (manifest: SdkAssetsManifest): AssetsIntegrity => {
-  if (!manifest?.files || typeof manifest.files !== 'object') {
-    throw new SdkError('CONFIG', 'Invalid assets manifest: missing files');
-  }
-  const out: AssetsIntegrity = {};
-  for (const [logicalName, entry] of Object.entries(manifest.files)) {
-    const sha256 = (entry as any)?.sha256;
-    if (typeof sha256 === 'string' && sha256.length) {
-      out[logicalName] = sha256;
-    }
-  }
-  return out;
-};
-
 export const loadAssetsFromManifestUrl = async (input: {
   manifestUrl: string;
   baseUrl?: string;
-}): Promise<{ manifest: SdkAssetsManifest; assetsOverride: AssetsOverride; assetsIntegrity: AssetsIntegrity }> => {
+}): Promise<{ manifest: SdkAssetsManifest; assetsOverride: AssetsOverride }> => {
   if (!input?.manifestUrl || typeof input.manifestUrl !== 'string') {
     throw new SdkError('CONFIG', 'Missing manifestUrl');
   }
@@ -91,6 +77,5 @@ export const loadAssetsFromManifestUrl = async (input: {
   const manifest = (await response.json()) as SdkAssetsManifest;
   const baseUrl = input.baseUrl ?? new URL('.', input.manifestUrl).toString();
   const assetsOverride = createAssetsOverrideFromManifest(manifest, { baseUrl });
-  const assetsIntegrity = createAssetsIntegrityFromManifest(manifest);
-  return { manifest, assetsOverride, assetsIntegrity };
+  return { manifest, assetsOverride };
 };

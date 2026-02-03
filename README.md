@@ -30,21 +30,7 @@ pnpm run build
 
 ## M1：资产产出 / 托管 / 集成（集成就绪）
 
-SDK 本体不内置 wasm/电路文件；宿主必须提供这些运行时资产（`wasm_exec.js`、`app.wasm`、`transfer.r1cs/pk`、`withdraw.r1cs/pk`）。
-推荐做法是把资产发布到 CDN，并提供一份 `manifest.json`（包含切片信息与 sha256），然后在宿主侧从 manifest 生成 `assetsOverride + assetsIntegrity`。
-
-### 资产构建（离线/本地）
-
-如果你已经有本地的 `app.wasm/transfer*/withdraw*/wasm_exec.js`，可以用离线模式生成 `assets/manifest.json`（并将大文件自动切片）：
-
-```bash
-LOCAL_ASSETS_DIR=/absolute/path/to/wasm-and-circuits pnpm run build:assets:local
-```
-
-生成目录：
-
-- `assets/manifest.json`
-- `assets/<hashed files or shard dirs>`
+宿主可选提供运行时资产（`wasm_exec.js`、`app.wasm`、`transfer.r1cs/pk`、`withdraw.r1cs/pk`）。
 
 ## 最小用法（示例）
 
@@ -161,8 +147,10 @@ const sdk = createSdk({
 });
 ```
 
-所有必需文件（`wasm_exec.js`、`app.wasm`、`transfer.r1cs/pk`、`withdraw.r1cs/pk`）都需要显式配置；
+如果传入 `assetsOverride`，则所有必需文件（`wasm_exec.js`、`app.wasm`、`transfer.r1cs/pk`、`withdraw.r1cs/pk`）都需要显式配置；
 若提供分片数组则每个片段都能被浏览器独立缓存，带来更好的大文件加载体验。
+
+`assetsOverride` 可选；不传时使用 SDK 内置的默认资源地址（适用于测试网）。
 
 ### Node/Hybrid 本地文件（可选）
 
@@ -183,37 +171,17 @@ const sdk = createSdk({
 });
 ```
 
-#### 使用 manifest 生成 `assetsOverride`（推荐）
-
-配合 `pnpm run build:assets` 生成 `assets/manifest.json`（脚本会把大文件切片并写入 sha256），
-宿主可以直接从 manifest 构造 `assetsOverride + assetsIntegrity`：
-
 ```ts
-import { createSdk } from '@ocash/sdk';
-import { loadAssetsFromManifestSync } from '@ocash/sdk/node';
-
-const { assetsOverride, assetsIntegrity } = loadAssetsFromManifestSync({
-  manifestPath: './assets/manifest.json',
-});
-
-const sdk = createSdk({
-  chains: [...],
-  runtime: 'node',
-  assetsOverride,
-  assetsIntegrity, // 可选：开启 sha256 校验
-});
-```
-
 浏览器/混合容器可直接从 `manifest.json` 的 URL 获取并生成配置：
 
 ```ts
 import { createSdk, loadAssetsFromManifestUrl } from '@ocash/sdk';
 
-const { assetsOverride, assetsIntegrity } = await loadAssetsFromManifestUrl({
+const { assetsOverride } = await loadAssetsFromManifestUrl({
   manifestUrl: 'https://cdn.example.com/ocash/manifest.json',
 });
 
-const sdk = createSdk({ chains: [...], runtime: 'browser', assetsOverride, assetsIntegrity });
+const sdk = createSdk({ chains: [...], runtime: 'browser', assetsOverride });
 ```
 
 Node 20+ 需要原生 `fetch/WebAssembly` 支持；混合容器请确保 `globalThis.crypto.getRandomValues` 可用。

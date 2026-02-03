@@ -1,10 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  createAssetsIntegrityFromManifest,
-  createAssetsOverrideFromManifest,
-  loadAssetsFromManifestUrl,
-  type SdkAssetsManifest,
-} from '../src/runtime/assetsManifest';
+import { createAssetsOverrideFromManifest, loadAssetsFromManifestUrl, type SdkAssetsManifest } from '../src/runtime/assetsManifest';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -25,11 +20,9 @@ describe('assets manifest helpers', () => {
       'https://cdn.example.com/ocash/transfer_pk_2_abcd/01',
     ]);
 
-    const integrity = createAssetsIntegrityFromManifest(manifest);
-    expect(integrity).toEqual({ 'app.wasm': '11'.repeat(32), 'transfer.pk': '22'.repeat(32) });
   });
 
-  it('loads manifest from URL and derives overrides/integrity', async () => {
+  it('loads manifest from URL and derives overrides', async () => {
     const manifest: SdkAssetsManifest = {
       files: {
         'app.wasm': { type: 'single', path: 'app_aaaa.wasm', count: 1, sha256: '11'.repeat(32) },
@@ -40,6 +33,5 @@ describe('assets manifest helpers', () => {
 
     const loaded = await loadAssetsFromManifestUrl({ manifestUrl: 'https://cdn.example.com/ocash/manifest.json' });
     expect(loaded.assetsOverride['app.wasm']).toBe('https://cdn.example.com/ocash/app_aaaa.wasm');
-    expect(loaded.assetsIntegrity['app.wasm']).toBe('11'.repeat(32));
   });
 });
