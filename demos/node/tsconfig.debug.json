@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@ocash/sdk": ["../../src/index.ts"],
+      "@ocash/sdk/browser": ["../../src/index.browser.ts"],
+      "@ocash/sdk/node": ["../../src/index.node.ts"],
+      "@ocash/sdk/*": ["../../src/*"]
+    }
+  }
+}
