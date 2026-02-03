@@ -171,19 +171,6 @@ const sdk = createSdk({
 });
 ```
 
-```ts
-浏览器/混合容器可直接从 `manifest.json` 的 URL 获取并生成配置：
-
-```ts
-import { createSdk, loadAssetsFromManifestUrl } from '@ocash/sdk';
-
-const { assetsOverride } = await loadAssetsFromManifestUrl({
-  manifestUrl: 'https://cdn.example.com/ocash/manifest.json',
-});
-
-const sdk = createSdk({ chains: [...], runtime: 'browser', assetsOverride });
-```
-
 Node 20+ 需要原生 `fetch/WebAssembly` 支持；混合容器请确保 `globalThis.crypto.getRandomValues` 可用。
 
 ### Demo
@@ -252,7 +239,7 @@ SDK 提供一体化的 `StorageAdapter`：UTXO/sync cursor 等钱包状态 + dep
 
 ### Entry/Merkle 缓存（可选）
 
-对齐 `client/app` 的数据库结构，`StorageAdapter` 还支持可选的原始 Entry 数据缓存与 Merkle 元数据：
+`StorageAdapter` 还支持原始 Entry 数据缓存与 Merkle 元数据：
 
 - `upsertEntryMemos` / `listEntryMemos`：缓存 EntryService 的 memo 页面数据（cid/commitment/memo/createdAt）
 - `upsertEntryNullifiers` / `listEntryNullifiers`：缓存 EntryService 的 nullifier 数据
@@ -278,7 +265,7 @@ const receipt = await submit.TransactionReceipt;
 
 ### 操作记录查询（过滤/分页）
 
-`listOperations` 支持传入数字 `limit`（兼容旧用法），也支持 query 对象：
+`listOperations` 支持传入数字 `limit`，也支持 query 对象：
 
 ```ts
 const ops = store.listOperations({

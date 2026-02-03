@@ -32,12 +32,6 @@ export type {
   OpsApi,
   RelayerRequest,
 } from './types';
-export {
-  type SdkAssetsManifest,
-  type SdkAssetManifestEntry,
-  createAssetsOverrideFromManifest,
-  loadAssetsFromManifestUrl,
-} from './runtime/assetsManifest';
 export { defaultAssetsOverride } from './assets/defaultAssetsOverride';
 export { MemoKit } from './memo/memoKit';
 export { CryptoToolkit } from './crypto/cryptoToolkit';
@@ -53,15 +47,7 @@ export { calcTransferProofBinding, calcWithdrawProofBinding } from './utils/ocas
 export { App_ABI } from './abi/app';
 export { ERC20_ABI } from './abi/erc20';
 export { MemoryStore } from './store/memoryStore';
-export {
-  KeyValueStore,
-  RedisStore,
-  SqliteStore,
-  type KeyValueStoreOptions,
-  type RedisStoreOptions,
-  type SqliteStoreOptions,
-  type KeyValueClient,
-} from './store/keyValueStore';
+export { KeyValueStore, RedisStore, SqliteStore, type KeyValueStoreOptions, type RedisStoreOptions, type SqliteStoreOptions, type KeyValueClient } from './store/keyValueStore';
 export {
   type StoredOperation,
   type OperationStatus,
@@ -76,7 +62,7 @@ export {
   type WithdrawOperationDetail,
 } from './store/operationTypes';
 
-import type { AssetsApi, CommitmentData, CommitmentFn, Hex, OCashSdk, OCashSdkConfig, SdkEvent, StorageAdapter } from './types';
+import type { AssetsApi, CommitmentData, Hex, OCashSdk, OCashSdkConfig, SdkEvent, StorageAdapter } from './types';
 import { defaultAssetsOverride } from './assets/defaultAssetsOverride';
 import { UniversalWasmBridge } from './runtime/wasmBridge';
 import { SdkCore } from './core/sdk-core';
