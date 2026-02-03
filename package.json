@@ -1,0 +1,81 @@
+{
+  "name": "@ocash/sdk",
+  "version": "0.1.0",
+  "description": "OCash ZKP SDK for browser, hybrid and Node runtimes",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "default": "./dist/index.js"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "import": "./dist/browser.js",
+      "require": "./dist/browser.cjs",
+      "default": "./dist/browser.js"
+    },
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.js",
+      "require": "./dist/node.cjs",
+      "default": "./dist/node.js"
+    }
+  },
+  "files": [
+    "dist",
+    "assets"
+  ],
+  "scripts": {
+    "clean": "rimraf dist",
+    "type-check": "tsc --noEmit",
+    "build": "pnpm run clean && tsup",
+    "build:assets": "node build_wasm_assets.mjs",
+    "build:assets:local": "INCLUDE_WASM_EXEC_JS=1 node build_wasm_assets.mjs",
+    "dev": "pnpm run demo:browser",
+    "dev:sdk": "tsup --watch",
+    "demo:browser": "vite --config demos/browser/vite.config.ts",
+    "demo:browser:build": "tsc -p demos/browser/tsconfig.json && vite build --config demos/browser/vite.config.ts",
+    "demo:browser:preview": "vite preview --config demos/browser/vite.config.ts",
+    "demo:node": "pnpm run build && tsc -p demos/node/tsconfig.json && node demos/node/dist/index.js",
+    "demo:node:tsx": "pnpm run build && tsx demos/node/src/index.ts",
+    "type-check:demo:browser": "tsc -p demos/browser/tsconfig.json --noEmit",
+    "type-check:demo:node": "pnpm run build && tsc -p demos/node/tsconfig.json --noEmit",
+    "test": "vitest run",
+    "prepublishOnly": "pnpm run build"
+  },
+  "devDependencies": {
+    "@tanstack/react-query": "^5.45.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react-swc": "^4.2.2",
+    "@types/node": "^20.16.11",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "rimraf": "^6.0.1",
+    "tsup": "^8.3.5",
+    "tsx": "^4.19.2",
+    "typescript": "~5.8.3",
+    "vite": "^7.1.0",
+    "vitest": "^2.1.4",
+    "wagmi": "^2.12.0"
+  },
+  "dependencies": {
+    "@noble/ciphers": "1.3.0",
+    "@noble/curves": "1.9.6",
+    "@noble/hashes": "1.8.0",
+    "eventemitter3": "^5.0.1",
+    "tweetnacl": "1.0.3",
+    "viem": "2.33.2"
+  },
+  "sideEffects": false,
+  "engines": {
+    "node": ">=20.19.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.0"
+}
