@@ -16,7 +16,6 @@ export function WalletPanel({
   selectedChainId,
   currentChain,
   syncOnce,
-  refreshOperations,
   sdk,
   walletOpened,
   actionMessage,
@@ -35,7 +34,6 @@ export function WalletPanel({
   | 'selectedChainId'
   | 'currentChain'
   | 'syncOnce'
-  | 'refreshOperations'
   | 'sdk'
   | 'walletOpened'
   | 'actionMessage'
@@ -82,9 +80,6 @@ export function WalletPanel({
       <div className="row">
         <button className="teal" onClick={syncOnce} disabled={!sdk || !walletOpened}>
           Sync Once {'Syncing…' === actionMessage ? <Spin className="inline-spinner" /> : null}
-        </button>
-        <button className="secondary" onClick={refreshOperations} disabled={!sdk}>
-          Refresh Operations
         </button>
       </div>
     </section>

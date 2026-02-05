@@ -1,6 +1,19 @@
 import type { DemoConfig } from './constants';
 import { useDemoController } from './hooks/useDemoController';
-import { ActivityPanel, AssetContextPanel, BalancesPanel, ConfigPanel, DepositPanel, OperationsPanel, TransferPanel, UtxosPanel, WalletPanel, WithdrawPanel } from './sections';
+import {
+  ActivityPanel,
+  AssetContextPanel,
+  BalancesPanel,
+  ConfigPanel,
+  DepositPanel,
+  EntryMemosPanel,
+  EntryNullifiersPanel,
+  OperationsPanel,
+  TransferPanel,
+  UtxosPanel,
+  WalletPanel,
+  WithdrawPanel,
+} from './sections';
 
 export function DemoApp({ config }: { config: DemoConfig }) {
   const controller = useDemoController({ config });
@@ -38,7 +51,6 @@ export function DemoApp({ config }: { config: DemoConfig }) {
           selectedChainId={controller.selectedChainId}
           currentChain={controller.currentChain}
           syncOnce={controller.syncOnce}
-          refreshOperations={controller.refreshOperations}
           sdk={controller.sdk}
           walletOpened={controller.walletOpened}
           actionMessage={controller.actionMessage}
@@ -108,6 +120,28 @@ export function DemoApp({ config }: { config: DemoConfig }) {
           walletOpened={controller.walletOpened}
           sdk={controller.sdk}
           tokenInfoById={controller.tokenInfoById}
+        />
+
+        <EntryMemosPanel
+          memoRows={controller.memoRows}
+          memoPage={controller.memoPage}
+          memoTotal={controller.memoTotal}
+          memoLoading={controller.memoLoading}
+          setMemoPage={controller.setMemoPage}
+          refreshEntryMemos={controller.refreshEntryMemos}
+          walletOpened={controller.walletOpened}
+          sdk={controller.sdk}
+        />
+
+        <EntryNullifiersPanel
+          nullifierRows={controller.nullifierRows}
+          nullifierPage={controller.nullifierPage}
+          nullifierTotal={controller.nullifierTotal}
+          nullifierLoading={controller.nullifierLoading}
+          setNullifierPage={controller.setNullifierPage}
+          refreshEntryNullifiers={controller.refreshEntryNullifiers}
+          walletOpened={controller.walletOpened}
+          sdk={controller.sdk}
         />
 
         <OperationsPanel operations={controller.operations} />

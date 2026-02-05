@@ -6,5 +6,7 @@ export { TransferPanel } from './TransferPanel';
 export { WithdrawPanel } from './WithdrawPanel';
 export { BalancesPanel } from './BalancesPanel';
 export { UtxosPanel } from './UtxosPanel';
+export { EntryMemosPanel } from './EntryMemosPanel';
+export { EntryNullifiersPanel } from './EntryNullifiersPanel';
 export { OperationsPanel } from './OperationsPanel';
 export { ActivityPanel } from './ActivityPanel';

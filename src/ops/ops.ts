@@ -124,6 +124,10 @@ export class Ops implements OpsApi {
     this.emit?.({ type: 'debug', payload: { scope, message, detail } } as any);
   }
 
+  private emitOperationUpdate(payload: Extract<SdkEvent, { type: 'operations:update' }>['payload']) {
+    this.emit?.({ type: 'operations:update', payload } as SdkEvent);
+  }
+
   private getPublicClient(chainId: number): PublicClient {
     const cached = this.publicClients.get(chainId);
     if (cached) return cached;
@@ -157,6 +161,7 @@ export class Ops implements OpsApi {
     if (!operationId) return;
     try {
       this.store?.updateOperation(operationId, patch);
+      this.emitOperationUpdate({ action: 'update', operationId, patch });
     } catch {
       // ignore operation store errors
     }
@@ -585,6 +590,7 @@ export class Ops implements OpsApi {
     const operation = input.operation ?? (plan ? this.buildOperationFromPlan(plan) : undefined);
     if (!operationId && operation) {
       const created = this.store?.createOperation(operation as any);
+      if (created) this.emitOperationUpdate({ action: 'create', operation: created });
       operationId = created?.id ?? operationId;
     }
     try {
@@ -846,6 +852,7 @@ export class Ops implements OpsApi {
           outputCommitments,
         },
       } as any);
+      if (created) this.emitOperationUpdate({ action: 'create', operation: created });
       operationId = created?.id ?? operationId;
     }
 

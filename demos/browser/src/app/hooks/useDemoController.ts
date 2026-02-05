@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import OcashSdk, { ERC20_ABI, IndexedDbStore } from '@ocash/sdk/browser';
-import type { Hex, PlannerEstimateTransferResult, PlannerEstimateWithdrawResult, StorageAdapter, StoredOperation, TokenMetadata, UtxoRecord } from '@ocash/sdk';
+import type {
+  EntryMemoRecord,
+  EntryNullifierRecord,
+  Hex,
+  PlannerEstimateTransferResult,
+  PlannerEstimateWithdrawResult,
+  StorageAdapter,
+  StoredOperation,
+  TokenMetadata,
+  UtxoRecord,
+} from '@ocash/sdk';
 import { defineChain, getAddress, isAddress } from 'viem';
 import { createConfig, http } from 'wagmi';
 import { useAccount, useChainId, useConfig, useConnect, useDisconnect, usePublicClient, useWalletClient } from 'wagmi';
@@ -15,6 +25,8 @@ import { sepolia } from 'viem/chains';
 export type DemoController = ReturnType<typeof useDemoController>;
 
 export function useDemoController({ config }: { config: DemoConfig }) {
+  const MEMO_PAGE_SIZE = 20;
+  const NULLIFIER_PAGE_SIZE = 20;
   const configText = useMemo(() => JSON.stringify(config, null, 2), [config]);
   const [sdk, setSdk] = useState<ReturnType<typeof OcashSdk.createSdk> | null>(null);
   const [sdkStatus, setSdkStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
@@ -28,6 +40,14 @@ export function useDemoController({ config }: { config: DemoConfig }) {
   const [utxos, setUtxos] = useState<UtxoRecord[]>([]);
   const [utxoFilter, setUtxoFilter] = useState<'all' | 'unspent' | 'spent'>('unspent');
   const [operations, setOperations] = useState<StoredOperation[]>([]);
+  const [memoRows, setMemoRows] = useState<EntryMemoRecord[]>([]);
+  const [memoPage, setMemoPage] = useState(1);
+  const [memoTotal, setMemoTotal] = useState(0);
+  const [memoLoading, setMemoLoading] = useState(false);
+  const [nullifierRows, setNullifierRows] = useState<EntryNullifierRecord[]>([]);
+  const [nullifierPage, setNullifierPage] = useState(1);
+  const [nullifierTotal, setNullifierTotal] = useState(0);
+  const [nullifierLoading, setNullifierLoading] = useState(false);
   const [actionMessage, setActionMessage] = useState<string>('');
   const [depositAmount, setDepositAmount] = useState('0.1');
   const [transferAmount, setTransferAmount] = useState('0.1');
@@ -78,6 +98,11 @@ export function useDemoController({ config }: { config: DemoConfig }) {
           setCoreProgress(pct);
           return;
         }
+        if (event.type === 'operations:update') {
+          const store = nextSdk.storage.getAdapter() as StorageAdapter;
+          setOperations(store.listOperations());
+          return;
+        }
         if (event.type === 'error') {
           addLog({
             time: new Date().toLocaleTimeString(),
@@ -106,6 +131,10 @@ export function useDemoController({ config }: { config: DemoConfig }) {
     setBalances([]);
     setUtxos([]);
     setOperations([]);
+    setMemoRows([]);
+    setMemoTotal(0);
+    setNullifierRows([]);
+    setNullifierTotal(0);
     setActionMessage('');
 
     return () => {
@@ -136,6 +165,11 @@ export function useDemoController({ config }: { config: DemoConfig }) {
     }
   }, [sdk, config]);
   const chainMismatch = Boolean(walletChainId && selectedChainId && walletChainId !== selectedChainId);
+
+  useEffect(() => {
+    setMemoPage(1);
+    setNullifierPage(1);
+  }, [currentChain?.chainId]);
 
   useEffect(() => {
     let active = true;
@@ -309,32 +343,36 @@ export function useDemoController({ config }: { config: DemoConfig }) {
     initSdk();
   }, [isConnected, sdk, sdkStatus, walletOpened, initSdk]);
 
-  const syncOnce = async () => {
-    if (!sdk || !currentChain) return;
-    setActionMessage('Syncing…');
-    try {
-      await sdk.sync.syncOnce({ chainIds: [currentChain.chainId] });
-      setActionMessage('Sync complete');
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : String(error));
-      setActionMessage('');
-    }
-  };
-
-  const refreshBalances = async () => {
-    if (!sdk || !currentChain || !walletOpened) return;
-    const rows: BalanceRow[] = [];
-    for (const token of currentTokens) {
-      const value = await sdk.wallet.getBalance({ chainId: currentChain.chainId, assetId: token.id });
-      rows.push({ token, value });
-    }
-    setBalances(rows);
-  };
-
-  const refreshOperations = () => {
-    if (!sdk) return;
+  useEffect(() => {
+    if (!sdk || !walletOpened) return;
     const store = sdk.storage.getAdapter() as StorageAdapter;
     setOperations(store.listOperations());
+  }, [sdk, walletOpened]);
+
+  useEffect(() => {
+    if (!walletOpened) {
+      setMemoRows([]);
+      setMemoTotal(0);
+      setNullifierRows([]);
+      setNullifierTotal(0);
+    }
+  }, [walletOpened]);
+
+  const refreshBalances = async ({ sync = true }: { sync?: boolean } = {}) => {
+    if (!sdk || !currentChain || !walletOpened) return;
+    try {
+      if (sync) {
+        await sdk.sync.syncOnce({ chainIds: [currentChain.chainId] });
+      }
+      const rows: BalanceRow[] = [];
+      for (const token of currentTokens) {
+        const value = await sdk.wallet.getBalance({ chainId: currentChain.chainId, assetId: token.id });
+        rows.push({ token, value });
+      }
+      setBalances(rows);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : String(error));
+    }
   };
 
   const refreshUtxos = async () => {
@@ -347,6 +385,94 @@ export function useDemoController({ config }: { config: DemoConfig }) {
     });
     const filtered = utxoFilter === 'all' ? list : list.filter((utxo) => (utxoFilter === 'spent' ? utxo.isSpent : !utxo.isSpent));
     setUtxos(filtered);
+  };
+
+  const refreshEntryMemos = async () => {
+    if (!sdk || !currentChain || !walletOpened) {
+      setMemoRows([]);
+      setMemoTotal(0);
+      return;
+    }
+    const store = sdk.storage.getAdapter() as StorageAdapter;
+    if (!store.listEntryMemos) {
+      setMemoRows([]);
+      setMemoTotal(0);
+      return;
+    }
+    setMemoLoading(true);
+    try {
+      const all = await store.listEntryMemos({ chainId: currentChain.chainId, offset: 0 });
+      const total = all.length;
+      const maxPage = Math.max(1, Math.ceil(total / MEMO_PAGE_SIZE));
+      if (memoPage > maxPage) {
+        setMemoPage(maxPage);
+        setMemoRows([]);
+        setMemoTotal(total);
+        return;
+      }
+      const offset = (memoPage - 1) * MEMO_PAGE_SIZE;
+      setMemoRows(all.slice(offset, offset + MEMO_PAGE_SIZE));
+      setMemoTotal(total);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      setMemoLoading(false);
+    }
+  };
+
+  const refreshEntryNullifiers = async () => {
+    if (!sdk || !currentChain || !walletOpened) {
+      setNullifierRows([]);
+      setNullifierTotal(0);
+      return;
+    }
+    const store = sdk.storage.getAdapter() as StorageAdapter;
+    if (!store.listEntryNullifiers) {
+      setNullifierRows([]);
+      setNullifierTotal(0);
+      return;
+    }
+    setNullifierLoading(true);
+    try {
+      const all = await store.listEntryNullifiers({ chainId: currentChain.chainId, offset: 0 });
+      const total = all.length;
+      const maxPage = Math.max(1, Math.ceil(total / NULLIFIER_PAGE_SIZE));
+      if (nullifierPage > maxPage) {
+        setNullifierPage(maxPage);
+        setNullifierRows([]);
+        setNullifierTotal(total);
+        return;
+      }
+      const offset = (nullifierPage - 1) * NULLIFIER_PAGE_SIZE;
+      setNullifierRows(all.slice(offset, offset + NULLIFIER_PAGE_SIZE));
+      setNullifierTotal(total);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      setNullifierLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void refreshEntryMemos();
+  }, [memoPage, currentChain?.chainId, sdk, walletOpened]);
+
+  useEffect(() => {
+    void refreshEntryNullifiers();
+  }, [nullifierPage, currentChain?.chainId, sdk, walletOpened]);
+
+  const syncOnce = async () => {
+    if (!sdk || !currentChain) return;
+    setActionMessage('Syncing…');
+    try {
+      await sdk.sync.syncOnce({ chainIds: [currentChain.chainId] });
+      setActionMessage('Sync complete');
+      await refreshBalances({ sync: false });
+      await refreshUtxos();
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : String(error));
+      setActionMessage('');
+    }
   };
 
   const handleDeposit = async () => {
@@ -393,7 +519,6 @@ export function useDemoController({ config }: { config: DemoConfig }) {
       });
       console.log('Deposit submit result:', submit);
       setActionMessage(`Deposit tx: ${submit.txHash}`);
-      refreshOperations();
     } catch (error) {
       message.error(error instanceof Error ? error.message : String(error));
       setActionMessage('');
@@ -438,7 +563,6 @@ export function useDemoController({ config }: { config: DemoConfig }) {
       const submit = await sdk.ops.submitRelayerRequest<Hex>({ prepared, publicClient });
       await submit.TransactionReceipt;
       setActionMessage(`Transfer relayer tx: ${submit.result}`);
-      refreshOperations();
     } catch (error) {
       message.error(error instanceof Error ? error.message : String(error));
       setActionMessage('');
@@ -477,7 +601,6 @@ export function useDemoController({ config }: { config: DemoConfig }) {
       const submit = await sdk.ops.submitRelayerRequest<Hex>({ prepared, publicClient });
       await submit.TransactionReceipt;
       setActionMessage(`Withdraw relayer tx: ${submit.result}`);
-      refreshOperations();
     } catch (error) {
       message.error(error instanceof Error ? error.message : String(error));
       setActionMessage('');
@@ -542,6 +665,16 @@ export function useDemoController({ config }: { config: DemoConfig }) {
     utxoFilter,
     setUtxoFilter,
     operations,
+    memoRows,
+    memoPage,
+    memoTotal,
+    memoLoading,
+    setMemoPage,
+    nullifierRows,
+    nullifierPage,
+    nullifierTotal,
+    nullifierLoading,
+    setNullifierPage,
     actionMessage,
     depositAmount,
     setDepositAmount,
@@ -574,8 +707,9 @@ export function useDemoController({ config }: { config: DemoConfig }) {
     closeWallet,
     syncOnce,
     refreshBalances,
-    refreshOperations,
     refreshUtxos,
+    refreshEntryMemos,
+    refreshEntryNullifiers,
     handleDepositMax,
     handleTransferMax,
     handleWithdrawMax,

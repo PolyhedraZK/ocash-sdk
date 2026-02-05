@@ -124,6 +124,15 @@ export type SdkEvent =
   | { type: 'sync:progress'; payload: { chainId: number; resource: 'memo' | 'nullifier' | 'merkle'; downloaded: number; total?: number } }
   | { type: 'sync:done'; payload: { chainId: number; cursor: SyncCursor } }
   | { type: 'debug'; payload: { scope: string; message: string; detail?: unknown } }
+  | {
+      type: 'operations:update';
+      payload: {
+        action: 'create' | 'update';
+        operationId?: string;
+        patch?: Partial<StoredOperation>;
+        operation?: StoredOperation;
+      };
+    }
   /**
    * UTXO state changed due to memo/nullifier sync.
    *
