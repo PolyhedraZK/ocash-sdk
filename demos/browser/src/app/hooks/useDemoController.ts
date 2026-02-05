@@ -276,7 +276,7 @@ export function useDemoController({ config }: { config: DemoConfig }) {
     setWithdrawAmount(formatTokenAmount(withdrawEstimate.maxSummary.outputAmount, currentToken));
   };
 
-  const initSdk = async () => {
+  const initSdk = useCallback(async () => {
     if (!sdk) return;
     setSdkStatus('loading');
     try {
@@ -290,9 +290,9 @@ export function useDemoController({ config }: { config: DemoConfig }) {
       setSdkStatus('error');
       message.error(error instanceof Error ? error.message : String(error));
     }
-  };
+  }, [sdk, config.seed, config.accountNonce, viewingAddressFromSeed, addLog]);
 
-  const closeWallet = async () => {
+  const closeWallet = useCallback(async () => {
     if (!sdk) return;
     try {
       await sdk.wallet.close();
@@ -301,7 +301,13 @@ export function useDemoController({ config }: { config: DemoConfig }) {
     } catch (error) {
       message.error(error instanceof Error ? error.message : String(error));
     }
-  };
+  }, [sdk, addLog]);
+
+  useEffect(() => {
+    if (!isConnected || !sdk) return;
+    if (sdkStatus !== 'idle' || walletOpened) return;
+    initSdk();
+  }, [isConnected, sdk, sdkStatus, walletOpened, initSdk]);
 
   const syncOnce = async () => {
     if (!sdk || !currentChain) return;
@@ -385,6 +391,7 @@ export function useDemoController({ config }: { config: DemoConfig }) {
         publicClient,
         autoApprove: true,
       });
+      console.log('Deposit submit result:', submit);
       setActionMessage(`Deposit tx: ${submit.txHash}`);
       refreshOperations();
     } catch (error) {

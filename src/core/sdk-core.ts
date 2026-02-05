@@ -15,7 +15,10 @@ export class SdkCore {
   private initialized = false;
   private readonly eventBus = new SdkEventBus();
 
-  constructor(private readonly config: OCashSdkConfig, private readonly proofBridge: ProofBridge) {
+  constructor(
+    private readonly config: OCashSdkConfig,
+    private readonly proofBridge: ProofBridge,
+  ) {
     // `config.onEvent` is invoked for every emitted event in `emit()`.
   }
 
@@ -32,10 +35,8 @@ export class SdkCore {
         payload: { stage: 'fetch', loaded: Math.floor(value * 100), total: 100 },
       });
     };
-    progress(0.1);
-    await this.proofBridge.init();
     progress(0.4);
-    await Promise.all([this.proofBridge.initTransfer(), this.proofBridge.initWithdraw()]);
+    await this.proofBridge.init();
     progress(1);
     this.initialized = true;
     this.emit({

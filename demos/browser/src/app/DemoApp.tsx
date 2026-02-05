@@ -1,17 +1,6 @@
 import type { DemoConfig } from './constants';
 import { useDemoController } from './hooks/useDemoController';
-import {
-  ActivityPanel,
-  AssetContextPanel,
-  BalancesPanel,
-  ConfigPanel,
-  DepositPanel,
-  OperationsPanel,
-  TransferPanel,
-  UtxosPanel,
-  WalletPanel,
-  WithdrawPanel,
-} from './sections';
+import { ActivityPanel, AssetContextPanel, BalancesPanel, ConfigPanel, DepositPanel, OperationsPanel, TransferPanel, UtxosPanel, WalletPanel, WithdrawPanel } from './sections';
 
 export function DemoApp({ config }: { config: DemoConfig }) {
   const controller = useDemoController({ config });
@@ -52,6 +41,7 @@ export function DemoApp({ config }: { config: DemoConfig }) {
           refreshOperations={controller.refreshOperations}
           sdk={controller.sdk}
           walletOpened={controller.walletOpened}
+          actionMessage={controller.actionMessage}
         />
 
         <AssetContextPanel
@@ -108,12 +98,7 @@ export function DemoApp({ config }: { config: DemoConfig }) {
           withdrawNotice={controller.withdrawNotice}
         />
 
-        <BalancesPanel
-          balances={controller.balances}
-          refreshBalances={controller.refreshBalances}
-          walletOpened={controller.walletOpened}
-          sdk={controller.sdk}
-        />
+        <BalancesPanel balances={controller.balances} refreshBalances={controller.refreshBalances} walletOpened={controller.walletOpened} sdk={controller.sdk} />
 
         <UtxosPanel
           utxos={controller.utxos}

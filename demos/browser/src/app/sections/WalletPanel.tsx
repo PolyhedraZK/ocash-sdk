@@ -1,4 +1,6 @@
+import { sepolia } from 'viem/chains';
 import type { DemoController } from '../hooks/useDemoController';
+import { Spin } from 'antd';
 
 export function WalletPanel({
   isConnected,
@@ -17,6 +19,7 @@ export function WalletPanel({
   refreshOperations,
   sdk,
   walletOpened,
+  actionMessage,
 }: Pick<
   DemoController,
   | 'isConnected'
@@ -35,6 +38,7 @@ export function WalletPanel({
   | 'refreshOperations'
   | 'sdk'
   | 'walletOpened'
+  | 'actionMessage'
 >) {
   return (
     <section className="panel span-5">
@@ -57,11 +61,16 @@ export function WalletPanel({
           <strong>Wallet:</strong> {address ?? 'Not connected'}
         </div>
         <div className="status">
+          <strong>Ocash:</strong>{' '}
+          <a href={`${sepolia.blockExplorers?.default.url}/address/${config.chains?.[0]?.ocashContractAddress}`} target="_blank" rel="noopener noreferrer">
+            {config.chains?.[0]?.ocashContractAddress ?? 'Not ocashContractAddress'}
+          </a>
+        </div>
+        <div className="status">
           <strong>Chain:</strong> {walletChainId ?? 'N/A'}
         </div>
         <div className="status">
-          <strong>OCash Receive (nonce {config.accountNonce ?? 0}):</strong>{' '}
-          <span className="mono">{viewingAddress ?? viewingAddressFromSeed ?? 'N/A'}</span>
+          <strong>OCash Receive (nonce {config.accountNonce ?? 0}):</strong> <span className="mono">{viewingAddress ?? viewingAddressFromSeed ?? 'N/A'}</span>
         </div>
       </div>
       {chainMismatch && (
@@ -72,7 +81,7 @@ export function WalletPanel({
       {currentChain?.rpcUrl ? null : <div className="notice">Current chain missing rpcUrl.</div>}
       <div className="row">
         <button className="teal" onClick={syncOnce} disabled={!sdk || !walletOpened}>
-          Sync Once
+          Sync Once {'Syncing…' === actionMessage ? <Spin className="inline-spinner" /> : null}
         </button>
         <button className="secondary" onClick={refreshOperations} disabled={!sdk}>
           Refresh Operations
