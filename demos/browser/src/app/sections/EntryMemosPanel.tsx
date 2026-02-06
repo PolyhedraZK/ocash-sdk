@@ -99,7 +99,6 @@ export function EntryMemosPanel() {
               <strong>cid: {row.cid}</strong>
               <span className="mono">chain: {row.chainId}</span>
             </div>
-            <div className="mono">commitment: {row.commitment}</div>
             <div className="mono">memo: {shortenHex(row.memo)}</div>
             {row.isTransparent ? (
               <div className="mono">

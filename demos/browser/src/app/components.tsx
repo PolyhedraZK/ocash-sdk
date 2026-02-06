@@ -1,5 +1,10 @@
 import type { FeeRow } from './constants';
 
+export type UtxoPreviewRow = {
+  cid: string;
+  amount: string;
+};
+
 export function FeePanel({ rows, loading, error, ok, okWithMerge }: { rows: FeeRow[]; loading: boolean; error: string; ok?: boolean; okWithMerge?: boolean }) {
   return (
     <div className="stack">
@@ -65,6 +70,29 @@ export function DepositForm({
   );
 }
 
+export function UtxoPreview({ rows }: { rows: UtxoPreviewRow[] }) {
+  if (rows.length === 0) return null;
+  return (
+    <div className="stack">
+      <label className="label">Selected UTXOs</label>
+      <div className="list">
+        {rows.map((row) => (
+          <div key={row.cid} className="list-item">
+            <div className="row">
+              <strong>cid</strong>
+              <span className="mono">{row.cid}</span>
+            </div>
+            <div className="row">
+              <strong>amount</strong>
+              <span className="mono">{row.amount}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function TransferForm({
   amount,
   to,
@@ -82,6 +110,7 @@ export function TransferForm({
   feeOk,
   feeOkWithMerge,
   notice,
+  utxoRows,
 }: {
   amount: string;
   to: string;
@@ -99,6 +128,7 @@ export function TransferForm({
   feeOk?: boolean;
   feeOkWithMerge?: boolean;
   notice?: string;
+  utxoRows?: UtxoPreviewRow[];
 }) {
   return (
     <div className="stack">
@@ -116,6 +146,7 @@ export function TransferForm({
         {submitLabel ?? (submitting ? 'Transferring...' : 'Transfer')}
       </button>
       {progressText ? <div className="status">{progressText}</div> : null}
+      {utxoRows ? <UtxoPreview rows={utxoRows} /> : null}
       <FeePanel rows={feeRows} loading={feeLoading} error={feeError} ok={feeOk} okWithMerge={feeOkWithMerge} />
     </div>
   );
@@ -138,6 +169,7 @@ export function WithdrawForm({
   feeOk,
   feeOkWithMerge,
   notice,
+  utxoRows,
 }: {
   amount: string;
   recipient: string;
@@ -155,6 +187,7 @@ export function WithdrawForm({
   feeOk?: boolean;
   feeOkWithMerge?: boolean;
   notice?: string;
+  utxoRows?: UtxoPreviewRow[];
 }) {
   return (
     <div className="stack">
@@ -172,6 +205,7 @@ export function WithdrawForm({
         {submitLabel ?? (submitting ? 'Withdrawing...' : 'Withdraw')}
       </button>
       {progressText ? <div className="status">{progressText}</div> : null}
+      {utxoRows ? <UtxoPreview rows={utxoRows} /> : null}
       <FeePanel rows={feeRows} loading={feeLoading} error={feeError} ok={feeOk} okWithMerge={feeOkWithMerge} />
     </div>
   );

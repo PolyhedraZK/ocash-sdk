@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { message } from 'antd';
 import type { Hex, PlannerEstimateTransferResult } from '@ocash/sdk';
 import { parseAmount } from '../../utils/format';
-import { TransferForm } from '../components';
+import { TransferForm, type UtxoPreviewRow } from '../components';
 import { formatFeeRows, formatTokenAmount, useDebouncedValue } from '../utils';
 import { useDemoStore } from '../state/demoStore';
 
@@ -122,6 +122,7 @@ export function TransferPanel() {
       setTransferProgress('Waiting for receipt...');
       await submit.TransactionReceipt;
       setTransferProgress('Transfer confirmed.');
+      message.success('Transfer successful.');
     } catch (error) {
       message.error(error instanceof Error ? error.message : String(error));
     } finally {
@@ -145,8 +146,20 @@ export function TransferPanel() {
         { label: 'cost', value: transferEstimate ? formatTokenAmount(transferEstimate.feeSummary.cost, currentToken) : '' },
         { label: 'maxOutput', value: transferEstimate ? formatTokenAmount(transferEstimate.maxSummary.outputAmount, currentToken) : '' },
       ]),
-    [transferEstimate, currentToken]
+    [transferEstimate, currentToken],
   );
+
+  const transferUtxoRows: UtxoPreviewRow[] = useMemo(() => {
+    if (!transferEstimate || !currentToken) return [];
+    return transferEstimate.selectedInputs.map((input) => ({
+      cid: input.mkIndex.toString(),
+      amount: formatTokenAmount(input.amount, currentToken),
+    }));
+  }, [transferEstimate, currentToken]);
+
+  const transferRecipientReady = /^0x[0-9a-fA-F]{64}$/.test(transferTo.trim());
+  const transferAmountReady = debouncedTransferAmount.trim().length > 0;
+  const transferShowUtxos = transferRecipientReady && transferAmountReady;
 
   const transferNotice = !walletOpened ? 'Initialize the SDK to open the wallet.' : '';
   const transferSubmitLabel = transferSubmitting ? 'Transferring...' : 'Transfer';
@@ -174,6 +187,7 @@ export function TransferPanel() {
           feeOk={transferEstimate?.ok}
           feeOkWithMerge={transferEstimate?.okWithMerge}
           notice={transferNotice}
+          utxoRows={transferShowUtxos ? transferUtxoRows : []}
         />
       ) : null}
     </section>

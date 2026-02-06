@@ -3,7 +3,7 @@ import { message } from 'antd';
 import type { Hex, PlannerEstimateWithdrawResult } from '@ocash/sdk';
 import { getAddress, isAddress } from 'viem';
 import { parseAmount } from '../../utils/format';
-import { WithdrawForm } from '../components';
+import { WithdrawForm, type UtxoPreviewRow } from '../components';
 import { formatFeeRows, formatTokenAmount, useDebouncedValue } from '../utils';
 import { useDemoStore } from '../state/demoStore';
 
@@ -102,6 +102,7 @@ export function WithdrawPanel() {
       setWithdrawProgress('Waiting for receipt...');
       await submit.TransactionReceipt;
       setWithdrawProgress('Withdraw confirmed.');
+      message.success('Withdraw successful.');
     } catch (error) {
       message.error(error instanceof Error ? error.message : String(error));
     } finally {
@@ -124,8 +125,22 @@ export function WithdrawPanel() {
         { label: 'cost', value: withdrawEstimate ? formatTokenAmount(withdrawEstimate.feeSummary.cost, currentToken) : '' },
         { label: 'maxOutput', value: withdrawEstimate ? formatTokenAmount(withdrawEstimate.maxSummary.outputAmount, currentToken) : '' },
       ]),
-    [withdrawEstimate, currentToken]
+    [withdrawEstimate, currentToken],
   );
+
+  const withdrawUtxoRows: UtxoPreviewRow[] = useMemo(() => {
+    if (!withdrawEstimate || !currentToken || !withdrawEstimate.selectedInput) return [];
+    return [
+      {
+        cid: withdrawEstimate.selectedInput.mkIndex.toString(),
+        amount: formatTokenAmount(withdrawEstimate.selectedInput.amount, currentToken),
+      },
+    ];
+  }, [withdrawEstimate, currentToken]);
+
+  const withdrawRecipientReady = isAddress(withdrawRecipient);
+  const withdrawAmountReady = debouncedWithdrawAmount.trim().length > 0;
+  const withdrawShowUtxos = withdrawRecipientReady && withdrawAmountReady;
 
   const withdrawNotice = !walletOpened ? 'Initialize the SDK to open the wallet.' : '';
 
@@ -152,6 +167,7 @@ export function WithdrawPanel() {
           feeOk={withdrawEstimate?.ok}
           feeOkWithMerge={withdrawEstimate?.okWithMerge}
           notice={withdrawNotice}
+          utxoRows={withdrawShowUtxos ? withdrawUtxoRows : []}
         />
       ) : null}
     </section>

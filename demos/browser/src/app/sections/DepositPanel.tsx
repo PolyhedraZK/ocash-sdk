@@ -181,7 +181,7 @@ export function DepositPanel() {
         chainId: currentChain.chainId,
         assetId: currentToken.id,
       });
-      message.success('Commitment accepted.');
+      message.success('Deposit successful.');
     } catch (error) {
       message.error(error instanceof Error ? error.message : String(error));
     } finally {
