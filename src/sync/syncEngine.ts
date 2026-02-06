@@ -14,12 +14,10 @@ export type SyncEngineOptions = {
   pollMs?: number;
   requestTimeoutMs?: number;
   retry?: { attempts?: number; baseDelayMs?: number; maxDelayMs?: number };
-  backoff?: { enabled?: boolean; baseMs?: number; maxMs?: number };
 };
 
-type NormalizedSyncEngineOptions = Omit<Required<SyncEngineOptions>, 'retry' | 'backoff'> & {
+type NormalizedSyncEngineOptions = Omit<Required<SyncEngineOptions>, 'retry'> & {
   retry: { attempts: number; baseDelayMs: number; maxDelayMs: number };
-  backoff: { enabled: boolean; baseMs: number; maxMs: number };
 };
 
 const toBoundedInt = (value: unknown, fallback: number, bounds: { min: number; max?: number }): number => {
@@ -36,15 +34,11 @@ const normalizeSyncEngineOptions = (options?: SyncEngineOptions): NormalizedSync
     pollMs: DEFAULT_POLL_MS,
     requestTimeoutMs: DEFAULT_REQUEST_TIMEOUT_MS,
     retry: {},
-    backoff: {},
     ...(options ?? {}),
   };
   const retryAttempts = merged.retry?.attempts;
   const retryBaseDelayMs = merged.retry?.baseDelayMs;
   const retryMaxDelayMs = merged.retry?.maxDelayMs;
-  const backoffEnabled = merged.backoff?.enabled ?? false;
-  const backoffBaseMs = merged.backoff?.baseMs;
-  const backoffMaxMs = merged.backoff?.maxMs;
   return {
     pageSize: toBoundedInt(merged.pageSize, DEFAULT_PAGE_SIZE, { min: 1 }),
     pollMs: toBoundedInt(merged.pollMs, DEFAULT_POLL_MS, { min: 250 }),
@@ -53,11 +47,6 @@ const normalizeSyncEngineOptions = (options?: SyncEngineOptions): NormalizedSync
       attempts: retryAttempts == null ? 1 : toBoundedInt(retryAttempts, 1, { min: 1 }),
       baseDelayMs: retryBaseDelayMs == null ? 250 : toBoundedInt(retryBaseDelayMs, 250, { min: 0 }),
       maxDelayMs: retryMaxDelayMs == null ? 5_000 : toBoundedInt(retryMaxDelayMs, 5_000, { min: 0 }),
-    },
-    backoff: {
-      enabled: Boolean(backoffEnabled),
-      baseMs: backoffBaseMs == null ? DEFAULT_POLL_MS : toBoundedInt(backoffBaseMs, DEFAULT_POLL_MS, { min: 250 }),
-      maxMs: backoffMaxMs == null ? DEFAULT_POLL_MS * 8 : toBoundedInt(backoffMaxMs, DEFAULT_POLL_MS * 8, { min: 250 }),
     },
   };
 };
@@ -177,7 +166,6 @@ export class SyncEngine implements SyncApi {
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly runningChains = new Set<number>();
   private readonly options: NormalizedSyncEngineOptions;
-  private readonly chainBackoffState = new Map<number, { failures: number; nextAt: number }>();
 
   constructor(
     private readonly assets: AssetsApi,
@@ -235,21 +223,6 @@ export class SyncEngine implements SyncApi {
           },
         });
         return Promise.resolve();
-      }
-      if (this.options.backoff.enabled) {
-        const now = Date.now();
-        const state = this.chainBackoffState.get(chainId);
-        if (state && now < state.nextAt) {
-          this.emit({
-            type: 'error',
-            payload: {
-              code: 'SYNC',
-              message: 'Sync skipped: backoff active',
-              detail: { chainId, skipped: true, reason: 'backoff', nextAt: state.nextAt, failures: state.failures },
-            },
-          });
-          return Promise.resolve();
-        }
       }
       this.runningChains.add(chainId);
       return this.syncChain(chainId, options?.resources, {
@@ -556,23 +529,8 @@ export class SyncEngine implements SyncApi {
       }
 
     } finally {
-      this.updateBackoff(chainId, hadError);
       this.emit({ type: 'sync:done', payload: { chainId, cursor } });
     }
-  }
-
-  private updateBackoff(chainId: number, failed: boolean) {
-    if (!this.options.backoff.enabled) return;
-    if (!failed) {
-      this.chainBackoffState.delete(chainId);
-      return;
-    }
-    const prev = this.chainBackoffState.get(chainId);
-    const failures = (prev?.failures ?? 0) + 1;
-    const base = this.options.backoff.baseMs;
-    const max = this.options.backoff.maxMs;
-    const delay = Math.min(max, Math.floor(base * Math.min(32, 2 ** Math.min(10, failures - 1))));
-    this.chainBackoffState.set(chainId, { failures, nextAt: Date.now() + delay });
   }
 
   private async withRetries<T>(

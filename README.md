@@ -201,9 +201,9 @@ pnpm run demo:node -- --help
 
 可通过 `createSdk({ sync: { pollMs, pageSize, requestTimeoutMs } })` 设置默认同步参数；也可以在 `sync.start({ pollMs })` / `sync.syncOnce({ pageSize, requestTimeoutMs })` 覆盖单次行为。
 
-#### sync 重试与退避（可选）
+#### sync 重试（可选）
 
-对于不稳定网络，可以开启请求重试；对于连续失败的链，可以开启 per-chain backoff（默认关闭）：
+对于不稳定网络，可以开启请求重试：
 
 ```ts
 const sdk = createSdk({
@@ -211,7 +211,6 @@ const sdk = createSdk({
   sync: {
     requestTimeoutMs: 20_000,
     retry: { attempts: 3, baseDelayMs: 250, maxDelayMs: 5_000 },
-    backoff: { enabled: true, baseMs: 15_000, maxMs: 120_000 },
   },
 });
 ```

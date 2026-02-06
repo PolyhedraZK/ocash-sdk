@@ -101,11 +101,6 @@ export interface OCashSdkConfig {
      * Defaults to no retries.
      */
     retry?: { attempts?: number; baseDelayMs?: number; maxDelayMs?: number };
-    /**
-     * Optional per-chain backoff for repeated sync failures.
-     * Defaults to disabled.
-     */
-    backoff?: { enabled?: boolean; baseMs?: number; maxMs?: number };
   };
   onEvent?: (event: SdkEvent) => void;
 }
