@@ -17,6 +17,9 @@ import type { ListOperationsQuery, OperationDetailFor, OperationType, StoredOper
 import { newOperationId } from './operationTypes';
 import type { PersistedStoreState } from './persisted';
 import { applyOperationsQuery } from './operationsQuery';
+import { applyEntryMemoQuery } from './entryMemoQuery';
+import { applyEntryNullifierQuery } from './entryNullifierQuery';
+import { applyUtxoQuery } from './utxoQuery';
 
 export type IndexedDbStoreOptions = {
   dbName?: string;
@@ -262,13 +265,11 @@ export class IndexedDbStore implements StorageAdapter {
     return updated;
   }
 
-  async listEntryMemos(query: ListEntryMemosQuery): Promise<EntryMemoRecord[]> {
+  async listEntryMemos(query: ListEntryMemosQuery): Promise<{ total: number; rows: EntryMemoRecord[] }> {
     const rows = this.entryMemos[String(query.chainId)];
-    if (!Array.isArray(rows) || rows.length === 0) return [];
-    const offset = Math.max(0, Math.floor(query.offset ?? 0));
-    const limit = query.limit == null ? undefined : Math.max(0, Math.floor(query.limit));
-    const paged = limit == null ? rows.slice(offset) : rows.slice(offset, offset + limit);
-    return paged.map((r) => ({ ...(r as any) }));
+    if (!Array.isArray(rows) || rows.length === 0) return { total: 0, rows: [] };
+    const paged = applyEntryMemoQuery(rows as EntryMemoRecord[], query);
+    return { total: paged.total, rows: paged.rows.map((r) => ({ ...(r as any) })) };
   }
 
   async clearEntryMemos(chainId: number): Promise<void> {
@@ -304,13 +305,11 @@ export class IndexedDbStore implements StorageAdapter {
     return updated;
   }
 
-  async listEntryNullifiers(query: ListEntryNullifiersQuery): Promise<EntryNullifierRecord[]> {
+  async listEntryNullifiers(query: ListEntryNullifiersQuery): Promise<{ total: number; rows: EntryNullifierRecord[] }> {
     const rows = this.entryNullifiers[String(query.chainId)];
-    if (!Array.isArray(rows) || rows.length === 0) return [];
-    const offset = Math.max(0, Math.floor(query.offset ?? 0));
-    const limit = query.limit == null ? undefined : Math.max(0, Math.floor(query.limit));
-    const paged = limit == null ? rows.slice(offset) : rows.slice(offset, offset + limit);
-    return paged.map((r) => ({ ...(r as any) }));
+    if (!Array.isArray(rows) || rows.length === 0) return { total: 0, rows: [] };
+    const paged = applyEntryNullifierQuery(rows as EntryNullifierRecord[], query);
+    return { total: paged.total, rows: paged.rows.map((r) => ({ ...(r as any) })) };
   }
 
   async clearEntryNullifiers(chainId: number): Promise<void> {
@@ -387,20 +386,10 @@ export class IndexedDbStore implements StorageAdapter {
     await this.save();
   }
 
-  async listUtxos(query?: ListUtxosQuery): Promise<UtxoRecord[]> {
-    const includeSpent = query?.includeSpent ?? false;
-    const includeFrozen = query?.includeFrozen ?? false;
-    const records = Array.from(this.utxos.values()).filter((utxo) => {
-      if (query?.chainId != null && utxo.chainId !== query.chainId) return false;
-      if (query?.assetId != null && utxo.assetId !== query.assetId) return false;
-      if (!includeSpent && utxo.isSpent) return false;
-      if (!includeFrozen && utxo.isFrozen) return false;
-      return true;
-    });
-    const offset = Math.max(0, Math.floor(query?.offset ?? 0));
-    const limit = query?.limit == null ? undefined : Math.max(0, Math.floor(query.limit));
-    const paged = limit == null ? records.slice(offset) : records.slice(offset, offset + limit);
-    return paged.map((utxo) => ({ ...utxo }));
+  async listUtxos(query?: ListUtxosQuery): Promise<{ total: number; rows: UtxoRecord[] }> {
+    const records = Array.from(this.utxos.values());
+    const paged = applyUtxoQuery(records, query);
+    return { total: paged.total, rows: paged.rows.map((utxo) => ({ ...utxo })) };
   }
 
   async markSpent(input: { chainId: number; nullifiers: Hex[] }): Promise<number> {

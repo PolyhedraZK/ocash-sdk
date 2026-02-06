@@ -34,7 +34,7 @@ describe('FileStore', () => {
       await store2.init({ walletId: 'wallet_1' });
 
       await expect(store2.getSyncCursor(1)).resolves.toEqual({ memo: 1, nullifier: 2, merkle: 3 });
-      await expect(store2.listUtxos({ chainId: 1 })).resolves.toMatchObject([{ amount: 123n, isSpent: false }]);
+      await expect(store2.listUtxos({ chainId: 1 })).resolves.toMatchObject({ total: 1, rows: [{ amount: 123n, isSpent: false }] });
       expect(store2.listOperations({ chainId: 1 })[0]).toMatchObject({
         id: op.id,
         type: 'transfer',
@@ -57,7 +57,7 @@ describe('FileStore', () => {
 
       await store.init({ walletId: 'wallet_b' });
       await expect(store.getSyncCursor(1)).resolves.toBeUndefined();
-      await expect(store.listUtxos({ chainId: 1 })).resolves.toEqual([]);
+      await expect(store.listUtxos({ chainId: 1 })).resolves.toEqual({ total: 0, rows: [] });
       expect(store.listOperations()).toEqual([]);
     } finally {
       await rm(await Promise.resolve(dir), { recursive: true, force: true });

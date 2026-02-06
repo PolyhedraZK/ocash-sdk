@@ -8,7 +8,7 @@ export async function demoBalanceDetails(ctx: DemoContext) {
   await ctx.sdk.wallet.open({ seed: ctx.config.seed, accountNonce: ctx.config.accountNonce });
   await ctx.sdk.sync.syncOnce({ chainIds: [chain.chainId] });
 
-  const utxos = await ctx.sdk.wallet.getUtxos({ chainId: chain.chainId, includeSpent: true, includeFrozen: true });
+  const utxos = (await ctx.sdk.wallet.getUtxos({ chainId: chain.chainId, includeSpent: true, includeFrozen: true })).rows;
   const tokens = new Map(ctx.sdk.assets.getTokens(chain.chainId).map((t) => [t.id, t] as const));
 
   for (const utxo of utxos.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))) {

@@ -48,7 +48,7 @@ describe('SyncEngine (concurrency)', () => {
         setCalls.push({ chainId, cursor });
       },
       upsertUtxos: async () => undefined,
-      listUtxos: async () => [],
+      listUtxos: async () => ({ total: 0, rows: [] }),
       markSpent: async () => 0,
     };
 
@@ -105,7 +105,7 @@ describe('SyncEngine (concurrency)', () => {
       getSyncCursor: async () => ({ memo: 0, nullifier: 0, merkle: 0 }),
       setSyncCursor: async () => undefined,
       upsertUtxos: async () => undefined,
-      listUtxos: async () => [],
+      listUtxos: async () => ({ total: 0, rows: [] }),
       markSpent: async () => 0,
     };
 

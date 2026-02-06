@@ -32,7 +32,7 @@ describe('SyncEngine (merkle restart)', () => {
         saved = cursor;
       },
       upsertUtxos: async () => undefined,
-      listUtxos: async () => [],
+      listUtxos: async () => ({ total: 0, rows: [] }),
       markSpent: async () => 0,
     };
 

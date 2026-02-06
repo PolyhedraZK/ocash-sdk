@@ -15,6 +15,9 @@ import type {
 import type { ListOperationsQuery, OperationDetailFor, OperationType, StoredOperation } from './operationTypes';
 import { newOperationId } from './operationTypes';
 import { applyOperationsQuery } from './operationsQuery';
+import { applyEntryMemoQuery } from './entryMemoQuery';
+import { applyEntryNullifierQuery } from './entryNullifierQuery';
+import { applyUtxoQuery } from './utxoQuery';
 
 export class MemoryStore implements StorageAdapter {
   private walletId: string | undefined;
@@ -78,20 +81,10 @@ export class MemoryStore implements StorageAdapter {
     return Promise.resolve();
   }
 
-  listUtxos(query?: ListUtxosQuery): Promise<UtxoRecord[]> {
-    const includeSpent = query?.includeSpent ?? false;
-    const includeFrozen = query?.includeFrozen ?? false;
-    const records = Array.from(this.utxos.values()).filter((utxo) => {
-      if (query?.chainId != null && utxo.chainId !== query.chainId) return false;
-      if (query?.assetId != null && utxo.assetId !== query.assetId) return false;
-      if (!includeSpent && utxo.isSpent) return false;
-      if (!includeFrozen && utxo.isFrozen) return false;
-      return true;
-    });
-    const offset = Math.max(0, Math.floor(query?.offset ?? 0));
-    const limit = query?.limit == null ? undefined : Math.max(0, Math.floor(query.limit));
-    const paged = limit == null ? records.slice(offset) : records.slice(offset, offset + limit);
-    return Promise.resolve(paged.map((utxo) => ({ ...utxo })));
+  listUtxos(query?: ListUtxosQuery): Promise<{ total: number; rows: UtxoRecord[] }> {
+    const records = Array.from(this.utxos.values());
+    const paged = applyUtxoQuery(records, query);
+    return Promise.resolve({ total: paged.total, rows: paged.rows.map((utxo) => ({ ...utxo })) });
   }
 
   markSpent(input: { chainId: number; nullifiers: Hex[] }): Promise<number> {
@@ -197,14 +190,12 @@ export class MemoryStore implements StorageAdapter {
     return updated;
   }
 
-  async listEntryMemos(query: ListEntryMemosQuery): Promise<EntryMemoRecord[]> {
+  async listEntryMemos(query: ListEntryMemosQuery): Promise<{ total: number; rows: EntryMemoRecord[] }> {
     const byCid = this.entryMemosByChain.get(query.chainId);
-    if (!byCid || byCid.size === 0) return [];
-    const offset = Math.max(0, Math.floor(query.offset ?? 0));
-    const limit = query.limit == null ? undefined : Math.max(0, Math.floor(query.limit));
-    const rows = Array.from(byCid.values()).sort((a, b) => a.cid - b.cid);
-    const paged = limit == null ? rows.slice(offset) : rows.slice(offset, offset + limit);
-    return paged.map((r) => ({ ...r }));
+    if (!byCid || byCid.size === 0) return { total: 0, rows: [] };
+    const rows = Array.from(byCid.values());
+    const paged = applyEntryMemoQuery(rows, query);
+    return { total: paged.total, rows: paged.rows.map((r) => ({ ...r })) };
   }
 
   async clearEntryMemos(chainId: number): Promise<void> {
@@ -226,14 +217,12 @@ export class MemoryStore implements StorageAdapter {
     return updated;
   }
 
-  async listEntryNullifiers(query: ListEntryNullifiersQuery): Promise<EntryNullifierRecord[]> {
+  async listEntryNullifiers(query: ListEntryNullifiersQuery): Promise<{ total: number; rows: EntryNullifierRecord[] }> {
     const byNid = this.entryNullifiersByChain.get(query.chainId);
-    if (!byNid || byNid.size === 0) return [];
-    const offset = Math.max(0, Math.floor(query.offset ?? 0));
-    const limit = query.limit == null ? undefined : Math.max(0, Math.floor(query.limit));
-    const rows = Array.from(byNid.values()).sort((a, b) => a.nid - b.nid);
-    const paged = limit == null ? rows.slice(offset) : rows.slice(offset, offset + limit);
-    return paged.map((r) => ({ ...r }));
+    if (!byNid || byNid.size === 0) return { total: 0, rows: [] };
+    const rows = Array.from(byNid.values());
+    const paged = applyEntryNullifierQuery(rows, query);
+    return { total: paged.total, rows: paged.rows.map((r) => ({ ...r })) };
   }
 
   async clearEntryNullifiers(chainId: number): Promise<void> {

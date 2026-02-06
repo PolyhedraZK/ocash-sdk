@@ -375,23 +375,28 @@ export function useDemoController({ config }: { config: DemoConfig }) {
 
   const refreshUtxos = async () => {
     if (!sdk || !currentChain || !walletOpened) return;
-    const includeSpent = utxoFilter !== 'unspent';
-    const list = await sdk.wallet.getUtxos({
+    const limit = 20;
+    const offset = (utxoPage - 1) * limit;
+    const spent = utxoFilter === 'spent' ? true : utxoFilter === 'unspent' ? false : undefined;
+    const result = await sdk.wallet.getUtxos({
       chainId: currentChain.chainId,
       assetId: selectedTokenId ?? undefined,
-      includeSpent,
+      includeSpent: utxoFilter === 'all',
+      spent,
+      offset,
+      limit,
+      orderBy: 'mkIndex',
+      order: 'desc',
     });
-    const filtered = utxoFilter === 'all' ? list : list.filter((utxo) => (utxoFilter === 'spent' ? utxo.isSpent : !utxo.isSpent));
-    const total = filtered.length;
-    const maxPage = Math.max(1, Math.ceil(total / 20));
+    const total = result.total;
+    const maxPage = Math.max(1, Math.ceil(total / limit));
     if (utxoPage > maxPage) {
       setUtxoPage(maxPage);
       setUtxos([]);
       setUtxoTotal(total);
       return;
     }
-    const offset = (utxoPage - 1) * 20;
-    setUtxos(filtered.slice(offset, offset + 20));
+    setUtxos(result.rows);
     setUtxoTotal(total);
   };
 
@@ -409,8 +414,15 @@ export function useDemoController({ config }: { config: DemoConfig }) {
     }
     setMemoLoading(true);
     try {
-      const all = await store.listEntryMemos({ chainId: currentChain.chainId, offset: 0 });
-      const total = all.length;
+      const offset = (memoPage - 1) * MEMO_PAGE_SIZE;
+      const result = await store.listEntryMemos({
+        chainId: currentChain.chainId,
+        offset,
+        limit: MEMO_PAGE_SIZE,
+        orderBy: 'cid',
+        order: 'desc',
+      });
+      const total = result.total;
       const maxPage = Math.max(1, Math.ceil(total / MEMO_PAGE_SIZE));
       if (memoPage > maxPage) {
         setMemoPage(maxPage);
@@ -418,8 +430,7 @@ export function useDemoController({ config }: { config: DemoConfig }) {
         setMemoTotal(total);
         return;
       }
-      const offset = (memoPage - 1) * MEMO_PAGE_SIZE;
-      setMemoRows(all.slice(offset, offset + MEMO_PAGE_SIZE));
+      setMemoRows(result.rows);
       setMemoTotal(total);
     } catch (error) {
       message.error(error instanceof Error ? error.message : String(error));
@@ -442,8 +453,15 @@ export function useDemoController({ config }: { config: DemoConfig }) {
     }
     setNullifierLoading(true);
     try {
-      const all = await store.listEntryNullifiers({ chainId: currentChain.chainId, offset: 0 });
-      const total = all.length;
+      const offset = (nullifierPage - 1) * NULLIFIER_PAGE_SIZE;
+      const result = await store.listEntryNullifiers({
+        chainId: currentChain.chainId,
+        offset,
+        limit: NULLIFIER_PAGE_SIZE,
+        orderBy: 'nid',
+        order: 'desc',
+      });
+      const total = result.total;
       const maxPage = Math.max(1, Math.ceil(total / NULLIFIER_PAGE_SIZE));
       if (nullifierPage > maxPage) {
         setNullifierPage(maxPage);
@@ -451,8 +469,7 @@ export function useDemoController({ config }: { config: DemoConfig }) {
         setNullifierTotal(total);
         return;
       }
-      const offset = (nullifierPage - 1) * NULLIFIER_PAGE_SIZE;
-      setNullifierRows(all.slice(offset, offset + NULLIFIER_PAGE_SIZE));
+      setNullifierRows(result.rows);
       setNullifierTotal(total);
     } catch (error) {
       message.error(error instanceof Error ? error.message : String(error));

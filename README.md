@@ -241,8 +241,8 @@ SDK 提供一体化的 `StorageAdapter`：UTXO/sync cursor 等钱包状态 + dep
 
 `StorageAdapter` 还支持原始 Entry 数据缓存与 Merkle 元数据：
 
-- `upsertEntryMemos` / `listEntryMemos`：缓存 EntryService 的 memo 页面数据（cid/commitment/memo/createdAt）
-- `upsertEntryNullifiers` / `listEntryNullifiers`：缓存 EntryService 的 nullifier 数据
+- `upsertEntryMemos` / `listEntryMemos`：缓存 EntryService 的 memo 页面数据（cid/commitment/memo/createdAt），支持过滤/排序/分页，返回 `{ total, rows }`
+- `upsertEntryNullifiers` / `listEntryNullifiers`：缓存 EntryService 的 nullifier 数据，支持过滤/排序/分页，返回 `{ total, rows }`
 - `getMerkleTree` / `setMerkleTree`：缓存“已合并到主树”的 Merkle 元数据（root/totalElements/lastUpdated）
 
 这些接口为 best-effort：SDK 同步与 proof 流程不强依赖它们，但实现后可用于调试、导出、以及更接近 app 的本地数据视图。

@@ -383,7 +383,7 @@ export class Planner implements PlannerApi {
       if (sendAmount < 0n) {
         throw new SdkError('CONFIG', 'amount is too small to cover relayer fee', { relayerFee: relayerFee.toString() });
       }
-      const utxos = await this.wallet.getUtxos({ chainId: input.chainId, assetId: input.assetId, includeSpent: false, includeFrozen: false });
+      const utxos = (await this.wallet.getUtxos({ chainId: input.chainId, assetId: input.assetId, includeSpent: false, includeFrozen: false })).rows;
       const { selected, sum } = selectTransferInputs(utxos, required, 3);
       const records = utxos.map((u) => u.amount).filter((v) => v > 0n);
       const estimates = estimateRecords({
@@ -418,7 +418,7 @@ export class Planner implements PlannerApi {
     const protocolFee = (withdrawBase * BigInt(token.withdrawFeeBps ?? 0)) / 10000n;
     const burnAmount = input.payIncludesFee ? input.amount : input.amount + relayerFee + protocolFee;
 
-    const utxos = await this.wallet.getUtxos({ chainId: input.chainId, assetId: input.assetId, includeSpent: false, includeFrozen: false });
+    const utxos = (await this.wallet.getUtxos({ chainId: input.chainId, assetId: input.assetId, includeSpent: false, includeFrozen: false })).rows;
     const chosen = selectWithdrawInput(utxos, burnAmount);
     const records = utxos.map((u) => u.amount).filter((v) => v > 0n);
     const estimates = estimateRecords({
@@ -459,7 +459,7 @@ export class Planner implements PlannerApi {
     const relayerFee = this.getRelayerFee(relayerConfig, token, input.action);
     const transferFee = input.action === 'withdraw' ? this.getRelayerFee(relayerConfig, token, 'transfer') : relayerFee;
 
-    const utxos = await this.wallet.getUtxos({ chainId: input.chainId, assetId: input.assetId, includeSpent: false, includeFrozen: false });
+    const utxos = (await this.wallet.getUtxos({ chainId: input.chainId, assetId: input.assetId, includeSpent: false, includeFrozen: false })).rows;
     const records = utxos.map((u) => u.amount).filter((v) => v > 0n);
     const estimates = estimateRecords({
       records,
@@ -503,12 +503,12 @@ export class Planner implements PlannerApi {
         throw new SdkError('CONFIG', 'amount is too small to cover relayer fee', { relayerFee: relayerFee.toString() });
       }
 
-      const utxos = await this.wallet.getUtxos({
+      const utxos = (await this.wallet.getUtxos({
         chainId: parsed.chainId,
         assetId: parsed.assetId,
         includeSpent: false,
         includeFrozen: false,
-      });
+      })).rows;
       const { selected, sum } = selectTransferInputs(utxos, required, 3);
       const estimates = estimateRecords({
         records: utxos.map((u) => u.amount).filter((v) => v > 0n),
@@ -619,12 +619,12 @@ export class Planner implements PlannerApi {
     const protocolFee = (withdrawBase * BigInt(token.withdrawFeeBps ?? 0)) / 10000n;
     const burnAmount = parsed.payIncludesFee ? parsed.amount : parsed.amount + relayerFee + protocolFee;
 
-    const utxos = await this.wallet.getUtxos({
+    const utxos = (await this.wallet.getUtxos({
       chainId: parsed.chainId,
       assetId: parsed.assetId,
       includeSpent: false,
       includeFrozen: false,
-    });
+    })).rows;
     const chosen = selectWithdrawInput(utxos, burnAmount);
     if (!chosen) {
       throw new SdkError('CONFIG', 'no single utxo can cover burn amount', { burnAmount: burnAmount.toString() });

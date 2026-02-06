@@ -43,7 +43,7 @@ export async function demoTransferDebug(ctx: DemoContext) {
       console.log(`- ${b.symbol}: ${formatAmount(b.amount, b.decimals)} (${b.assetId})`);
     }
 
-    const utxos = await ctx.sdk.wallet.getUtxos({ chainId: chain.chainId, includeSpent: true, includeFrozen: true });
+    const utxos = (await ctx.sdk.wallet.getUtxos({ chainId: chain.chainId, includeSpent: true, includeFrozen: true })).rows;
     console.log(c.dim(`utxos(total=${utxos.length}):`));
     for (const u of utxos.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)).slice(0, 20)) {
       const t = tokenById.get(u.assetId);

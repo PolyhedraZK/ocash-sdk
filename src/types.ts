@@ -347,10 +347,18 @@ export type ListUtxosQuery = {
   includeSpent?: boolean;
   /** Include frozen UTXOs (default: false). */
   includeFrozen?: boolean;
+  /** Filter by spent flag (overrides includeSpent when set). */
+  spent?: boolean;
+  /** Filter by frozen flag (overrides includeFrozen when set). */
+  frozen?: boolean;
   /** Result pagination offset (default: 0). */
   offset?: number;
   /** Result pagination limit (default: no limit). */
   limit?: number;
+  /** Order by field (default: mkIndex). */
+  orderBy?: 'mkIndex' | 'createdAt';
+  /** Order direction (default: asc). */
+  order?: 'asc' | 'desc';
 };
 
 export type EntryMemoRecord = {
@@ -386,6 +394,18 @@ export type ListEntryMemosQuery = {
   offset?: number;
   /** Max rows to return. */
   limit?: number;
+  /** Order by field (default: cid). */
+  orderBy?: 'cid' | 'createdAt';
+  /** Order direction (default: asc). */
+  order?: 'asc' | 'desc';
+  /** Filter by cid range (inclusive). */
+  cidFrom?: number;
+  /** Filter by cid range (inclusive). */
+  cidTo?: number;
+  /** Filter by createdAt range (inclusive, epoch). */
+  createdAtFrom?: number;
+  /** Filter by createdAt range (inclusive, epoch). */
+  createdAtTo?: number;
 };
 
 export type ListEntryNullifiersQuery = {
@@ -394,6 +414,33 @@ export type ListEntryNullifiersQuery = {
   offset?: number;
   /** Max rows to return. */
   limit?: number;
+  /** Order by field (default: nid). */
+  orderBy?: 'nid' | 'createdAt';
+  /** Order direction (default: asc). */
+  order?: 'asc' | 'desc';
+  /** Filter by nid range (inclusive). */
+  nidFrom?: number;
+  /** Filter by nid range (inclusive). */
+  nidTo?: number;
+  /** Filter by createdAt range (inclusive, epoch). */
+  createdAtFrom?: number;
+  /** Filter by createdAt range (inclusive, epoch). */
+  createdAtTo?: number;
+};
+
+export type ListEntryMemosResult = {
+  total: number;
+  rows: EntryMemoRecord[];
+};
+
+export type ListEntryNullifiersResult = {
+  total: number;
+  rows: EntryNullifierRecord[];
+};
+
+export type ListUtxosResult = {
+  total: number;
+  rows: UtxoRecord[];
 };
 
 export type MerkleTreeState = {
@@ -452,7 +499,7 @@ export interface StorageAdapter {
    * List UTXOs with optional filters and pagination.
    * Pagination is applied after filtering.
    */
-  listUtxos(query?: ListUtxosQuery): Promise<UtxoRecord[]>;
+  listUtxos(query?: ListUtxosQuery): Promise<ListUtxosResult>;
   /**
    * Mark matching UTXOs as spent by nullifier.
    * @returns number of updated records.
@@ -503,7 +550,7 @@ export interface StorageAdapter {
    * Useful for debugging, rebuilds, and app-like local caches.
    */
   upsertEntryMemos?(memos: EntryMemoRecord[]): Promise<number> | number;
-  listEntryMemos?(query: ListEntryMemosQuery): Promise<EntryMemoRecord[]>;
+  listEntryMemos?(query: ListEntryMemosQuery): Promise<ListEntryMemosResult>;
   clearEntryMemos?(chainId: number): Promise<void> | void;
 
   /**
@@ -511,7 +558,7 @@ export interface StorageAdapter {
    * Useful for debugging and app-like local caches.
    */
   upsertEntryNullifiers?(nullifiers: EntryNullifierRecord[]): Promise<number> | number;
-  listEntryNullifiers?(query: ListEntryNullifiersQuery): Promise<EntryNullifierRecord[]>;
+  listEntryNullifiers?(query: ListEntryNullifiersQuery): Promise<ListEntryNullifiersResult>;
   clearEntryNullifiers?(chainId: number): Promise<void> | void;
 
   /**
@@ -665,7 +712,7 @@ export interface UtxoRecord {
 export interface WalletApi {
   open(session: WalletSessionInput): Promise<void>;
   close(): Promise<void>;
-  getUtxos(query?: ListUtxosQuery): Promise<UtxoRecord[]>;
+  getUtxos(query?: ListUtxosQuery): Promise<ListUtxosResult>;
   getBalance(query?: { chainId?: number; assetId?: string }): Promise<bigint>;
   markSpent(input: { chainId: number; nullifiers: Hex[] }): Promise<void>;
 }

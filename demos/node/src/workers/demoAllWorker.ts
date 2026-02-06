@@ -260,7 +260,7 @@ async function main() {
     'balance-unspent': async () => {
       await pauseSyncAndSyncOnce();
       try {
-        const utxos = await sdk.wallet.getUtxos({ chainId: chain.chainId, includeSpent: false, includeFrozen: true });
+        const utxos = (await sdk.wallet.getUtxos({ chainId: chain.chainId, includeSpent: false, includeFrozen: true })).rows;
         const tokens = new Map(sdk.assets.getTokens(chain.chainId).map((t) => [t.id, t] as const));
         return utxos
           .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
@@ -284,7 +284,7 @@ async function main() {
     'balance-spent': async () => {
       await pauseSyncAndSyncOnce();
       try {
-        const utxos = await sdk.wallet.getUtxos({ chainId: chain.chainId, includeSpent: true, includeFrozen: true });
+        const utxos = (await sdk.wallet.getUtxos({ chainId: chain.chainId, includeSpent: true, includeFrozen: true })).rows;
         const tokens = new Map(sdk.assets.getTokens(chain.chainId).map((t) => [t.id, t] as const));
         const totals = new Map<string, bigint>();
         for (const u of utxos) {
@@ -306,7 +306,7 @@ async function main() {
     'balance-details': async () => {
       await pauseSyncAndSyncOnce();
       try {
-        const utxos = await sdk.wallet.getUtxos({ chainId: chain.chainId, includeSpent: true, includeFrozen: true });
+        const utxos = (await sdk.wallet.getUtxos({ chainId: chain.chainId, includeSpent: true, includeFrozen: true })).rows;
         const tokens = new Map(sdk.assets.getTokens(chain.chainId).map((t) => [t.id, t] as const));
         return utxos
           .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))

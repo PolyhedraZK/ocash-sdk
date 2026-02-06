@@ -21,7 +21,7 @@ describe('SyncEngine (nullifier anomalies)', () => {
       getSyncCursor: async () => ({ memo: 0, nullifier: 0, merkle: 0 }),
       setSyncCursor: async () => undefined,
       upsertUtxos: async () => undefined,
-      listUtxos: async () => [],
+      listUtxos: async () => ({ total: 0, rows: [] }),
       markSpent: async () => 0,
     };
 
@@ -56,7 +56,7 @@ describe('SyncEngine (nullifier anomalies)', () => {
       getSyncCursor: async () => ({ memo: 0, nullifier: 0, merkle: 0 }),
       setSyncCursor: async () => undefined,
       upsertUtxos: async () => undefined,
-      listUtxos: async () => [],
+      listUtxos: async () => ({ total: 0, rows: [] }),
       markSpent: async () => 0,
     };
 

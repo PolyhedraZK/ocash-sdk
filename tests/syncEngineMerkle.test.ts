@@ -19,7 +19,7 @@ describe('SyncEngine (merkle)', () => {
       getSyncCursor: async () => ({ memo: 0, nullifier: 0, merkle: 42 }),
       setSyncCursor: setCursorSpy,
       upsertUtxos: async () => undefined,
-      listUtxos: async () => [],
+      listUtxos: async () => ({ total: 0, rows: [] }),
       markSpent: async () => 0,
     };
 
@@ -57,7 +57,7 @@ describe('SyncEngine (merkle)', () => {
         saved = cursor;
       },
       upsertUtxos: async () => undefined,
-      listUtxos: async () => [],
+      listUtxos: async () => ({ total: 0, rows: [] }),
       markSpent: async () => 0,
     };
 

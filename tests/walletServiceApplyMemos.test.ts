@@ -25,7 +25,7 @@ describe('WalletService.applyMemos', () => {
 
     const applied = await wallet.applyMemos(1, [{ memo, commitment, cid: null }]);
     expect(applied).toBe(0);
-    await expect(wallet.getUtxos({ chainId: 1 })).resolves.toEqual([]);
+    await expect(wallet.getUtxos({ chainId: 1 })).resolves.toEqual({ total: 0, rows: [] });
   });
 
   it('uses chain-scoped asset lookup and refreshes lookup when chains update', async () => {
@@ -63,8 +63,8 @@ describe('WalletService.applyMemos', () => {
     expect(applied).toBe(1);
 
     const utxos = await wallet.getUtxos({ chainId: 1 });
-    expect(utxos).toHaveLength(1);
-    expect(utxos[0]!.assetId).toBe('tokenA');
-    expect(utxos[0]!.nullifier).toBe(CryptoToolkit.nullifier(keyPair.user_sk.address_sk, commitment, freezerPoint));
+    expect(utxos.rows).toHaveLength(1);
+    expect(utxos.rows[0]!.assetId).toBe('tokenA');
+    expect(utxos.rows[0]!.nullifier).toBe(CryptoToolkit.nullifier(keyPair.user_sk.address_sk, commitment, freezerPoint));
   });
 });

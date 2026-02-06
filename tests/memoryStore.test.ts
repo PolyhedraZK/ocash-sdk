@@ -11,7 +11,7 @@ describe('MemoryStore', () => {
 
     store.init({ walletId: 'wallet_b' });
     await expect(store.getSyncCursor(1)).resolves.toBeUndefined();
-    await expect(store.listUtxos({ chainId: 1 })).resolves.toEqual([]);
+    await expect(store.listUtxos({ chainId: 1 })).resolves.toEqual({ total: 0, rows: [] });
     expect(store.listOperations()).toEqual([]);
   });
 

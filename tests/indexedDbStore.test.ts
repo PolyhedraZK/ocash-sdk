@@ -133,7 +133,7 @@ describe('IndexedDbStore', () => {
     await expect(store2.init({ walletId: 'wallet_1' })).resolves.toBeUndefined();
     await expect(store2.getSyncCursor(1)).resolves.toEqual({ memo: 1, nullifier: 2, merkle: 3 });
     expect(store2.listOperations()).toEqual([]);
-    await expect(store2.listUtxos({ chainId: 1 })).resolves.toEqual([]);
+    await expect(store2.listUtxos({ chainId: 1 })).resolves.toEqual({ total: 0, rows: [] });
 
     // Merkle leaves API should not throw on corrupted entries; should return undefined/empty.
     await expect(store2.getMerkleLeaves?.(1)).resolves.toBeUndefined();

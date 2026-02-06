@@ -1,4 +1,4 @@
-import type { AssetsApi, ChainConfigInput, Hex, ListUtxosQuery, StorageAdapter, UtxoRecord, WalletSessionInput } from '../types';
+import type { AssetsApi, ChainConfigInput, Hex, ListUtxosQuery, ListUtxosResult, StorageAdapter, UtxoRecord, WalletSessionInput } from '../types';
 import { SdkError } from '../errors';
 import { KeyManager } from '../crypto/keyManager';
 import { CryptoToolkit } from '../crypto/cryptoToolkit';
@@ -61,19 +61,19 @@ export class WalletService {
     return this.secretKey;
   }
 
-  async getUtxos(query?: ListUtxosQuery): Promise<UtxoRecord[]> {
+  async getUtxos(query?: ListUtxosQuery): Promise<ListUtxosResult> {
     this.getViewingAddress();
     return this.storage.listUtxos(query);
   }
 
   async getBalance(query?: { chainId?: number; assetId?: string }): Promise<bigint> {
-    const utxos = await this.storage.listUtxos({
+    const utxosResult = await this.storage.listUtxos({
       chainId: query?.chainId,
       assetId: query?.assetId,
       includeSpent: false,
       includeFrozen: false,
     });
-    return utxos.reduce((sum, utxo) => sum + utxo.amount, 0n);
+    return utxosResult.rows.reduce((sum, utxo) => sum + utxo.amount, 0n);
   }
 
   async markSpent(input: { chainId: number; nullifiers: Hex[] }) {
