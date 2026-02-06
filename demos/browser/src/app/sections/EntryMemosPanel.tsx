@@ -1,5 +1,10 @@
 import type { DemoController } from '../hooks/useDemoController';
 
+function formatTimestamp(value: number) {
+  const millis = value < 1_000_000_000_000 ? value * 1000 : value;
+  return new Date(millis).toLocaleString();
+}
+
 export function EntryMemosPanel({
   memoRows,
   memoPage,
@@ -44,7 +49,7 @@ export function EntryMemosPanel({
             </div>
             <div className="mono">commitment: {row.commitment}</div>
             <div className="mono">memo: {row.memo}</div>
-            {row.createdAt != null && <div className="status">createdAt: {row.createdAt}</div>}
+            {row.createdAt != null && <div className="status">createdAt: {formatTimestamp(row.createdAt)}</div>}
           </div>
         ))}
       </div>

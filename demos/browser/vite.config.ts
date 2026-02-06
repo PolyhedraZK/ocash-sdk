@@ -8,4 +8,7 @@ const rootDir = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   root: rootDir,
   plugins: [react()],
+  server: {
+    port: 5777,
+  },
 });

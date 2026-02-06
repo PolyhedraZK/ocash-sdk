@@ -116,6 +116,9 @@ export function DemoApp({ config }: { config: DemoConfig }) {
           utxos={controller.utxos}
           utxoFilter={controller.utxoFilter}
           setUtxoFilter={controller.setUtxoFilter}
+          utxoPage={controller.utxoPage}
+          setUtxoPage={controller.setUtxoPage}
+          utxoTotal={controller.utxoTotal}
           refreshUtxos={controller.refreshUtxos}
           walletOpened={controller.walletOpened}
           sdk={controller.sdk}

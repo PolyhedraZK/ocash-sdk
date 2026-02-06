@@ -1,16 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import OcashSdk, { ERC20_ABI, IndexedDbStore } from '@ocash/sdk/browser';
-import type {
-  EntryMemoRecord,
-  EntryNullifierRecord,
-  Hex,
-  PlannerEstimateTransferResult,
-  PlannerEstimateWithdrawResult,
-  StorageAdapter,
-  StoredOperation,
-  TokenMetadata,
-  UtxoRecord,
-} from '@ocash/sdk';
+import type { EntryMemoRecord, EntryNullifierRecord, Hex, PlannerEstimateTransferResult, PlannerEstimateWithdrawResult, StorageAdapter, StoredOperation, TokenMetadata, UtxoRecord } from '@ocash/sdk';
 import { defineChain, getAddress, isAddress } from 'viem';
 import { createConfig, http } from 'wagmi';
 import { useAccount, useChainId, useConfig, useConnect, useDisconnect, usePublicClient, useWalletClient } from 'wagmi';
@@ -39,6 +29,8 @@ export function useDemoController({ config }: { config: DemoConfig }) {
   const [balances, setBalances] = useState<BalanceRow[]>([]);
   const [utxos, setUtxos] = useState<UtxoRecord[]>([]);
   const [utxoFilter, setUtxoFilter] = useState<'all' | 'unspent' | 'spent'>('unspent');
+  const [utxoPage, setUtxoPage] = useState(1);
+  const [utxoTotal, setUtxoTotal] = useState(0);
   const [operations, setOperations] = useState<StoredOperation[]>([]);
   const [memoRows, setMemoRows] = useState<EntryMemoRecord[]>([]);
   const [memoPage, setMemoPage] = useState(1);
@@ -85,6 +77,14 @@ export function useDemoController({ config }: { config: DemoConfig }) {
     setSelectedTokenId((prev) => (prev && chain?.tokens?.some((token) => token.id === prev) ? prev : firstToken));
   }, [config, selectedChainId]);
 
+  const currentChain = config.chains.find((chain) => chain.chainId === selectedChainId) ?? config.chains?.[0];
+  const currentTokens = currentChain?.tokens ?? [];
+  const currentToken = currentTokens.find((token) => token.id === selectedTokenId) ?? currentTokens?.[0];
+
+  useEffect(() => {
+    setUtxoPage(1);
+  }, [currentChain?.chainId, selectedTokenId, utxoFilter]);
+
   useEffect(() => {
     const storage = new IndexedDbStore({ dbName: 'ocash_sdk_browser_demo', storeName: 'sdk_browser_demo' });
     const nextSdk = OcashSdk.createSdk({
@@ -130,6 +130,7 @@ export function useDemoController({ config }: { config: DemoConfig }) {
     setViewingAddress(null);
     setBalances([]);
     setUtxos([]);
+    setUtxoTotal(0);
     setOperations([]);
     setMemoRows([]);
     setMemoTotal(0);
@@ -142,9 +143,6 @@ export function useDemoController({ config }: { config: DemoConfig }) {
     };
   }, [config, addLog]);
 
-  const currentChain = config.chains.find((chain) => chain.chainId === selectedChainId) ?? config.chains?.[0];
-  const currentTokens = currentChain?.tokens ?? [];
-  const currentToken = currentTokens.find((token) => token.id === selectedTokenId) ?? currentTokens?.[0];
   const tokenInfoById = useMemo(() => {
     const map = new Map<string, TokenMetadata>();
     for (const token of currentTokens) map.set(token.id, token);
@@ -384,7 +382,17 @@ export function useDemoController({ config }: { config: DemoConfig }) {
       includeSpent,
     });
     const filtered = utxoFilter === 'all' ? list : list.filter((utxo) => (utxoFilter === 'spent' ? utxo.isSpent : !utxo.isSpent));
-    setUtxos(filtered);
+    const total = filtered.length;
+    const maxPage = Math.max(1, Math.ceil(total / 20));
+    if (utxoPage > maxPage) {
+      setUtxoPage(maxPage);
+      setUtxos([]);
+      setUtxoTotal(total);
+      return;
+    }
+    const offset = (utxoPage - 1) * 20;
+    setUtxos(filtered.slice(offset, offset + 20));
+    setUtxoTotal(total);
   };
 
   const refreshEntryMemos = async () => {
@@ -461,6 +469,10 @@ export function useDemoController({ config }: { config: DemoConfig }) {
     void refreshEntryNullifiers();
   }, [nullifierPage, currentChain?.chainId, sdk, walletOpened]);
 
+  useEffect(() => {
+    void refreshUtxos();
+  }, [utxoPage, currentChain?.chainId, sdk, walletOpened, selectedTokenId, utxoFilter]);
+
   const syncOnce = async () => {
     if (!sdk || !currentChain) return;
     setActionMessage('Syncing…');
@@ -509,6 +521,8 @@ export function useDemoController({ config }: { config: DemoConfig }) {
         account: address,
         publicClient,
       });
+      const recipient = sdk.keys.userPkToAddress(prepared.recordOpening.user_pk);
+      console.log('Prepared deposit:', recipient, prepared);
 
       setActionMessage('Submitting deposit…');
       const submit = await sdk.ops.submitDeposit({
@@ -664,6 +678,9 @@ export function useDemoController({ config }: { config: DemoConfig }) {
     utxos,
     utxoFilter,
     setUtxoFilter,
+    utxoPage,
+    setUtxoPage,
+    utxoTotal,
     operations,
     memoRows,
     memoPage,

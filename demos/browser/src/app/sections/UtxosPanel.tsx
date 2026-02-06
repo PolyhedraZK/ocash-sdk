@@ -5,14 +5,28 @@ export function UtxosPanel({
   utxos,
   utxoFilter,
   setUtxoFilter,
+  utxoPage,
+  setUtxoPage,
+  utxoTotal,
   refreshUtxos,
   walletOpened,
   sdk,
   tokenInfoById,
 }: Pick<
   DemoController,
-  'utxos' | 'utxoFilter' | 'setUtxoFilter' | 'refreshUtxos' | 'walletOpened' | 'sdk' | 'tokenInfoById'
+  | 'utxos'
+  | 'utxoFilter'
+  | 'setUtxoFilter'
+  | 'utxoPage'
+  | 'setUtxoPage'
+  | 'utxoTotal'
+  | 'refreshUtxos'
+  | 'walletOpened'
+  | 'sdk'
+  | 'tokenInfoById'
 >) {
+  const maxPage = Math.max(1, Math.ceil(utxoTotal / 20));
+
   return (
     <section className="panel span-6">
       <div className="row">
@@ -25,6 +39,17 @@ export function UtxosPanel({
         <button className="secondary" onClick={refreshUtxos} disabled={!walletOpened || !sdk}>
           Refresh
         </button>
+      </div>
+      <div className="row">
+        <button className="secondary" onClick={() => setUtxoPage(utxoPage - 1)} disabled={utxoPage <= 1}>
+          Prev
+        </button>
+        <button className="secondary" onClick={() => setUtxoPage(utxoPage + 1)} disabled={utxoPage >= maxPage}>
+          Next
+        </button>
+        <span className="status">
+          Page {utxoPage}/{maxPage} (Total {utxoTotal})
+        </span>
       </div>
       <div className="list">
         {utxos.length === 0 && <div className="notice">No UTXOs found for current filter.</div>}
