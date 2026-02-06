@@ -84,15 +84,40 @@ export class WalletService {
     }
   }
 
-  async applyMemos(chainId: number, memos: Array<{ memo: Hex; commitment: Hex; cid: number | null; created_at?: number | null }>): Promise<number> {
+  async applyMemos(
+    chainId: number,
+    memos: Array<{
+      memo: Hex;
+      commitment: Hex;
+      cid: number | null;
+      created_at?: number | null;
+      is_transparent?: boolean;
+      asset_id?: Hex | null;
+      amount?: Hex | null;
+      partial_hash?: Hex | null;
+    }>,
+  ): Promise<number> {
     this.getViewingAddress();
     const secretKey = this.getSecretKey();
     const addedByKey = new Map<string, UtxoRecord>();
     let refreshedAssets = false;
     for (const entry of memos) {
       if (typeof entry.cid !== 'number' || !Number.isInteger(entry.cid) || entry.cid < 0) continue;
-      const ro = MemoKit.decryptMemo(secretKey, entry.memo);
+      const ro = MemoKit.decodeMemoForOwner({
+        secretKey,
+        memo: entry.memo,
+        expectedAddress: this.address,
+        isTransparent: entry.is_transparent,
+      });
       if (!ro) continue;
+      if (entry.amount && entry.asset_id && entry.partial_hash) {
+        try {
+          ro.asset_id = BigInt(entry.asset_id);
+          ro.asset_amount = BigInt(entry.amount);
+        } catch {
+          // ignore overrides if payload is malformed
+        }
+      }
       const localCommitment = CryptoToolkit.commitment(ro, 'hex');
       if (localCommitment.toLowerCase() !== entry.commitment.toLowerCase()) continue;
       const poolKey = ro.asset_id.toString();

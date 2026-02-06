@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { UtxoRecord } from '@ocash/sdk';
+import type { BalanceRow } from '../constants';
 import { formatTokenAmount } from '../utils';
 import { useDemoStore } from '../state/demoStore';
 import { message } from 'antd';
 
 export function UtxosPanel() {
-  const { sdk, walletOpened, currentChain, selectedTokenId, tokenInfoById } = useDemoStore();
+  const { sdk, walletOpened, currentChain, selectedTokenId, tokenInfoById, currentTokens } = useDemoStore();
   const [utxos, setUtxos] = useState<UtxoRecord[]>([]);
   const [utxoFilter, setUtxoFilter] = useState<'all' | 'unspent' | 'spent'>('unspent');
   const [utxoPage, setUtxoPage] = useState(1);
   const [utxoTotal, setUtxoTotal] = useState(0);
+  const [balances, setBalances] = useState<BalanceRow[]>([]);
 
   useEffect(() => {
     setUtxoPage(1);
@@ -46,9 +48,33 @@ export function UtxosPanel() {
     }
   }, [sdk, currentChain, walletOpened, utxoPage, utxoFilter, selectedTokenId]);
 
+  const refreshBalances = useCallback(async () => {
+    if (!sdk || !currentChain || !walletOpened) return;
+    try {
+      await sdk.sync.syncOnce({ chainIds: [currentChain.chainId] });
+      const rows: BalanceRow[] = [];
+      for (const token of currentTokens) {
+        const value = await sdk.wallet.getBalance({ chainId: currentChain.chainId, assetId: token.id });
+        rows.push({ token, value });
+      }
+      setBalances(rows);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : String(error));
+    }
+  }, [sdk, currentChain, walletOpened, currentTokens]);
+
+  const refreshAll = useCallback(async () => {
+    await refreshBalances();
+    await refreshUtxos();
+  }, [refreshBalances, refreshUtxos]);
+
   useEffect(() => {
     void refreshUtxos();
   }, [refreshUtxos]);
+
+  useEffect(() => {
+    void refreshBalances();
+  }, [refreshBalances]);
 
   const maxPage = Math.max(1, Math.ceil(utxoTotal / 20));
 
@@ -61,9 +87,21 @@ export function UtxosPanel() {
           <option value="spent">Spent</option>
           <option value="all">All</option>
         </select>
-        <button className="secondary" onClick={refreshUtxos} disabled={!walletOpened || !sdk}>
+        <button className="secondary" onClick={refreshAll} disabled={!walletOpened || !sdk}>
           Refresh
         </button>
+      </div>
+      <div className="row status">
+        <span className="label">Total Assets</span>
+        {balances.length === 0 ? (
+          <span>No balance data loaded.</span>
+        ) : (
+          balances.map((row) => (
+            <span key={row.token.id} className="mono">
+              {row.token.symbol}: {formatTokenAmount(row.value, row.token)}
+            </span>
+          ))
+        )}
       </div>
       <div className="row">
         <button className="secondary" onClick={() => setUtxoPage(utxoPage - 1)} disabled={utxoPage <= 1}>

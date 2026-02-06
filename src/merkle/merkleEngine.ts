@@ -3,6 +3,8 @@ import { SdkError } from '../errors';
 import { MerkleClient } from './merkleClient';
 import { getZeroHash, TREE_DEPTH_DEFAULT } from './zeroHashes';
 import { Poseidon2, Poseidon2Domain } from '../crypto/poseidon2';
+import { MemoKit } from '../memo/memoKit';
+import { KeyManager } from '../crypto/keyManager';
 
 const TEMP_ARRAY_SIZE_DEFAULT = 32;
 const SUBTREE_SIZE = 32;
@@ -428,6 +430,7 @@ export class MerkleEngine implements MerkleApi {
     }
     const owner = input.ownerKeyPair;
     const secretKey = typeof owner.user_sk.address_sk === 'bigint' ? owner.user_sk.address_sk : BigInt(owner.user_sk.address_sk);
+    const ownerAddress = KeyManager.userPkToAddress(owner.user_pk);
     const witnesses = this.buildAccMemberWitnesses({
       remote: input.remote,
       utxos: input.utxos,
@@ -444,7 +447,11 @@ export class MerkleEngine implements MerkleApi {
         out.push(await this.bridge.createDummyInputSecret());
         continue;
       }
-      const ro = this.bridge.decryptMemo(secretKey, utxo.memo);
+      const ro = MemoKit.decodeMemoForOwner({
+        secretKey,
+        memo: utxo.memo,
+        expectedAddress: ownerAddress,
+      });
       if (!ro) {
         throw new SdkError('MERKLE', 'Failed to decrypt utxo memo', { commitment: utxo.commitment });
       }

@@ -10,6 +10,12 @@ function formatTimestamp(value: number) {
   return new Date(millis).toLocaleString();
 }
 
+function shortenHex(value: string, head = 6, tail = 4) {
+  if (!value) return value;
+  if (value.length <= head + tail + 3) return value;
+  return `${value.slice(0, head)}...${value.slice(-tail)}`;
+}
+
 export function EntryMemosPanel() {
   const { sdk, walletOpened, currentChain } = useDemoStore();
   const [memoRows, setMemoRows] = useState<EntryMemoRecord[]>([]);
@@ -94,7 +100,12 @@ export function EntryMemosPanel() {
               <span className="mono">chain: {row.chainId}</span>
             </div>
             <div className="mono">commitment: {row.commitment}</div>
-            <div className="mono">memo: {row.memo}</div>
+            <div className="mono">memo: {shortenHex(row.memo)}</div>
+            {row.isTransparent ? (
+              <div className="mono">
+                transparent: {String(row.isTransparent)} | amount: {row.amount ?? 'N/A'}
+              </div>
+            ) : null}
             {row.createdAt != null && <div className="status">createdAt: {formatTimestamp(row.createdAt)}</div>}
           </div>
         ))}

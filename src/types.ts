@@ -365,6 +365,16 @@ export type EntryMemoRecord = {
   commitment: Hex;
   /** Encrypted memo payload. */
   memo: Hex;
+  /** EntryService memo transparency flag. */
+  isTransparent?: boolean;
+  /** Optional transparent asset id override (hex). */
+  assetId?: Hex | null;
+  /** Optional transparent amount override (hex). */
+  amount?: Hex | null;
+  /** Optional transparent partial hash. */
+  partialHash?: Hex | null;
+  /** Optional transaction hash. */
+  txHash?: Hex | null;
   /** Optional created_at from EntryService. */
   createdAt?: number | null;
 };

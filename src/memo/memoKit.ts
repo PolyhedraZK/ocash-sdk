@@ -2,8 +2,9 @@ import nacl from 'tweetnacl';
 import { bytesToHex, hexToBytes } from '@noble/hashes/utils';
 import { keccak256, toBytes } from 'viem';
 import { BabyJubjub, BABYJUBJUB_ORDER } from '../crypto/babyJubjub';
-import type { CommitmentData } from '../types';
+import type { CommitmentData, Hex } from '../types';
 import { RecordCodec } from '../crypto/recordCodec';
+import { KeyManager } from '../crypto/keyManager';
 import { randomBytes32Bigint } from '../utils/random';
 
 const memoNonce = (ephemeralPublicKey: [bigint, bigint], userPublicKey: [bigint, bigint]): Uint8Array => {
@@ -49,6 +50,28 @@ export class MemoKit {
     } catch {
       return null;
     }
+  }
+
+  static decodeMemoForOwner(input: { secretKey: bigint; memo: Hex; expectedAddress?: Hex | null; isTransparent?: boolean }): CommitmentData | null {
+    const tryTransparent = () => {
+      try {
+        const decoded = RecordCodec.decode(input.memo);
+        if (!input.expectedAddress) return decoded;
+        const decodedAddress = KeyManager.userPkToAddress(decoded.user_pk);
+        if (decodedAddress.toLowerCase() !== input.expectedAddress.toLowerCase()) return null;
+        return decoded;
+      } catch {
+        return null;
+      }
+    };
+
+    if (input.isTransparent) {
+      return tryTransparent();
+    }
+
+    const decrypted = MemoKit.decryptMemo(input.secretKey, input.memo as `0x${string}`);
+    if (decrypted) return decrypted;
+    return tryTransparent();
   }
 
   static memoNonce(ephemeralPublicKey: [bigint, bigint], userPublicKey: [bigint, bigint]): Uint8Array {

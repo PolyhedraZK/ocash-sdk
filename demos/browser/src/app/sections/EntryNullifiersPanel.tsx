@@ -5,6 +5,11 @@ import { useDemoStore } from '../state/demoStore';
 
 const NULLIFIER_PAGE_SIZE = 20;
 
+function formatTimestamp(value: number) {
+  const millis = value < 1_000_000_000_000 ? value * 1000 : value;
+  return new Date(millis).toLocaleString();
+}
+
 export function EntryNullifiersPanel() {
   const { sdk, walletOpened, currentChain } = useDemoStore();
   const [nullifierRows, setNullifierRows] = useState<EntryNullifierRecord[]>([]);
@@ -89,7 +94,7 @@ export function EntryNullifiersPanel() {
               <span className="mono">chain: {row.chainId}</span>
             </div>
             <div className="mono">nullifier: {row.nullifier}</div>
-            {row.createdAt != null && <div className="status">createdAt: {row.createdAt}</div>}
+            {row.createdAt != null && <div className="status">createdAt: {formatTimestamp(row.createdAt)}</div>}
           </div>
         ))}
       </div>

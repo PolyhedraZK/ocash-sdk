@@ -1,6 +1,6 @@
 import type { DemoConfig } from './constants';
 import { DemoProvider } from './state/demoStore';
-import { BalancesPanel, ConfigPanel, DepositPanel, EntryMemosPanel, EntryNullifiersPanel, OperationsPanel, TransferPanel, UtxosPanel, WalletPanel, WithdrawPanel } from './sections';
+import { ConfigPanel, DepositPanel, EntryMemosPanel, EntryNullifiersPanel, OperationsPanel, TransferPanel, UtxosPanel, WalletPanel, WithdrawPanel } from './sections';
 
 export function DemoApp({ config }: { config: DemoConfig }) {
   return (
@@ -17,7 +17,6 @@ export function DemoApp({ config }: { config: DemoConfig }) {
           <DepositPanel />
           <TransferPanel />
           <WithdrawPanel />
-          <BalancesPanel />
           <UtxosPanel />
           <EntryMemosPanel />
           <EntryNullifiersPanel />

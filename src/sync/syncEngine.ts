@@ -383,7 +383,12 @@ export class SyncEngine implements SyncApi {
                       cid: m.cid as number,
                       commitment: m.commitment,
                       memo: m.memo,
-                      createdAt: (m as any).created_at ?? null,
+                      isTransparent: m.is_transparent ?? undefined,
+                      assetId: m.asset_id ?? undefined,
+                      amount: m.amount ?? undefined,
+                      partialHash: m.partial_hash ?? undefined,
+                      txHash: m.txhash ?? undefined,
+                      createdAt: m.created_at ?? null,
                     })),
                 );
               } catch {

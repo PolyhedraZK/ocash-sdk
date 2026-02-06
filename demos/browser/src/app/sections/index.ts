@@ -3,7 +3,6 @@ export { WalletPanel } from './WalletPanel';
 export { DepositPanel } from './DepositPanel';
 export { TransferPanel } from './TransferPanel';
 export { WithdrawPanel } from './WithdrawPanel';
-export { BalancesPanel } from './BalancesPanel';
 export { UtxosPanel } from './UtxosPanel';
 export { EntryMemosPanel } from './EntryMemosPanel';
 export { EntryNullifiersPanel } from './EntryNullifiersPanel';

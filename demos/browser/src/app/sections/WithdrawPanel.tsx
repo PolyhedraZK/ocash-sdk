@@ -8,7 +8,7 @@ import { formatFeeRows, formatTokenAmount, useDebouncedValue } from '../utils';
 import { useDemoStore } from '../state/demoStore';
 
 export function WithdrawPanel() {
-  const { sdk, walletOpened, currentToken, currentChain, publicClient, config } = useDemoStore();
+  const { sdk, walletOpened, currentToken, currentChain, publicClient, config, address } = useDemoStore();
 
   const [withdrawAmount, setWithdrawAmount] = useState('0.1');
   const [withdrawRecipient, setWithdrawRecipient] = useState('');
@@ -16,6 +16,14 @@ export function WithdrawPanel() {
   const [withdrawEstimateLoading, setWithdrawEstimateLoading] = useState(false);
   const debouncedWithdrawAmount = useDebouncedValue(withdrawAmount, 400);
   const [expanded, setExpanded] = useState(false);
+  const [withdrawSubmitting, setWithdrawSubmitting] = useState(false);
+  const [withdrawProgress, setWithdrawProgress] = useState('');
+
+  useEffect(() => {
+    if (!withdrawRecipient && address) {
+      setWithdrawRecipient(address);
+    }
+  }, [withdrawRecipient, address]);
 
   useEffect(() => {
     let active = true;
@@ -62,15 +70,21 @@ export function WithdrawPanel() {
       message.error('Public client not available');
       return;
     }
+    setWithdrawSubmitting(true);
+    setWithdrawProgress('Preparing withdrawal...');
     if (!isAddress(withdrawRecipient)) {
       message.error('Recipient must be a valid EVM address');
+      setWithdrawSubmitting(false);
+      setWithdrawProgress('');
       return;
     }
     try {
+      setWithdrawProgress('Syncing wallet...');
       await sdk.core.ready();
       await sdk.wallet.open({ seed: config.seed, accountNonce: config.accountNonce });
       await sdk.sync.syncOnce({ chainIds: [currentChain.chainId] });
 
+      setWithdrawProgress('Building proof...');
       const amount = parseAmount(withdrawAmount, currentToken.decimals);
       const nonce = config.accountNonce != null ? String(config.accountNonce) : undefined;
       const owner = sdk.keys.deriveKeyPair(config.seed, nonce);
@@ -83,10 +97,16 @@ export function WithdrawPanel() {
         publicClient,
       });
 
+      setWithdrawProgress('Submitting to relayer...');
       const submit = await sdk.ops.submitRelayerRequest<Hex>({ prepared, publicClient });
+      setWithdrawProgress('Waiting for receipt...');
       await submit.TransactionReceipt;
+      setWithdrawProgress('Withdraw confirmed.');
     } catch (error) {
       message.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      setWithdrawSubmitting(false);
+      setWithdrawProgress('');
     }
   }, [sdk, currentChain, currentToken, publicClient, withdrawRecipient, withdrawAmount, config.seed, config.accountNonce]);
 
@@ -122,7 +142,10 @@ export function WithdrawPanel() {
           onRecipientChange={setWithdrawRecipient}
           onMax={handleWithdrawMax}
           onSubmit={handleWithdraw}
-          disabled={!sdk || !walletOpened || !currentToken}
+          disabled={!sdk || !walletOpened || !currentToken || withdrawSubmitting}
+          submitting={withdrawSubmitting}
+          submitLabel={withdrawSubmitting ? 'Withdrawing...' : 'Withdraw'}
+          progressText={withdrawProgress}
           feeRows={withdrawFeeRows}
           feeLoading={withdrawEstimateLoading}
           feeError=""

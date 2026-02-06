@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { message } from 'antd';
 import type { Hex, PlannerEstimateTransferResult } from '@ocash/sdk';
 import { parseAmount } from '../../utils/format';
@@ -7,7 +7,7 @@ import { formatFeeRows, formatTokenAmount, useDebouncedValue } from '../utils';
 import { useDemoStore } from '../state/demoStore';
 
 export function TransferPanel() {
-  const { sdk, walletOpened, currentToken, currentChain, publicClient, config } = useDemoStore();
+  const { sdk, walletOpened, currentToken, currentChain, publicClient, config, viewingAddress, viewingAddressFromSeed } = useDemoStore();
 
   const [transferAmount, setTransferAmount] = useState('0.1');
   const [transferTo, setTransferTo] = useState('');
@@ -15,6 +15,23 @@ export function TransferPanel() {
   const [transferEstimateLoading, setTransferEstimateLoading] = useState(false);
   const debouncedTransferAmount = useDebouncedValue(transferAmount, 400);
   const [expanded, setExpanded] = useState(false);
+  const [transferSubmitting, setTransferSubmitting] = useState(false);
+  const [transferProgress, setTransferProgress] = useState('');
+  const isMountedRef = useRef(true);
+  const defaultViewingAddress = viewingAddress ?? viewingAddressFromSeed ?? '';
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!transferTo && defaultViewingAddress) {
+      setTransferTo(defaultViewingAddress);
+    }
+  }, [transferTo, defaultViewingAddress]);
 
   useEffect(() => {
     let active = true;
@@ -61,15 +78,23 @@ export function TransferPanel() {
       message.error('Public client not available');
       return;
     }
+    setTransferSubmitting(true);
+    setTransferProgress('Preparing transfer...');
     if (!/^0x[0-9a-fA-F]{64}$/.test(transferTo)) {
       message.error('Recipient must be a 32-byte viewing address');
+      if (isMountedRef.current) {
+        setTransferSubmitting(false);
+        setTransferProgress('');
+      }
       return;
     }
     try {
+      setTransferProgress('Syncing wallet...');
       await sdk.core.ready();
       await sdk.wallet.open({ seed: config.seed, accountNonce: config.accountNonce });
       await sdk.sync.syncOnce({ chainIds: [currentChain.chainId] });
 
+      setTransferProgress('Building proof...');
       const amount = parseAmount(transferAmount, currentToken.decimals);
       const nonce = config.accountNonce != null ? String(config.accountNonce) : undefined;
       const owner = sdk.keys.deriveKeyPair(config.seed, nonce);
@@ -85,13 +110,25 @@ export function TransferPanel() {
 
       if (prepared.kind === 'merge') {
         message.warning('Merge required: submit merge plan, sync, then retry transfer.');
+        if (isMountedRef.current) {
+          setTransferSubmitting(false);
+          setTransferProgress('');
+        }
         return;
       }
 
+      setTransferProgress('Submitting to relayer...');
       const submit = await sdk.ops.submitRelayerRequest<Hex>({ prepared, publicClient });
+      setTransferProgress('Waiting for receipt...');
       await submit.TransactionReceipt;
+      setTransferProgress('Transfer confirmed.');
     } catch (error) {
       message.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      if (isMountedRef.current) {
+        setTransferSubmitting(false);
+        setTransferProgress('');
+      }
     }
   }, [sdk, currentChain, currentToken, publicClient, transferTo, transferAmount, config.seed, config.accountNonce]);
 
@@ -112,6 +149,7 @@ export function TransferPanel() {
   );
 
   const transferNotice = !walletOpened ? 'Initialize the SDK to open the wallet.' : '';
+  const transferSubmitLabel = transferSubmitting ? 'Transferring...' : 'Transfer';
 
   return (
     <section className="panel span-4 panel-collapsible">
@@ -126,7 +164,10 @@ export function TransferPanel() {
           onToChange={setTransferTo}
           onMax={handleTransferMax}
           onSubmit={handleTransfer}
-          disabled={!sdk || !walletOpened || !currentToken}
+          disabled={!sdk || !walletOpened || !currentToken || transferSubmitting}
+          submitting={transferSubmitting}
+          submitLabel={transferSubmitLabel}
+          progressText={transferProgress}
           feeRows={transferFeeRows}
           feeLoading={transferEstimateLoading}
           feeError=""

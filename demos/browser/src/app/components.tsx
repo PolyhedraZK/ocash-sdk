@@ -73,6 +73,9 @@ export function TransferForm({
   onMax,
   onSubmit,
   disabled,
+  submitting,
+  submitLabel,
+  progressText,
   feeRows,
   feeLoading,
   feeError,
@@ -87,6 +90,9 @@ export function TransferForm({
   onMax: () => void;
   onSubmit: () => void;
   disabled: boolean;
+  submitting?: boolean;
+  submitLabel?: string;
+  progressText?: string;
   feeRows: FeeRow[];
   feeLoading: boolean;
   feeError: string;
@@ -106,9 +112,10 @@ export function TransferForm({
       </div>
       <label className="label">Recipient (Viewing Address)</label>
       <input value={to} onChange={(event) => onToChange(event.target.value)} placeholder="0x..." />
-      <button onClick={onSubmit} disabled={disabled}>
-        Transfer
+      <button onClick={onSubmit} disabled={disabled || submitting}>
+        {submitLabel ?? (submitting ? 'Transferring...' : 'Transfer')}
       </button>
+      {progressText ? <div className="status">{progressText}</div> : null}
       <FeePanel rows={feeRows} loading={feeLoading} error={feeError} ok={feeOk} okWithMerge={feeOkWithMerge} />
     </div>
   );
@@ -122,6 +129,9 @@ export function WithdrawForm({
   onMax,
   onSubmit,
   disabled,
+  submitting,
+  submitLabel,
+  progressText,
   feeRows,
   feeLoading,
   feeError,
@@ -136,6 +146,9 @@ export function WithdrawForm({
   onMax: () => void;
   onSubmit: () => void;
   disabled: boolean;
+  submitting?: boolean;
+  submitLabel?: string;
+  progressText?: string;
   feeRows: FeeRow[];
   feeLoading: boolean;
   feeError: string;
@@ -155,9 +168,10 @@ export function WithdrawForm({
       </div>
       <label className="label">Recipient (EVM Address)</label>
       <input value={recipient} onChange={(event) => onRecipientChange(event.target.value)} placeholder="0x..." />
-      <button onClick={onSubmit} disabled={disabled}>
-        Withdraw
+      <button onClick={onSubmit} disabled={disabled || submitting}>
+        {submitLabel ?? (submitting ? 'Withdrawing...' : 'Withdraw')}
       </button>
+      {progressText ? <div className="status">{progressText}</div> : null}
       <FeePanel rows={feeRows} loading={feeLoading} error={feeError} ok={feeOk} okWithMerge={feeOkWithMerge} />
     </div>
   );

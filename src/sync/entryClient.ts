@@ -7,6 +7,11 @@ export interface EntryMemo {
   commitment: Hex;
   memo: Hex;
   cid: number | null;
+  is_transparent?: boolean;
+  asset_id?: Hex | null;
+  amount?: Hex | null;
+  partial_hash?: Hex | null;
+  txhash?: Hex | null;
   created_at?: number | null;
 }
 
@@ -35,6 +40,12 @@ const withQuery = (url: string, params: Record<string, string | number | undefin
 
 const isHex = (value: unknown): value is Hex => isHexStrict(value);
 
+const normalizeOptionalHex = (value: unknown): Hex | null | undefined => {
+  if (value == null) return undefined;
+  if (isHex(value)) return value;
+  return null;
+};
+
 const normalizeTotal = (value: unknown): number => {
   const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN;
   if (!Number.isFinite(n) || n < 0) return 0;
@@ -55,7 +66,25 @@ const normalizeMemoEntry = (raw: any): EntryMemo => {
   if (createdAt != null && !(typeof createdAt === 'number' && Number.isInteger(createdAt) && createdAt >= 0)) {
     throw new SdkError('SYNC', 'Invalid entry memo created_at', { created_at: createdAt });
   }
-  return { commitment: raw.commitment, memo: raw.memo, cid: cid ?? null, created_at: createdAt ?? null };
+  const isTransparent = raw.is_transparent;
+  if (isTransparent != null && typeof isTransparent !== 'boolean') {
+    throw new SdkError('SYNC', 'Invalid entry memo is_transparent', { is_transparent: isTransparent });
+  }
+  const assetId = normalizeOptionalHex(raw.asset_id);
+  const amount = normalizeOptionalHex(raw.amount);
+  const partialHash = normalizeOptionalHex(raw.partial_hash);
+  const txHash = normalizeOptionalHex(raw.txhash);
+  return {
+    commitment: raw.commitment,
+    memo: raw.memo,
+    cid: cid ?? null,
+    is_transparent: isTransparent ?? undefined,
+    asset_id: assetId ?? undefined,
+    amount: amount ?? undefined,
+    partial_hash: partialHash ?? undefined,
+    txhash: txHash ?? undefined,
+    created_at: createdAt ?? null,
+  };
 };
 
 const normalizeNullifierEntry = (raw: any): EntryNullifier => {
