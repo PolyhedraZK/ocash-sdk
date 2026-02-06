@@ -15,6 +15,7 @@ export function WithdrawPanel() {
   const [withdrawEstimate, setWithdrawEstimate] = useState<PlannerEstimateWithdrawResult | null>(null);
   const [withdrawEstimateLoading, setWithdrawEstimateLoading] = useState(false);
   const debouncedWithdrawAmount = useDebouncedValue(withdrawAmount, 400);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -109,23 +110,27 @@ export function WithdrawPanel() {
   const withdrawNotice = !walletOpened ? 'Initialize the SDK to open the wallet.' : '';
 
   return (
-    <section className="panel span-4">
-      <h2>Withdraw</h2>
-      <WithdrawForm
-        amount={withdrawAmount}
-        recipient={withdrawRecipient}
-        onAmountChange={setWithdrawAmount}
-        onRecipientChange={setWithdrawRecipient}
-        onMax={handleWithdrawMax}
-        onSubmit={handleWithdraw}
-        disabled={!sdk || !walletOpened || !currentToken}
-        feeRows={withdrawFeeRows}
-        feeLoading={withdrawEstimateLoading}
-        feeError=""
-        feeOk={withdrawEstimate?.ok}
-        feeOkWithMerge={withdrawEstimate?.okWithMerge}
-        notice={withdrawNotice}
-      />
+    <section className="panel span-4 panel-collapsible">
+      <button type="button" className="panel-toggle" aria-expanded={expanded} onClick={() => setExpanded((prev) => !prev)}>
+        <h2>Withdraw</h2>
+      </button>
+      {expanded ? (
+        <WithdrawForm
+          amount={withdrawAmount}
+          recipient={withdrawRecipient}
+          onAmountChange={setWithdrawAmount}
+          onRecipientChange={setWithdrawRecipient}
+          onMax={handleWithdrawMax}
+          onSubmit={handleWithdraw}
+          disabled={!sdk || !walletOpened || !currentToken}
+          feeRows={withdrawFeeRows}
+          feeLoading={withdrawEstimateLoading}
+          feeError=""
+          feeOk={withdrawEstimate?.ok}
+          feeOkWithMerge={withdrawEstimate?.okWithMerge}
+          notice={withdrawNotice}
+        />
+      ) : null}
     </section>
   );
 }

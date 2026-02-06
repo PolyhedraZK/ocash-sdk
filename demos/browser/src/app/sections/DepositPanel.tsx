@@ -28,6 +28,7 @@ export function DepositPanel() {
   const [depositEstimate, setDepositEstimate] = useState<DepositEstimate | null>(null);
   const [depositEstimateLoading, setDepositEstimateLoading] = useState(false);
   const debouncedDepositAmount = useDebouncedValue(depositAmount, 400);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -154,19 +155,23 @@ export function DepositPanel() {
   const depositNotice = !walletOpened ? 'Initialize the SDK to open the wallet.' : chainMismatch ? `Switch wallet chain to ${selectedChainId}.` : '';
 
   return (
-    <section className="panel span-4">
-      <h2>Deposit</h2>
-      <DepositForm
-        amount={depositAmount}
-        onAmountChange={setDepositAmount}
-        onMax={handleDepositMax}
-        onSubmit={handleDeposit}
-        disabled={!sdk || !walletOpened || !currentToken}
-        feeRows={depositFeeRows}
-        feeLoading={depositEstimateLoading}
-        feeError=""
-        notice={depositNotice}
-      />
+    <section className="panel span-4 panel-collapsible">
+      <button type="button" className="panel-toggle" aria-expanded={expanded} onClick={() => setExpanded((prev) => !prev)}>
+        <h2>Deposit</h2>
+      </button>
+      {expanded ? (
+        <DepositForm
+          amount={depositAmount}
+          onAmountChange={setDepositAmount}
+          onMax={handleDepositMax}
+          onSubmit={handleDeposit}
+          disabled={!sdk || !walletOpened || !currentToken}
+          feeRows={depositFeeRows}
+          feeLoading={depositEstimateLoading}
+          feeError=""
+          notice={depositNotice}
+        />
+      ) : null}
     </section>
   );
 }

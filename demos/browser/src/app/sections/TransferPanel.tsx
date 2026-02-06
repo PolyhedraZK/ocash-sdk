@@ -14,6 +14,7 @@ export function TransferPanel() {
   const [transferEstimate, setTransferEstimate] = useState<PlannerEstimateTransferResult | null>(null);
   const [transferEstimateLoading, setTransferEstimateLoading] = useState(false);
   const debouncedTransferAmount = useDebouncedValue(transferAmount, 400);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -113,23 +114,27 @@ export function TransferPanel() {
   const transferNotice = !walletOpened ? 'Initialize the SDK to open the wallet.' : '';
 
   return (
-    <section className="panel span-4">
-      <h2>Transfer</h2>
-      <TransferForm
-        amount={transferAmount}
-        to={transferTo}
-        onAmountChange={setTransferAmount}
-        onToChange={setTransferTo}
-        onMax={handleTransferMax}
-        onSubmit={handleTransfer}
-        disabled={!sdk || !walletOpened || !currentToken}
-        feeRows={transferFeeRows}
-        feeLoading={transferEstimateLoading}
-        feeError=""
-        feeOk={transferEstimate?.ok}
-        feeOkWithMerge={transferEstimate?.okWithMerge}
-        notice={transferNotice}
-      />
+    <section className="panel span-4 panel-collapsible">
+      <button type="button" className="panel-toggle" aria-expanded={expanded} onClick={() => setExpanded((prev) => !prev)}>
+        <h2>Transfer</h2>
+      </button>
+      {expanded ? (
+        <TransferForm
+          amount={transferAmount}
+          to={transferTo}
+          onAmountChange={setTransferAmount}
+          onToChange={setTransferTo}
+          onMax={handleTransferMax}
+          onSubmit={handleTransfer}
+          disabled={!sdk || !walletOpened || !currentToken}
+          feeRows={transferFeeRows}
+          feeLoading={transferEstimateLoading}
+          feeError=""
+          feeOk={transferEstimate?.ok}
+          feeOkWithMerge={transferEstimate?.okWithMerge}
+          notice={transferNotice}
+        />
+      ) : null}
     </section>
   );
 }

@@ -68,6 +68,35 @@ textarea {
   gap: 14px;
 }
 
+.panel-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  box-shadow: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.panel-toggle::after {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid var(--muted);
+  border-bottom: 2px solid var(--muted);
+  transform: rotate(-45deg);
+  transition: transform 0.2s ease;
+}
+
+.panel-toggle[aria-expanded='true']::after {
+  transform: rotate(45deg);
+}
+
 .panel h2 {
   margin: 0;
   font-size: 18px;
@@ -179,6 +208,11 @@ button:disabled {
 
 button:not(:disabled):hover {
   transform: translateY(-1px);
+}
+
+.panel-toggle:hover {
+  transform: none;
+  box-shadow: none;
 }
 
 .badge {
