@@ -1,26 +1,65 @@
-import type { DemoController } from '../hooks/useDemoController';
+import { useCallback, useEffect, useState } from 'react';
+import type { EntryNullifierRecord, StorageAdapter } from '@ocash/sdk';
+import { message } from 'antd';
+import { useDemoStore } from '../state/demoStore';
 
-export function EntryNullifiersPanel({
-  nullifierRows,
-  nullifierPage,
-  nullifierTotal,
-  nullifierLoading,
-  setNullifierPage,
-  refreshEntryNullifiers,
-  walletOpened,
-  sdk,
-}: Pick<
-  DemoController,
-  | 'nullifierRows'
-  | 'nullifierPage'
-  | 'nullifierTotal'
-  | 'nullifierLoading'
-  | 'setNullifierPage'
-  | 'refreshEntryNullifiers'
-  | 'walletOpened'
-  | 'sdk'
->) {
-  const maxPage = Math.max(1, Math.ceil(nullifierTotal / 20));
+const NULLIFIER_PAGE_SIZE = 20;
+
+export function EntryNullifiersPanel() {
+  const { sdk, walletOpened, currentChain } = useDemoStore();
+  const [nullifierRows, setNullifierRows] = useState<EntryNullifierRecord[]>([]);
+  const [nullifierPage, setNullifierPage] = useState(1);
+  const [nullifierTotal, setNullifierTotal] = useState(0);
+  const [nullifierLoading, setNullifierLoading] = useState(false);
+
+  useEffect(() => {
+    setNullifierPage(1);
+  }, [currentChain?.chainId]);
+
+  const refreshEntryNullifiers = useCallback(async () => {
+    if (!sdk || !currentChain || !walletOpened) {
+      setNullifierRows([]);
+      setNullifierTotal(0);
+      return;
+    }
+    const store = sdk.storage.getAdapter() as StorageAdapter;
+    if (!store.listEntryNullifiers) {
+      setNullifierRows([]);
+      setNullifierTotal(0);
+      return;
+    }
+    setNullifierLoading(true);
+    try {
+      const offset = (nullifierPage - 1) * NULLIFIER_PAGE_SIZE;
+      const result = await store.listEntryNullifiers({
+        chainId: currentChain.chainId,
+        offset,
+        limit: NULLIFIER_PAGE_SIZE,
+        orderBy: 'nid',
+        order: 'desc',
+      });
+      const total = result.total;
+      const maxPage = Math.max(1, Math.ceil(total / NULLIFIER_PAGE_SIZE));
+      if (nullifierPage > maxPage) {
+        setNullifierPage(maxPage);
+        setNullifierRows([]);
+        setNullifierTotal(total);
+        return;
+      }
+      setNullifierRows(result.rows);
+      setNullifierTotal(total);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      setNullifierLoading(false);
+    }
+  }, [sdk, currentChain, walletOpened, nullifierPage]);
+
+  useEffect(() => {
+    void refreshEntryNullifiers();
+  }, [refreshEntryNullifiers]);
+
+  const maxPage = Math.max(1, Math.ceil(nullifierTotal / NULLIFIER_PAGE_SIZE));
 
   return (
     <section className="panel span-6">

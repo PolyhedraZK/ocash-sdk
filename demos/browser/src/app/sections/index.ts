@@ -1,6 +1,5 @@
 export { ConfigPanel } from './ConfigPanel';
 export { WalletPanel } from './WalletPanel';
-export { AssetContextPanel } from './AssetContextPanel';
 export { DepositPanel } from './DepositPanel';
 export { TransferPanel } from './TransferPanel';
 export { WithdrawPanel } from './WithdrawPanel';
@@ -9,4 +8,3 @@ export { UtxosPanel } from './UtxosPanel';
 export { EntryMemosPanel } from './EntryMemosPanel';
 export { EntryNullifiersPanel } from './EntryNullifiersPanel';
 export { OperationsPanel } from './OperationsPanel';
-export { ActivityPanel } from './ActivityPanel';

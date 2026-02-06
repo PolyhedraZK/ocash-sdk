@@ -1,30 +1,55 @@
-import type { DemoController } from '../hooks/useDemoController';
+import { useCallback, useEffect, useState } from 'react';
+import type { UtxoRecord } from '@ocash/sdk';
 import { formatTokenAmount } from '../utils';
+import { useDemoStore } from '../state/demoStore';
+import { message } from 'antd';
 
-export function UtxosPanel({
-  utxos,
-  utxoFilter,
-  setUtxoFilter,
-  utxoPage,
-  setUtxoPage,
-  utxoTotal,
-  refreshUtxos,
-  walletOpened,
-  sdk,
-  tokenInfoById,
-}: Pick<
-  DemoController,
-  | 'utxos'
-  | 'utxoFilter'
-  | 'setUtxoFilter'
-  | 'utxoPage'
-  | 'setUtxoPage'
-  | 'utxoTotal'
-  | 'refreshUtxos'
-  | 'walletOpened'
-  | 'sdk'
-  | 'tokenInfoById'
->) {
+export function UtxosPanel() {
+  const { sdk, walletOpened, currentChain, selectedTokenId, tokenInfoById } = useDemoStore();
+  const [utxos, setUtxos] = useState<UtxoRecord[]>([]);
+  const [utxoFilter, setUtxoFilter] = useState<'all' | 'unspent' | 'spent'>('unspent');
+  const [utxoPage, setUtxoPage] = useState(1);
+  const [utxoTotal, setUtxoTotal] = useState(0);
+
+  useEffect(() => {
+    setUtxoPage(1);
+  }, [currentChain?.chainId, selectedTokenId, utxoFilter]);
+
+  const refreshUtxos = useCallback(async () => {
+    if (!sdk || !currentChain || !walletOpened) return;
+    const limit = 20;
+    const offset = (utxoPage - 1) * limit;
+    const spent = utxoFilter === 'spent' ? true : utxoFilter === 'unspent' ? false : undefined;
+    try {
+      const result = await sdk.wallet.getUtxos({
+        chainId: currentChain.chainId,
+        assetId: selectedTokenId ?? undefined,
+        includeSpent: utxoFilter === 'all',
+        spent,
+        offset,
+        limit,
+        orderBy: 'mkIndex',
+        order: 'desc',
+      });
+      const total = result.total;
+      const maxPage = Math.max(1, Math.ceil(total / limit));
+      if (utxoPage > maxPage) {
+        setUtxoPage(maxPage);
+        setUtxos([]);
+        setUtxoTotal(total);
+        return;
+      }
+      setUtxos(result.rows);
+      setUtxoTotal(total);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : String(error));
+    }
+  }, [sdk, currentChain, walletOpened, utxoPage, utxoFilter, selectedTokenId]);
+
+  useEffect(() => {
+    void refreshUtxos();
+  }, [refreshUtxos]);
+
   const maxPage = Math.max(1, Math.ceil(utxoTotal / 20));
 
   return (

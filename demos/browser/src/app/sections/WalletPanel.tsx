@@ -1,43 +1,51 @@
+import { useCallback, useEffect } from 'react';
 import { sepolia } from 'viem/chains';
-import type { DemoController } from '../hooks/useDemoController';
-import { Spin } from 'antd';
+import { useDemoStore } from '../state/demoStore';
 
-export function WalletPanel({
-  isConnected,
-  connectors,
-  connect,
-  disconnect,
-  address,
-  walletChainId,
-  viewingAddress,
-  viewingAddressFromSeed,
-  config,
-  chainMismatch,
-  selectedChainId,
-  currentChain,
-  syncOnce,
-  sdk,
-  walletOpened,
-  actionMessage,
-}: Pick<
-  DemoController,
-  | 'isConnected'
-  | 'connectors'
-  | 'connect'
-  | 'disconnect'
-  | 'address'
-  | 'walletChainId'
-  | 'viewingAddress'
-  | 'viewingAddressFromSeed'
-  | 'config'
-  | 'chainMismatch'
-  | 'selectedChainId'
-  | 'currentChain'
-  | 'syncOnce'
-  | 'sdk'
-  | 'walletOpened'
-  | 'actionMessage'
->) {
+export function WalletPanel() {
+  const {
+    isConnected,
+    connectors,
+    connect,
+    disconnect,
+    address,
+    walletChainId,
+    viewingAddress,
+    viewingAddressFromSeed,
+    config,
+    selectedChainId,
+    currentChain,
+    sdk,
+    walletOpened,
+    sdkStatus,
+    setSdkStatus,
+    setWalletOpened,
+    setViewingAddress,
+  } = useDemoStore();
+
+  const chainMismatch = Boolean(walletChainId && selectedChainId && walletChainId !== selectedChainId);
+
+  const initSdk = useCallback(async () => {
+    if (!sdk) return;
+    setSdkStatus('loading');
+    try {
+      await sdk.core.ready();
+      await sdk.wallet.open({ seed: config.seed, accountNonce: config.accountNonce });
+      setSdkStatus('ready');
+      setWalletOpened(true);
+      setViewingAddress(viewingAddressFromSeed ?? null);
+    } catch (error) {
+      setSdkStatus('error');
+      message.error(error instanceof Error ? error.message : String(error));
+    }
+  }, [sdk, config.seed, config.accountNonce, viewingAddressFromSeed, setSdkStatus, setWalletOpened, setViewingAddress]);
+
+  useEffect(() => {
+    if (!isConnected || !sdk) return;
+    if (sdkStatus !== 'idle' || walletOpened) return;
+    initSdk();
+  }, [isConnected, sdk, sdkStatus, walletOpened, initSdk]);
+
   return (
     <section className="panel span-5">
       <h2>Wallet</h2>
@@ -77,11 +85,6 @@ export function WalletPanel({
         </div>
       )}
       {currentChain?.rpcUrl ? null : <div className="notice">Current chain missing rpcUrl.</div>}
-      <div className="row">
-        <button className="teal" onClick={syncOnce} disabled={!sdk || !walletOpened}>
-          Sync Once {'Syncing…' === actionMessage ? <Spin className="inline-spinner" /> : null}
-        </button>
-      </div>
     </section>
   );
 }

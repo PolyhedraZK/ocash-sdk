@@ -1,6 +1,8 @@
-import type { DemoController } from '../hooks/useDemoController';
+import { useDemoStore } from '../state/demoStore';
 
-export function OperationsPanel({ operations }: Pick<DemoController, 'operations'>) {
+export function OperationsPanel() {
+  const { operations } = useDemoStore();
+
   return (
     <section className="panel span-6">
       <h2>Operations</h2>
