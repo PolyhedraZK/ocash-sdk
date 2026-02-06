@@ -185,8 +185,7 @@ export class SyncEngine implements SyncApi {
   async start(options?: { chainIds?: number[]; pollMs?: number }) {
     if (this.timer) return;
     await this.syncOnce({ chainIds: options?.chainIds, continueOnError: true });
-    const pollMs =
-      options?.pollMs != null ? toBoundedInt(options.pollMs, this.options.pollMs, { min: 250 }) : this.options.pollMs;
+    const pollMs = options?.pollMs != null ? toBoundedInt(options.pollMs, this.options.pollMs, { min: 250 }) : this.options.pollMs;
     this.timer = setInterval(() => {
       if (this.runningChains.size) return;
       void this.syncOnce({ chainIds: options?.chainIds, continueOnError: true }).catch(() => undefined);
@@ -198,14 +197,7 @@ export class SyncEngine implements SyncApi {
     this.timer = null;
   }
 
-  async syncOnce(options?: {
-    chainIds?: number[];
-    resources?: Array<'memo' | 'nullifier' | 'merkle'>;
-    signal?: AbortSignal;
-    requestTimeoutMs?: number;
-    pageSize?: number;
-    continueOnError?: boolean;
-  }) {
+  async syncOnce(options?: { chainIds?: number[]; resources?: Array<'memo' | 'nullifier' | 'merkle'>; signal?: AbortSignal; requestTimeoutMs?: number; pageSize?: number; continueOnError?: boolean }) {
     const chainIds = options?.chainIds ?? this.assets.getChains().map((c) => c.chainId);
     const requestTimeoutMs = toBoundedInt(options?.requestTimeoutMs, this.options.requestTimeoutMs, { min: 1000 });
     const pageSize = toBoundedInt(options?.pageSize, this.options.pageSize, { min: 1 });
@@ -252,11 +244,7 @@ export class SyncEngine implements SyncApi {
     );
   }
 
-  private async syncChain(
-    chainId: number,
-    resources?: Array<'memo' | 'nullifier' | 'merkle'>,
-    options?: { signal?: AbortSignal; requestTimeoutMs: number; pageSize: number },
-  ) {
+  private async syncChain(chainId: number, resources?: Array<'memo' | 'nullifier' | 'merkle'>, options?: { signal?: AbortSignal; requestTimeoutMs: number; pageSize: number }) {
     const chain = this.assets.getChain(chainId);
     const cursor = (await this.storage.getSyncCursor(chainId)) ?? defaultCursor();
     this.emit({
@@ -370,10 +358,7 @@ export class SyncEngine implements SyncApi {
             const signal = signalAny([options?.signal, signalTimeout(options?.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS)]);
             const pageSize = options?.pageSize ?? DEFAULT_PAGE_SIZE;
             this.emit({ type: 'debug', payload: { scope: 'sync:memo', message: 'page:request', detail: { chainId, offset, limit: pageSize } } });
-            const page = await this.withRetries(
-              () => client!.listMemos({ chainId, address: contractAddress!, offset, limit: pageSize, signal }),
-              { chainId, resource: 'memo', signal },
-            );
+            const page = await this.withRetries(() => client!.listMemos({ chainId, address: contractAddress!, offset, limit: pageSize, signal }), { chainId, resource: 'memo', signal });
             status.memo.total = page.total;
             const contiguous = sanitizeContiguousMemos(page.items, offset);
             if (page.items.length > 0 && contiguous.length === 0) {
@@ -405,8 +390,8 @@ export class SyncEngine implements SyncApi {
                 // best-effort cache
               }
             }
-            await this.merkle?.ingestEntryMemos?.(chainId, contiguous as any);
-            const added = await this.wallet.applyMemos(chainId, contiguous as any);
+            await this.merkle?.ingestEntryMemos?.(chainId, contiguous);
+            const added = await this.wallet.applyMemos(chainId, contiguous);
             this.emit({
               type: 'debug',
               payload: { scope: 'sync:memo', message: 'page:applied', detail: { chainId, offset, returned: page.items.length, contiguous: contiguous.length, added } },
@@ -468,10 +453,11 @@ export class SyncEngine implements SyncApi {
               type: 'debug',
               payload: { scope: 'sync:nullifier', message: 'page:request', detail: { chainId, offset, limit: pageSize, endpoint: 'list_by_block' } },
             });
-            const page = await this.withRetries(
-              () => client!.listNullifiersByBlock({ chainId, address: contractAddress!, offset, limit: pageSize, signal }),
-              { chainId, resource: 'nullifier', signal },
-            );
+            const page = await this.withRetries(() => client!.listNullifiersByBlock({ chainId, address: contractAddress!, offset, limit: pageSize, signal }), {
+              chainId,
+              resource: 'nullifier',
+              signal,
+            });
             status.nullifier.total = page.total;
             this.emit({
               type: 'sync:progress',
@@ -527,16 +513,12 @@ export class SyncEngine implements SyncApi {
           });
         }
       }
-
     } finally {
       this.emit({ type: 'sync:done', payload: { chainId, cursor } });
     }
   }
 
-  private async withRetries<T>(
-    fn: () => Promise<T>,
-    meta: { chainId: number; resource: 'memo' | 'nullifier' | 'merkle'; signal?: AbortSignal },
-  ): Promise<T> {
+  private async withRetries<T>(fn: () => Promise<T>, meta: { chainId: number; resource: 'memo' | 'nullifier' | 'merkle'; signal?: AbortSignal }): Promise<T> {
     const attempts = this.options.retry.attempts;
     const baseDelayMs = this.options.retry.baseDelayMs;
     const maxDelayMs = this.options.retry.maxDelayMs;

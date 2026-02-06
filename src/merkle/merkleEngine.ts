@@ -1,14 +1,4 @@
-import type {
-  MerkleApi,
-  ProofBridge,
-  RemoteMerkleProofResponse,
-  Hex,
-  AccMemberWitness,
-  InputSecret,
-  MerkleNodeRecord,
-  StorageAdapter,
-  UserKeyPair,
-} from '../types';
+import type { MerkleApi, ProofBridge, RemoteMerkleProofResponse, Hex, AccMemberWitness, InputSecret, MerkleNodeRecord, StorageAdapter, UserKeyPair } from '../types';
 import { SdkError } from '../errors';
 import { MerkleClient } from './merkleClient';
 import { getZeroHash, TREE_DEPTH_DEFAULT } from './zeroHashes';
@@ -312,11 +302,7 @@ export class MerkleEngine implements MerkleApi {
     const canUseLocal = this.mode !== 'remote';
     if (canUseLocal) {
       const tree = await this.storage?.getMerkleTree?.(input.chainId);
-      const hasDb =
-        typeof this.storage?.getMerkleLeaf === 'function' &&
-        typeof this.storage?.getMerkleNode === 'function' &&
-        typeof tree?.totalElements === 'number' &&
-        typeof tree?.root === 'string';
+      const hasDb = typeof this.storage?.getMerkleLeaf === 'function' && typeof this.storage?.getMerkleNode === 'function' && typeof tree?.totalElements === 'number' && typeof tree?.root === 'string';
 
       if (hasDb && tree) {
         if (tree.totalElements < contractTreeElements) {
@@ -411,12 +397,7 @@ export class MerkleEngine implements MerkleApi {
     return client.getProofByCids(input.cids);
   }
 
-  buildAccMemberWitnesses(input: {
-    remote: RemoteMerkleProofResponse;
-    utxos: Array<{ commitment: Hex; mkIndex: number }>;
-    arrayHash: bigint;
-    totalElements: bigint;
-  }): AccMemberWitness[] {
+  buildAccMemberWitnesses(input: { remote: RemoteMerkleProofResponse; utxos: Array<{ commitment: Hex; mkIndex: number }>; arrayHash: bigint; totalElements: bigint }): AccMemberWitness[] {
     return input.utxos.map((utxo, idx) => {
       const remoteProof = input.remote.proof[idx];
       if (!remoteProof) {

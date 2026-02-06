@@ -26,16 +26,7 @@ export function DemoApp({ config }: { config: DemoConfig }) {
       </div>
 
       <div className="grid">
-        <ConfigPanel
-          configText={controller.configText}
-          initSdk={controller.initSdk}
-          closeWallet={controller.closeWallet}
-          sdk={controller.sdk}
-          sdkStatus={controller.sdkStatus}
-          walletOpened={controller.walletOpened}
-          statusLabel={controller.statusLabel}
-          coreProgress={controller.coreProgress}
-        />
+        <ConfigPanel configText={controller.configText} statusLabel={controller.statusLabel} />
 
         <WalletPanel
           isConnected={controller.isConnected}

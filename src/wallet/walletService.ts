@@ -84,10 +84,7 @@ export class WalletService {
     }
   }
 
-  async applyMemos(
-    chainId: number,
-    memos: Array<{ memo: Hex; commitment: Hex; cid: number | null; created_at?: number | null }>,
-  ): Promise<number> {
+  async applyMemos(chainId: number, memos: Array<{ memo: Hex; commitment: Hex; cid: number | null; created_at?: number | null }>): Promise<number> {
     this.getViewingAddress();
     const secretKey = this.getSecretKey();
     const addedByKey = new Map<string, UtxoRecord>();
@@ -96,7 +93,7 @@ export class WalletService {
       if (typeof entry.cid !== 'number' || !Number.isInteger(entry.cid) || entry.cid < 0) continue;
       const ro = MemoKit.decryptMemo(secretKey, entry.memo);
       if (!ro) continue;
-      const localCommitment = CryptoToolkit.commitment(ro, 'hex') as Hex;
+      const localCommitment = CryptoToolkit.commitment(ro, 'hex');
       if (localCommitment.toLowerCase() !== entry.commitment.toLowerCase()) continue;
       const poolKey = ro.asset_id.toString();
       const lookupKey = `${chainId}:${poolKey}`;
