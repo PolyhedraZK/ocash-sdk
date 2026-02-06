@@ -1,5 +1,6 @@
 import { useCallback, useEffect } from 'react';
 import { sepolia } from 'viem/chains';
+import { message } from 'antd';
 import { useDemoStore } from '../state/demoStore';
 
 export function WalletPanel() {
@@ -31,6 +32,7 @@ export function WalletPanel() {
     try {
       await sdk.core.ready();
       await sdk.wallet.open({ seed: config.seed, accountNonce: config.accountNonce });
+      await sdk.sync.start({ chainIds: [currentChain?.chainId ?? config.chains?.[0]?.chainId].filter(Boolean) as number[] });
       setSdkStatus('ready');
       setWalletOpened(true);
       setViewingAddress(viewingAddressFromSeed ?? null);
@@ -45,6 +47,13 @@ export function WalletPanel() {
     if (sdkStatus !== 'idle' || walletOpened) return;
     initSdk();
   }, [isConnected, sdk, sdkStatus, walletOpened, initSdk]);
+
+  useEffect(() => {
+    if (!sdk) return;
+    return () => {
+      sdk.sync.stop();
+    };
+  }, [sdk]);
 
   return (
     <section className="panel span-5">

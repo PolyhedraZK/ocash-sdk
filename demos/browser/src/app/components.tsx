@@ -28,6 +28,8 @@ export function DepositForm({
   onMax,
   onSubmit,
   disabled,
+  submitting,
+  submitLabel,
   feeRows,
   feeLoading,
   feeError,
@@ -38,6 +40,8 @@ export function DepositForm({
   onMax: () => void;
   onSubmit: () => void;
   disabled: boolean;
+  submitting?: boolean;
+  submitLabel?: string;
   feeRows: FeeRow[];
   feeLoading: boolean;
   feeError: string;
@@ -53,8 +57,8 @@ export function DepositForm({
           Max
         </button>
       </div>
-      <button onClick={onSubmit} disabled={disabled}>
-        Deposit
+      <button onClick={onSubmit} disabled={disabled || submitting}>
+        {submitLabel ?? (submitting ? 'Depositing...' : 'Deposit')}
       </button>
       <FeePanel rows={feeRows} loading={feeLoading} error={feeError} />
     </div>

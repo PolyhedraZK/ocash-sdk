@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { message } from 'antd';
-import { ERC20_ABI } from '@ocash/sdk/browser';
+import { CryptoToolkit, ERC20_ABI, type Hex } from '@ocash/sdk/browser';
 import { getWalletClient } from 'wagmi/actions';
 import { parseAmount } from '../../utils/format';
 import { NATIVE_ADDRESS, type DepositEstimate } from '../constants';
@@ -29,6 +29,15 @@ export function DepositPanel() {
   const [depositEstimateLoading, setDepositEstimateLoading] = useState(false);
   const debouncedDepositAmount = useDebouncedValue(depositAmount, 400);
   const [expanded, setExpanded] = useState(false);
+  const [depositStatus, setDepositStatus] = useState<'idle' | 'submitting' | 'waiting'>('idle');
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -73,6 +82,34 @@ export function DepositPanel() {
     };
   }, [sdk, currentChain, currentToken, publicClient, address, debouncedDepositAmount, config.accountNonce, config.seed]);
 
+  const waitForCommitment = useCallback(
+    async (input: { commitment: Hex; chainId: number; assetId: string; timeoutMs?: number; intervalMs?: number }) => {
+      if (!sdk) return;
+      const timeoutMs = input.timeoutMs ?? 120_000;
+      const intervalMs = input.intervalMs ?? 2_000;
+      const startedAt = Date.now();
+      const commitmentLower = input.commitment.toLowerCase();
+
+      while (Date.now() - startedAt < timeoutMs) {
+        const result = await sdk.wallet.getUtxos({
+          chainId: input.chainId,
+          assetId: input.assetId,
+          includeSpent: true,
+          offset: 0,
+          limit: 50,
+          orderBy: 'mkIndex',
+          order: 'desc',
+        });
+        if (result.rows.some((row) => row.commitment.toLowerCase() === commitmentLower)) {
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, intervalMs));
+      }
+      throw new Error('Timed out waiting for commitment to be indexed');
+    },
+    [sdk],
+  );
+
   const handleDepositMax = useCallback(async () => {
     if (!publicClient || !address || !currentToken) return;
     try {
@@ -110,6 +147,7 @@ export function DepositPanel() {
       message.error('Public client not available');
       return;
     }
+    setDepositStatus('submitting');
     try {
       await sdk.core.ready();
       const amount = parseAmount(depositAmount, currentToken.decimals);
@@ -126,6 +164,7 @@ export function DepositPanel() {
       });
       const recipient = sdk.keys.userPkToAddress(prepared.recordOpening.user_pk);
       console.log('Prepared deposit:', recipient, prepared);
+      const commitment = CryptoToolkit.commitment(prepared.recordOpening, 'hex') as Hex;
 
       const submit = await sdk.ops.submitDeposit({
         prepared,
@@ -134,10 +173,38 @@ export function DepositPanel() {
         autoApprove: true,
       });
       console.log('Deposit submit result:', submit);
+      if (isMountedRef.current) {
+        setDepositStatus('waiting');
+      }
+      await waitForCommitment({
+        commitment,
+        chainId: currentChain.chainId,
+        assetId: currentToken.id,
+      });
+      message.success('Commitment accepted.');
     } catch (error) {
       message.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      if (isMountedRef.current) {
+        setDepositStatus('idle');
+      }
     }
-  }, [sdk, currentChain, currentToken, address, walletChainId, selectedChainId, isConnected, walletClient, wagmiConfig, publicClient, depositAmount, config.accountNonce, config.seed]);
+  }, [
+    sdk,
+    currentChain,
+    currentToken,
+    address,
+    walletChainId,
+    selectedChainId,
+    isConnected,
+    walletClient,
+    wagmiConfig,
+    publicClient,
+    depositAmount,
+    config.accountNonce,
+    config.seed,
+    waitForCommitment,
+  ]);
 
   const depositFeeRows = useMemo(
     () =>
@@ -153,6 +220,8 @@ export function DepositPanel() {
 
   const chainMismatch = Boolean(walletChainId && selectedChainId && walletChainId !== selectedChainId);
   const depositNotice = !walletOpened ? 'Initialize the SDK to open the wallet.' : chainMismatch ? `Switch wallet chain to ${selectedChainId}.` : '';
+  const depositSubmitting = depositStatus !== 'idle';
+  const depositSubmitLabel = depositStatus === 'waiting' ? 'Waiting for commitment...' : depositStatus === 'submitting' ? 'Depositing...' : 'Deposit';
 
   return (
     <section className="panel span-4 panel-collapsible">
@@ -165,7 +234,9 @@ export function DepositPanel() {
           onAmountChange={setDepositAmount}
           onMax={handleDepositMax}
           onSubmit={handleDeposit}
-          disabled={!sdk || !walletOpened || !currentToken}
+          disabled={!sdk || !walletOpened || !currentToken || depositSubmitting}
+          submitting={depositSubmitting}
+          submitLabel={depositSubmitLabel}
           feeRows={depositFeeRows}
           feeLoading={depositEstimateLoading}
           feeError=""
