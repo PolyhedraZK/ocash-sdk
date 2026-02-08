@@ -261,7 +261,7 @@ export class SyncEngine implements SyncApi {
           type: 'error',
           payload: {
             code: 'SYNC',
-            message: status.merkle.errorMessage,
+            message: status.merkle.errorMessage ?? 'Merkle sync requires memo sync',
             detail: { chainId, resource: 'merkle', reason: 'requires_memo' },
           },
         });
@@ -412,7 +412,7 @@ export class SyncEngine implements SyncApi {
             downloaded: status.memo.downloaded ?? cursor.memo,
             errorMessage: formatSyncErrorMessage(error),
           };
-          this.emit({ type: 'error', payload: { code: 'SYNC', message: status.memo.errorMessage, detail: { chainId, resource: 'memo' }, cause: error } });
+          this.emit({ type: 'error', payload: { code: 'SYNC', message: status.memo.errorMessage ?? 'Memo sync failed', detail: { chainId, resource: 'memo' }, cause: error } });
           if (enabled.has('merkle')) {
             status.merkle = {
               status: 'error',
@@ -421,7 +421,7 @@ export class SyncEngine implements SyncApi {
             };
             this.emit({
               type: 'error',
-              payload: { code: 'SYNC', message: status.merkle.errorMessage, detail: { chainId, resource: 'merkle', reason: 'memo_failed' }, cause: error },
+              payload: { code: 'SYNC', message: status.merkle.errorMessage ?? 'Merkle sync failed', detail: { chainId, resource: 'merkle', reason: 'memo_failed' }, cause: error },
             });
           }
         }
@@ -495,7 +495,7 @@ export class SyncEngine implements SyncApi {
           };
           this.emit({
             type: 'error',
-            payload: { code: 'SYNC', message: status.nullifier.errorMessage, detail: { chainId, resource: 'nullifier' }, cause: error },
+            payload: { code: 'SYNC', message: status.nullifier.errorMessage ?? 'Nullifier sync failed', detail: { chainId, resource: 'nullifier' }, cause: error },
           });
         }
       }
