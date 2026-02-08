@@ -12,7 +12,7 @@ export default defineConfig({
         nav: [
           { text: 'Guide', link: '/guide/getting-started' },
           { text: 'API Reference', link: '/api/sdk' },
-          { text: 'GitHub', link: 'https://github.com/aspect-build/ocash-sdk' },
+          { text: 'GitHub', link: 'https://github.com/PolyhedraZK/ocash-sdk' },
         ],
         sidebar: {
           '/guide/': [
@@ -67,7 +67,7 @@ export default defineConfig({
         nav: [
           { text: '指南', link: '/zh/guide/getting-started' },
           { text: 'API 参考', link: '/zh/api/sdk' },
-          { text: 'GitHub', link: 'https://github.com/aspect-build/ocash-sdk' },
+          { text: 'GitHub', link: 'https://github.com/PolyhedraZK/ocash-sdk' },
         ],
         sidebar: {
           '/zh/guide/': [
@@ -122,7 +122,7 @@ export default defineConfig({
       provider: 'local',
     },
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/aspect-build/ocash-sdk' },
+      { icon: 'github', link: 'https://github.com/PolyhedraZK/ocash-sdk' },
     ],
   },
 });

@@ -6,7 +6,7 @@ Thank you for your interest in contributing! This document provides guidelines a
 
 ```bash
 # Clone the repository
-git clone https://github.com/aspect-build/ocash-sdk.git
+git clone https://github.com/PolyhedraZK/ocash-sdk.git
 cd ocash-sdk
 
 # Install dependencies (requires pnpm 9+)
@@ -79,7 +79,7 @@ Use conventional commit style:
 
 ## Reporting Issues
 
-Please use [GitHub Issues](https://github.com/aspect-build/ocash-sdk/issues) and include:
+Please use [GitHub Issues](https://github.com/PolyhedraZK/ocash-sdk/issues) and include:
 
 - SDK version
 - Environment (browser/Node.js/hybrid)
