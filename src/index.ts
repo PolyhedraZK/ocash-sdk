@@ -89,6 +89,16 @@ function commitment(ro: CommitmentData, format?: 'hex' | 'bigint') {
   return format === 'bigint' ? CryptoToolkit.commitment(ro, 'bigint') : CryptoToolkit.commitment(ro, 'hex');
 }
 
+/**
+ * Create an SDK instance with the given configuration.
+ *
+ * @example
+ * ```ts
+ * const sdk = createSdk({ chains: [...], onEvent: (e) => console.log(e) });
+ * await sdk.core.ready();
+ * await sdk.wallet.open({ seed: 'my-secret-seed' });
+ * ```
+ */
 export const createSdk = (config: OCashSdkConfig): OCashSdk => {
   const normalizedConfig: OCashSdkConfig = {
     ...config,

@@ -73,6 +73,7 @@ export interface AssetsOverride {
   [filename: string]: AssetOverrideEntry;
 }
 
+/** SDK configuration passed to {@link createSdk}. */
 export interface OCashSdkConfig {
   chains: ChainConfigInput[];
   assetsOverride?: AssetsOverride;
@@ -575,16 +576,25 @@ export interface StorageAdapter {
   clearMerkleTree?(chainId: number): Promise<void>;
 }
 
+/** WASM & circuit initialization. Call `ready()` before any proof operations. */
 export interface CoreApi {
+  /** Load Go WASM runtime, compile circuits, and initialize proof engine. */
   ready: (onProgress?: (value: number) => void) => Promise<void>;
+  /** Release WASM resources and reset internal state. */
   reset: () => void;
+  /** Subscribe to a specific SDK event type. */
   on: (type: SdkEvent['type'], handler: (event: SdkEvent) => void) => void;
+  /** Unsubscribe from a specific SDK event type. */
   off: (type: SdkEvent['type'], handler: (event: SdkEvent) => void) => void;
 }
 
+/** Cryptographic primitives: Poseidon2 commitments, nullifiers, memo encryption. */
 export interface CryptoApi {
+  /** Compute Poseidon2 commitment from record opening data. */
   commitment: CommitmentFn;
+  /** Derive nullifier = Poseidon2(commitment, secret_key, merkle_index). */
   nullifier: (secretKey: bigint, commitment: Hex, freezerPk?: [bigint, bigint]) => Hex;
+  /** Create a record opening with normalized BigInt fields and random blinding factor. */
   createRecordOpening: (input: {
     asset_id: bigint | number | string;
     asset_amount: bigint | number | string;
@@ -612,14 +622,21 @@ export interface CryptoApi {
   };
 }
 
+/** BabyJubjub key derivation and address conversion. Seed must be >= 16 characters. */
 export interface KeysApi {
+  /** Derive full key pair (secret + public) from seed via HKDF-SHA256. */
   deriveKeyPair: (seed: string, nonce?: string) => UserKeyPair;
+  /** Derive secret key only (includes public key). */
   getSecretKeyBySeed: (seed: string, nonce?: string) => UserSecretKey;
+  /** Derive public key only (no secret key exposure). */
   getPublicKeyBySeed: (seed: string, nonce?: string) => UserPublicKey;
+  /** Compress BabyJubjub public key to 32-byte viewing address (0x...). */
   userPkToAddress: (userPk: { user_address: [bigint | string, bigint | string] }) => Hex;
+  /** Decompress viewing address back to BabyJubjub public key point. */
   addressToUserPk: (address: Hex) => { user_address: [bigint, bigint] };
 }
 
+/** Chain, token, and relayer configuration queries. */
 export interface AssetsApi {
   getChains: () => ChainConfigInput[];
   getChain: (chainId: number) => ChainConfigInput;
@@ -627,8 +644,10 @@ export interface AssetsApi {
   getPoolInfo: (chainId: number, tokenId: string) => TokenMetadata | undefined;
   getAllowanceTarget: (chainId: number) => Address;
   appendTokens: (chainId: number, tokens: TokenMetadata[]) => void;
+  /** Load chain/token config from a remote JSON URL. */
   loadFromUrl: (url: string) => Promise<void>;
   getRelayerConfig: (chainId: number) => RelayerConfig | undefined;
+  /** Fetch latest relayer config (fees, limits) from the relayer service. */
   syncRelayerConfig: (chainId: number) => Promise<RelayerConfig>;
   syncAllRelayerConfigs: () => Promise<void>;
 }
@@ -637,9 +656,13 @@ export interface StorageApi {
   getAdapter: () => StorageAdapter;
 }
 
+/** Memo, nullifier, and Merkle tree synchronization from Entry service. */
 export interface SyncApi {
+  /** Start background polling. Syncs immediately then repeats at `pollMs` interval. */
   start(options?: { chainIds?: number[]; pollMs?: number }): Promise<void>;
+  /** Stop polling and abort any in-flight sync. */
   stop(): void;
+  /** Run a single sync pass. Resolves when all requested resources are synced. */
   syncOnce(options?: {
     chainIds?: number[];
     resources?: Array<'memo' | 'nullifier' | 'merkle'>;
@@ -714,11 +737,17 @@ export interface UtxoRecord {
   createdAt?: number;
 }
 
+/** Wallet session, UTXO queries, and balance. */
 export interface WalletApi {
+  /** Open wallet session: derive keys from seed, initialize storage. */
   open(session: WalletSessionInput): Promise<void>;
+  /** Close session: release keys, flush storage. */
   close(): Promise<void>;
+  /** Query unspent UTXOs with optional filters. */
   getUtxos(query?: ListUtxosQuery): Promise<ListUtxosResult>;
+  /** Get total balance (sum of unspent, unfrozen UTXO amounts). */
   getBalance(query?: { chainId?: number; assetId?: string }): Promise<bigint>;
+  /** Mark UTXOs as spent by their nullifiers. */
   markSpent(input: { chainId: number; nullifiers: Hex[] }): Promise<void>;
 }
 
@@ -838,7 +867,9 @@ export type WithdrawPlan = {
 
 export type PlannerPlanResult = TransferPlan | TransferMergePlan | WithdrawPlan;
 
+/** Coin selection, fee estimation, and transaction planning. */
 export interface PlannerApi {
+  /** Estimate fees and check if balance is sufficient for an operation. */
   estimate(input: {
     chainId: number;
     assetId: string;
@@ -846,10 +877,13 @@ export interface PlannerApi {
     amount: bigint;
     payIncludesFee?: boolean;
   }): Promise<PlannerEstimateResult>;
+  /** Calculate the maximum transferable/withdrawable amount after fees. */
   estimateMax(input: { chainId: number; assetId: string; action: 'transfer' | 'withdraw'; payIncludesFee?: boolean }): Promise<PlannerMaxEstimateResult>;
+  /** Build a full transaction plan (coin selection, outputs, proof binding). */
   plan(input: Record<string, unknown>): Promise<PlannerPlanResult>;
 }
 
+/** zk-SNARK proof generation via Go WASM (Groth16). Requires `core.ready()`. */
 export interface ZkpApi {
   createWitnessTransfer: (input: TransferWitnessInput, context?: WitnessContext) => Promise<WitnessBuildResult>;
   createWitnessWithdraw: (input: WithdrawWitnessInput, context?: WitnessContext) => Promise<WitnessBuildResult>;
@@ -869,7 +903,9 @@ export interface TxBuilderApi {
   buildWithdrawCalldata: (input: { chainId: number; proof: ProofResult }) => Promise<RelayerRequest>;
 }
 
+/** End-to-end operation orchestration: plan → Merkle proof → witness → zk-SNARK proof → relayer request. */
 export interface OpsApi {
+  /** Prepare a private transfer (auto-merges UTXOs if needed when `autoMerge: true`). */
   prepareTransfer(input: {
     chainId: number;
     assetId: string;
@@ -899,6 +935,7 @@ export interface OpsApi {
   nextInput: { chainId: number; assetId: string; amount: bigint; to: Hex; relayerUrl?: string; autoMerge?: boolean };
   }>;
 
+  /** Prepare a withdrawal to an EVM address. Optionally includes gas drop. */
   prepareWithdraw(input: {
     chainId: number;
     assetId: string;
@@ -916,6 +953,7 @@ export interface OpsApi {
     meta: { arrayHashIndex: number; merkleRootIndex: number; relayer: Address };
   }>;
 
+  /** Prepare a deposit: compute commitment, memo, and build contract call requests. */
   prepareDeposit(input: {
     chainId: number;
     assetId: string;
@@ -952,6 +990,7 @@ export interface OpsApi {
     };
   }>;
 
+  /** Execute deposit on-chain: optionally auto-approve ERC-20 then call deposit(). */
   submitDeposit(input: {
     prepared: Awaited<ReturnType<OpsApi['prepareDeposit']>>;
     walletClient: { writeContract: (request: { address: Address; abi: any; functionName: string; args: any; value?: bigint; chainId?: number }) => Promise<Hex> };
@@ -983,6 +1022,7 @@ export interface OpsApi {
     confirmations?: number;
     operationId?: string;
   }): Promise<TransactionReceipt>;
+  /** Submit prepared transfer/withdraw to relayer and optionally wait for tx confirmation. */
   submitRelayerRequest<T = unknown>(input: {
     prepared: { plan: TransferPlan | WithdrawPlan; request: RelayerRequest; kind?: 'transfer' | 'merge' };
     relayerUrl?: string;
@@ -1004,18 +1044,35 @@ export interface OpsApi {
   }>;
 }
 
+/**
+ * The SDK instance returned by `createSdk(config)`.
+ *
+ * Lifecycle: `core.ready()` → `wallet.open()` → `sync.syncOnce()` → operations → `wallet.close()`
+ */
 export interface OCashSdk {
+  /** WASM & circuit initialization. */
   core: CoreApi;
+  /** Poseidon2 commitments, nullifiers, memo encryption. */
   crypto: CryptoApi;
+  /** BabyJubjub key derivation and address conversion. */
   keys: KeysApi;
+  /** Chain, token, and relayer configuration. */
   assets: AssetsApi;
+  /** Persistence adapter access. */
   storage: StorageApi;
+  /** Memo/nullifier/Merkle sync from Entry service. */
   sync: SyncApi;
+  /** Merkle proofs and membership witnesses. */
   merkle: MerkleApi;
+  /** Wallet session, UTXO queries, balance. */
   wallet: WalletApi;
+  /** Coin selection, fee estimation, transaction planning. */
   planner: PlannerApi;
+  /** zk-SNARK proof generation (Groth16 via Go WASM). */
   zkp: ZkpApi;
+  /** Relayer request payload builder. */
   tx: TxBuilderApi;
+  /** End-to-end operation orchestration. */
   ops: OpsApi;
 }
 

@@ -1,0 +1,60 @@
+You are working on @ocash/sdk — a TypeScript ZKP SDK for privacy-preserving token operations (deposit, transfer, withdraw) via UTXO model and zk-SNARK proofs.
+
+## Project Basics
+
+- Language: TypeScript 5.8 strict, ES2020 target
+- Build: tsup (ESM + CJS, 3 entry points: index, browser, node)
+- Test: vitest 2.1 (run: `pnpm run test`)
+- Type check: `pnpm run type-check`
+- Package manager: pnpm 9+ (NOT npm/yarn)
+- Node: 20.19.0+
+
+## Architecture
+
+- Factory: `createSdk(config)` returns `OCashSdk` with 12 modules
+- Event-driven: `onEvent` callback with `SdkEvent` union type
+- UTXO model, not account balances
+- 3 entry points: `@ocash/sdk` (universal), `@ocash/sdk/browser` (+IndexedDbStore), `@ocash/sdk/node` (+FileStore)
+- WASM lazy-loaded: `core.ready()` must be called before proof operations
+
+## Code Conventions
+
+- No `any` casts. No `@ts-ignore`. Fix the types properly.
+- No comments on obvious code. Only comment non-obvious logic.
+- Errors: use `SdkError(code, message, detail?, cause?)`, not raw throw.
+- Internal: BigInt. External API: `Hex` (`0x${string}`).
+- Exports converge through entry point files — no deep imports.
+- Module directories map 1:1 to functionality. No shared/common/helpers dirs.
+- BigInt sort: `(a > b ? 1 : a < b ? -1 : 0)` — never `Number(a - b)` (precision loss).
+- Don't over-engineer. No abstractions for one-time ops. Three similar lines > premature abstraction.
+
+## Key Files
+
+- `src/index.ts` — main entry, createSdk factory
+- `src/types.ts` — all type definitions (~850 lines)
+- `src/crypto/poseidon2.ts` — Poseidon2 hash (pure JS)
+- `src/crypto/babyJubjub.ts` — BabyJubjub curve (pure JS)
+- `src/crypto/keyManager.ts` — HKDF key derivation
+- `src/ops/ops.ts` — end-to-end operation orchestration
+- `src/planner/planner.ts` — coin selection, fee calculation
+- `src/sync/syncEngine.ts` — data sync engine
+- `src/runtime/wasmBridge.ts` — Go WASM bridge
+
+## Crypto Stack
+
+- BabyJubjub: twisted Edwards over BN254 scalar field (pure JS)
+- Poseidon2: commitments, nullifiers, Merkle nodes (pure JS)
+- ECDH + NaCl XSalsa20-Poly1305: memo encryption (tweetnacl)
+- HKDF-SHA256: seed → spending key (@noble/hashes)
+- Groth16 proofs: Go WASM (fetched at runtime, not bundled)
+
+## Testing Rules
+
+- Tests in `tests/` dir, pattern `{module}.test.ts`
+- vitest globals (describe/it/expect without import)
+- Seeds must be >= 16 characters
+- Always run `pnpm run test` after changes
+
+## Full API Reference
+
+See `llms.txt` in repo root for complete API signatures, types, and examples.
