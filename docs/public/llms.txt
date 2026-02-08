@@ -1,0 +1,44 @@
+# @ocash/sdk
+
+> TypeScript ZKP SDK for privacy-preserving token operations via UTXO model and zk-SNARK proofs.
+
+## Install
+
+```bash
+pnpm add @ocash/sdk
+```
+
+Three entry points:
+- `@ocash/sdk` — universal (MemoryStore)
+- `@ocash/sdk/browser` — browser (+ IndexedDbStore)
+- `@ocash/sdk/node` — Node.js (+ FileStore)
+
+## Quick Start
+
+```ts
+import { createSdk } from '@ocash/sdk';
+
+const sdk = createSdk({
+  chains: [{
+    chainId: 11155111,
+    entryUrl: 'https://entry.example.com',
+    ocashContractAddress: '0x...',
+    relayerUrl: 'https://relayer.example.com',
+    merkleProofUrl: 'https://merkle.example.com',
+    tokens: [],
+  }],
+  onEvent: (event) => console.log(event.type, event.payload),
+});
+
+await sdk.core.ready();
+await sdk.wallet.open({ seed: 'your-secret-seed' });
+await sdk.sync.syncOnce();
+const balance = await sdk.wallet.getBalance({ chainId: 11155111 });
+await sdk.wallet.close();
+```
+
+## Lifecycle
+
+createSdk(config) → sdk.core.ready() → sdk.wallet.open({ seed }) → sdk.sync.start() → sdk.ops.* → sdk.wallet.close()
+
+## Full API Reference: docs.o.cash

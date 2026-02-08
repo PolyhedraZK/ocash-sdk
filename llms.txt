@@ -1,0 +1,277 @@
+# @ocash/sdk
+
+> TypeScript ZKP SDK for privacy-preserving token operations via UTXO model and zk-SNARK proofs.
+
+## Install
+
+```bash
+pnpm add @ocash/sdk
+```
+
+Three entry points:
+- `@ocash/sdk` — universal (MemoryStore)
+- `@ocash/sdk/browser` — browser (+ IndexedDbStore)
+- `@ocash/sdk/node` — Node.js (+ FileStore)
+
+## Quick Start
+
+```ts
+import { createSdk } from '@ocash/sdk';
+
+const sdk = createSdk({
+  chains: [{
+    chainId: 11155111,
+    entryUrl: 'https://entry.example.com',
+    ocashContractAddress: '0x...',
+    relayerUrl: 'https://relayer.example.com',
+    merkleProofUrl: 'https://merkle.example.com',
+    tokens: [],
+  }],
+  onEvent: (event) => console.log(event.type, event.payload),
+});
+
+await sdk.core.ready();                                    // Load WASM & circuits
+await sdk.wallet.open({ seed: 'your-secret-seed' });      // Derive keys, init storage
+await sdk.sync.syncOnce();                                 // Sync memos, nullifiers, merkle
+const balance = await sdk.wallet.getBalance({ chainId: 11155111 });
+await sdk.wallet.close();                                  // Release keys, flush storage
+```
+
+## SDK Modules
+
+sdk.core      — WASM & circuit initialization (ready, reset)
+sdk.keys      — BabyJubjub key derivation (deriveKeyPair, userPkToAddress, addressToUserPk)
+sdk.crypto    — Commitments, nullifiers, memo encryption (commitment, nullifier, createRecordOpening)
+sdk.assets    — Chain/token/relayer configuration (getChains, getTokens, syncRelayerConfig)
+sdk.storage   — Persistence adapter (upsertUtxos, listUtxos, markSpent, getSyncCursor)
+sdk.wallet    — Session, UTXOs, balance (open, close, getUtxos, getBalance, markSpent)
+sdk.sync      — Memo/nullifier/Merkle sync (start, stop, syncOnce, getStatus)
+sdk.merkle    — Merkle proofs & membership witnesses (getProofByCids, buildInputSecretsFromUtxos)
+sdk.planner   — Coin selection, fee estimation (estimate, estimateMax, plan)
+sdk.zkp       — zk-SNARK proof generation (proveTransfer, proveWithdraw)
+sdk.tx        — Relayer request builder (buildTransferCalldata, buildWithdrawCalldata)
+sdk.ops       — End-to-end orchestration (prepareTransfer, prepareWithdraw, prepareDeposit, submitRelayerRequest)
+
+## Configuration
+
+```ts
+interface OCashSdkConfig {
+  chains: ChainConfigInput[];           // Required: chain configurations
+  assetsOverride?: AssetsOverride;      // WASM/circuit file URLs (string or string[] for chunks)
+  storage?: StorageAdapter;             // Default: MemoryStore
+  runtime?: 'auto' | 'browser' | 'node' | 'hybrid';
+  cacheDir?: string;                    // Node/hybrid: local asset cache directory
+  merkle?: { mode?: 'remote' | 'local' | 'hybrid'; treeDepth?: number };
+  sync?: { pageSize?: number; pollMs?: number; requestTimeoutMs?: number; retry?: { attempts?: number; baseDelayMs?: number; maxDelayMs?: number } };
+  onEvent?: (event: SdkEvent) => void;  // Event callback
+}
+
+interface ChainConfigInput {
+  chainId: number;
+  rpcUrl?: string;                      // JSON-RPC URL
+  entryUrl?: string;                    // Entry Service (memo/nullifier sync)
+  ocashContractAddress?: Address;       // OCash contract
+  relayerUrl?: string;                  // Relayer service
+  merkleProofUrl?: string;              // Merkle proof service
+  tokens?: TokenMetadata[];
+}
+
+interface TokenMetadata {
+  id: string; symbol: string; decimals: number; wrappedErc20: Address;
+  viewerPk: [string, string]; freezerPk: [string, string];
+  depositFeeBps?: number; withdrawFeeBps?: number;
+  transferMaxAmount?: bigint | string; withdrawMaxAmount?: bigint | string;
+}
+```
+
+## Transfer
+
+```ts
+const keyPair = sdk.keys.deriveKeyPair(seed, nonce);
+
+// Estimate fees first
+const estimate = await sdk.planner.estimate({
+  chainId: 11155111, assetId: 'token-id', action: 'transfer', amount: 500000n,
+});
+// estimate.feeSummary.mergeCount / relayerFeeTotal / protocolFeeTotal
+
+// Max transferable
+const max = await sdk.planner.estimateMax({
+  chainId: 11155111, assetId: 'token-id', action: 'transfer',
+});
+// max.maxSummary.outputAmount
+
+// Prepare (plan → merkle proof → witness → zk-SNARK proof → relayer request)
+const prepared = await sdk.ops.prepareTransfer({
+  chainId: 11155111, assetId: 'token-id', amount: 500000n,
+  to: recipientViewingAddress,  // Hex: BabyJubjub compressed address
+  ownerKeyPair: keyPair,
+  publicClient,                 // viem PublicClient
+});
+
+// Submit to relayer
+const result = await sdk.ops.submitRelayerRequest({ prepared, publicClient });
+const txHash = await result.waitRelayerTxHash;
+const receipt = await result.transactionReceipt;
+```
+
+If more than 3 UTXOs needed, prepareTransfer returns `{ kind: 'merge' }` with merge steps. The planner handles this automatically with `autoMerge: true` (default).
+
+## Withdraw
+
+```ts
+const prepared = await sdk.ops.prepareWithdraw({
+  chainId: 11155111, assetId: 'token-id', amount: 500000n,
+  recipient: '0x1234...abcd',   // EVM address to receive tokens
+  ownerKeyPair: keyPair, publicClient,
+  gasDropValue: 10000000000000000n,  // Optional: 0.01 ETH gas drop
+});
+const result = await sdk.ops.submitRelayerRequest({ prepared, publicClient });
+```
+
+## Deposit
+
+```ts
+const ownerPub = sdk.keys.getPublicKeyBySeed(seed, nonce);
+const prepared = await sdk.ops.prepareDeposit({
+  chainId: 11155111, assetId: 'token-id', amount: 1000000n,
+  ownerPublicKey: ownerPub,
+  account: walletAddress,       // Depositor's EOA
+  publicClient,
+});
+
+// ERC-20 approval if needed
+if (prepared.approveNeeded && prepared.approveRequest) {
+  await walletClient.writeContract(prepared.approveRequest);
+}
+await walletClient.writeContract(prepared.depositRequest);
+
+// Or use submitDeposit for auto-approve:
+const result = await sdk.ops.submitDeposit({
+  prepared, walletClient, publicClient, autoApprove: true,
+});
+```
+
+## Key Management
+
+```ts
+// Derive key pair (seed must be >= 16 characters)
+const keyPair = sdk.keys.deriveKeyPair('my-secret-seed', 'optional-nonce');
+// keyPair.user_sk.address_sk: bigint (secret key)
+// keyPair.user_pk.user_address: [bigint, bigint] (BabyJubjub public key)
+
+// Public key only (no secret key exposure)
+const pubKey = sdk.keys.getPublicKeyBySeed(seed, nonce);
+
+// Compress to viewing address
+const address = sdk.keys.userPkToAddress(pubKey);  // 0x... (32 bytes)
+
+// Decompress back
+const pk = sdk.keys.addressToUserPk(address);
+```
+
+## Sync
+
+```ts
+// One-shot sync
+await sdk.sync.syncOnce({
+  chainIds: [11155111],
+  resources: ['memo', 'nullifier', 'merkle'],
+  signal: abortController.signal,
+});
+
+// Background polling
+await sdk.sync.start({ pollMs: 10_000 });
+sdk.sync.stop();  // Stops polling + aborts in-flight sync
+
+// Check status
+const status = sdk.sync.getStatus();
+// { 11155111: { memo: { status: 'synced', downloaded: 1291 }, ... } }
+```
+
+## Storage Adapters
+
+```ts
+import { MemoryStore } from '@ocash/sdk';
+import { IndexedDbStore } from '@ocash/sdk/browser';
+import { FileStore } from '@ocash/sdk/node';
+
+new MemoryStore({ maxOperations: 100 })
+new IndexedDbStore({ dbName: 'myapp', maxOperations: 200 })
+new FileStore({ baseDir: './data', maxOperations: 500 })
+```
+
+Required interface methods:
+- upsertUtxos(utxos: UtxoRecord[]): Promise<void>
+- listUtxos(query?: ListUtxosQuery): Promise<{ total: number; rows: UtxoRecord[] }>
+- markSpent(input: { chainId: number; nullifiers: Hex[] }): Promise<number>
+- getSyncCursor(chainId: number): Promise<SyncCursor | undefined>
+- setSyncCursor(chainId: number, cursor: SyncCursor): Promise<void>
+
+## Events
+
+All events via `onEvent` callback. Union type `SdkEvent`:
+
+- core:ready — { assetsVersion, durationMs }
+- core:progress — { stage: 'fetch'|'compile'|'init', loaded, total? }
+- sync:start — { chainId }
+- sync:progress — { chainId, resource: 'memo'|'nullifier'|'merkle', downloaded, total? }
+- sync:done — { chainId, cursor }
+- wallet:utxo:update — { chainId, added, spent, frozen }
+- zkp:start — { circuit: 'transfer'|'withdraw' }
+- zkp:done — { circuit, costMs }
+- error — { code: SdkErrorCode, message, detail?, cause? }
+
+Error codes: CONFIG | ASSETS | STORAGE | SYNC | CRYPTO | MERKLE | WITNESS | PROOF | RELAYER
+
+## Key Types
+
+```ts
+type Hex = `0x${string}`;
+
+interface UtxoRecord {
+  chainId: number; assetId: string; amount: bigint;
+  commitment: Hex; nullifier: Hex; mkIndex: number;
+  isFrozen: boolean; isSpent: boolean; memo?: Hex; createdAt?: number;
+}
+
+interface CommitmentData {
+  asset_id: bigint; asset_amount: bigint;
+  user_pk: { user_address: [bigint, bigint] };
+  blinding_factor: bigint; is_frozen: boolean;
+}
+
+interface SyncCursor { memo: number; nullifier: number; merkle: number; }
+
+type OperationType = 'deposit' | 'transfer' | 'withdraw';
+type OperationStatus = 'pending' | 'submitted' | 'confirmed' | 'failed';
+
+interface ProofResult { proof: string; publicInputs: string[]; }
+interface RelayerRequest { kind: 'relayer'; method: 'POST'; path: string; body: Record<string, unknown>; }
+```
+
+## Cryptography
+
+- Curve: BabyJubjub (twisted Edwards over BN254 scalar field)
+- Hash: Poseidon2 (commitments, nullifiers, Merkle nodes)
+- Encryption: ECDH + NaCl XSalsa20-Poly1305 (memo encryption)
+- Key derivation: HKDF-SHA256 (seed → spending key)
+- Proofs: Groth16 zk-SNARK (Go WASM, transfer & withdraw circuits)
+- commitment = Poseidon2(asset_id, amount, pk.x, pk.y, blinding_factor)
+- nullifier = Poseidon2(commitment, secret_key, merkle_index)
+
+## Static Utilities
+
+```ts
+import { MemoKit, CryptoToolkit, KeyManager, Utils } from '@ocash/sdk';
+
+MemoKit.createMemo(recordOpening)                    // Encrypt record opening → Hex memo
+MemoKit.decodeMemoForOwner({ secretKey, memo })      // Decrypt memo → CommitmentData | null
+
+CryptoToolkit.commitment(data)                       // Poseidon2 commitment
+CryptoToolkit.nullifier(secretKey, commitment)       // Nullifier derivation
+CryptoToolkit.createRecordOpening({ assetId, amount, userPk })
+
+Utils.calcDepositFee(amount, feeBps)                 // Protocol fee calculation
+Utils.randomBytes32Bigint()                          // Cryptographic random bigint
+```
