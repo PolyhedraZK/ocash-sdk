@@ -2,6 +2,24 @@
   "name": "@ocash/sdk",
   "version": "0.1.0",
   "description": "OCash ZKP SDK for browser, hybrid and Node runtimes",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PolyhedraZK/ocash-sdk.git"
+  },
+  "homepage": "https://docs.o.cash",
+  "keywords": [
+    "zk",
+    "snark",
+    "zkp",
+    "zero-knowledge",
+    "privacy",
+    "utxo",
+    "ethereum",
+    "groth16",
+    "poseidon",
+    "babyjubjub"
+  ],
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
