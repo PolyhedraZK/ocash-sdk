@@ -4,6 +4,10 @@ export default defineConfig({
   title: '@ocash/sdk',
   description: 'TypeScript ZKP SDK for privacy-preserving token operations',
 
+  head: [
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/logo.svg' }],
+  ],
+
   locales: {
     root: {
       label: 'English',
@@ -118,6 +122,7 @@ export default defineConfig({
   },
 
   themeConfig: {
+    logo: '/logo.svg',
     search: {
       provider: 'local',
     },
