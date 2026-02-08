@@ -27,12 +27,14 @@ pnpm add @ocash/sdk
 ```ts
 import { createSdk } from '@ocash/sdk';
 
+// See demos/node/ocash.config.example.json for testnet URLs
 const sdk = createSdk({
   chains: [{
     chainId: 11155111,
-    entryUrl: 'https://entry.example.com',
-    ocashContractAddress: '0x...',
-    relayerUrl: 'https://relayer.example.com',
+    entryUrl: '<ENTRY_SERVICE_URL>',
+    ocashContractAddress: '<CONTRACT_ADDRESS>',
+    relayerUrl: '<RELAYER_URL>',
+    merkleProofUrl: '<MERKLE_PROOF_URL>',
     tokens: [],
   }],
   onEvent: console.log,
