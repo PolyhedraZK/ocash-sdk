@@ -83,7 +83,7 @@ export type OperationCreateInput<TType extends OperationType = OperationType> = 
 > &
   Partial<Pick<StoredOperation<OperationDetailFor<TType>>, 'createdAt' | 'id' | 'status'>> & { type: TType };
 
-export const newOperationId = () => `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+export const newOperationId = () => globalThis.crypto.randomUUID();
 
 export type DepositOperation = Omit<StoredOperation<DepositOperationDetail>, 'type'> & { type: 'deposit'; detail?: DepositOperationDetail };
 export type TransferOperation = Omit<StoredOperation<TransferOperationDetail>, 'type'> & { type: 'transfer'; detail?: TransferOperationDetail };

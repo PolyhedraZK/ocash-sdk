@@ -1001,7 +1001,6 @@ export interface OpsApi {
     updateOperation: (patch: Partial<StoredOperation>) => void;
     waitRelayerTxHash: Promise<Hex>;
     transactionReceipt?: Promise<TransactionReceipt>;
-    TransactionReceipt?: Promise<TransactionReceipt>;
   }>;
 }
 

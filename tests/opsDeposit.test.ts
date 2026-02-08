@@ -32,7 +32,7 @@ describe('Ops.prepareDeposit', () => {
       chainId,
       assetId: '1',
       amount: 100n,
-      ownerPublicKey: KeyManager.getPublicKeyBySeed('opsDeposit-test', '0'),
+      ownerPublicKey: KeyManager.getPublicKeyBySeed('opsDeposit-test-seed', '0'),
       account: '0x0000000000000000000000000000000000000003',
       publicClient,
     });

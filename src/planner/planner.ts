@@ -85,7 +85,7 @@ const parsePlanInput = (input: Record<string, unknown>): PlanInput => {
 const tokenFeeKey = (token: TokenMetadata) => toHex(BigInt(token.id), { size: 32 }).toLowerCase();
 
 const selectTransferInputs = (utxos: UtxoRecord[], required: bigint, maxInputs = 3) => {
-  const sorted = [...utxos].sort((a, b) => Number(b.amount - a.amount));
+  const sorted = [...utxos].sort((a, b) => (b.amount > a.amount ? 1 : b.amount < a.amount ? -1 : 0));
   const selected: UtxoRecord[] = [];
   let sum = 0n;
   for (const utxo of sorted) {
@@ -97,7 +97,7 @@ const selectTransferInputs = (utxos: UtxoRecord[], required: bigint, maxInputs =
 };
 
 const selectWithdrawInput = (utxos: UtxoRecord[], required: bigint) => {
-  const sorted = [...utxos].sort((a, b) => Number(b.amount - a.amount));
+  const sorted = [...utxos].sort((a, b) => (b.amount > a.amount ? 1 : b.amount < a.amount ? -1 : 0));
   return sorted.find((u) => u.amount >= required) ?? null;
 };
 
@@ -105,12 +105,13 @@ const INPUT_NUMBER = 3;
 
 const recordsFee = (
   input: { withdrawFeeBps?: number },
-  records: bigint[],
+  _records: bigint[],
   expectedOutput: bigint,
   action: 'transfer' | 'withdraw',
   relayerFee: { transfer: bigint; withdraw: bigint },
   expectedIsWithFee?: boolean,
 ) => {
+  const records = [..._records];
   let feeCount = 0;
   let fee = 0n;
   let cost = 0n;
@@ -234,7 +235,7 @@ const estimateRecords = (input: {
   withdrawFeeBps?: number;
   expectedIsWithFee?: boolean;
 }) => {
-  const sorted = [...input.records].sort((a, b) => Number(b - a));
+  const sorted = [...input.records].sort((a, b) => (b > a ? 1 : b < a ? -1 : 0));
   const payRecords: bigint[] = [];
   let payInfo = recordsFee(
     { withdrawFeeBps: input.withdrawFeeBps },
@@ -294,7 +295,7 @@ export class Planner implements PlannerApi {
   ) {}
 
   private selectMergeInputs(utxos: UtxoRecord[], count = INPUT_NUMBER) {
-    const sorted = [...utxos].sort((a, b) => Number(a.amount - b.amount));
+    const sorted = [...utxos].sort((a, b) => (a.amount > b.amount ? 1 : a.amount < b.amount ? -1 : 0));
     return sorted.slice(0, count);
   }
 
@@ -537,7 +538,7 @@ export class Planner implements PlannerApi {
         }
         let mergeSum = mergeInputs.reduce((acc, cur) => acc + cur.amount, 0n);
         if (mergeSum <= relayerFee) {
-          const largest = [...utxos].sort((a, b) => Number(b.amount - a.amount)).slice(0, INPUT_NUMBER);
+          const largest = [...utxos].sort((a, b) => (b.amount > a.amount ? 1 : b.amount < a.amount ? -1 : 0)).slice(0, INPUT_NUMBER);
           const largestSum = largest.reduce((acc, cur) => acc + cur.amount, 0n);
           if (largestSum <= relayerFee) {
             throw new SdkError('CONFIG', 'insufficient shielded balance for merge fee', {
@@ -701,6 +702,7 @@ export class Planner implements PlannerApi {
     const key = tokenFeeKey(token);
     const table = action === 'transfer' ? config.fee_configure.transfer : config.fee_configure.withdraw;
     const fee = (table as any)?.[key]?.fee;
+    // No fee entry → default to zero (favorable to user, no charge)
     return fee != null ? BigInt(fee) : 0n;
   }
 }

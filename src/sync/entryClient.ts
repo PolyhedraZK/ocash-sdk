@@ -26,7 +26,7 @@ interface EntryListResponse<T> {
   data?: { data?: T[]; total?: number } | { data?: T[]; total?: number; ready?: boolean };
 }
 
-const joinUrl = (base: string, path: string) => `${base.replace(/\/$/, '')}${path}`;
+import { joinUrl } from '../utils/url';
 
 const withQuery = (url: string, params: Record<string, string | number | undefined>) => {
   const search = new URLSearchParams();

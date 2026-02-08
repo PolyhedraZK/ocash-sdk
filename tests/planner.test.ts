@@ -84,9 +84,9 @@ describe('Planner.plan', () => {
     const assets = makeAssets({ chainId, token, relayerFee: 0n });
     const store = new MemoryStore();
     const wallet = new WalletService(assets as any, store as any, () => undefined);
-    await wallet.open({ seed: 'seed' });
+    await wallet.open({ seed: 'planner-test-seed-key' });
 
-    const validUserAddress = KeyManager.getPublicKeyBySeed('seed', '0').user_pk.user_address;
+    const validUserAddress = KeyManager.getPublicKeyBySeed('planner-test-seed-key', '0').user_pk.user_address;
     const bridge = {
       createDummyRecordOpening: async () =>
         CryptoToolkit.createRecordOpening({
@@ -111,7 +111,7 @@ describe('Planner.plan', () => {
     ]);
 
     const planner = new Planner(assets as any, wallet as any, bridge);
-    const receiver = KeyManager.userPkToAddress(KeyManager.getPublicKeyBySeed('seed', '1').user_pk as any);
+    const receiver = KeyManager.userPkToAddress(KeyManager.getPublicKeyBySeed('planner-test-seed-key', '1').user_pk as any);
     const plan = (await planner.plan({ action: 'transfer', chainId, assetId: token.id, amount: 60n, to: receiver })) as any;
 
     expect(plan.action).toBe('transfer');
@@ -137,9 +137,9 @@ describe('Planner.plan', () => {
     const assets = makeAssets({ chainId, token, relayerFee: 0n });
     const store = new MemoryStore();
     const wallet = new WalletService(assets as any, store as any, () => undefined);
-    await wallet.open({ seed: 'seed' });
+    await wallet.open({ seed: 'planner-test-seed-key' });
 
-    const validUserAddress = KeyManager.getPublicKeyBySeed('seed', '0').user_pk.user_address;
+    const validUserAddress = KeyManager.getPublicKeyBySeed('planner-test-seed-key', '0').user_pk.user_address;
     const bridge = {
       createDummyRecordOpening: async () =>
         CryptoToolkit.createRecordOpening({

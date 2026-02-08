@@ -1,4 +1,4 @@
-import type { AssetsApi, ChainConfigInput, Hex, ListUtxosQuery, ListUtxosResult, StorageAdapter, UtxoRecord, WalletSessionInput } from '../types';
+import type { AssetsApi, ChainConfigInput, Hex, ListUtxosQuery, ListUtxosResult, SdkEvent, StorageAdapter, UtxoRecord, WalletSessionInput } from '../types';
 import { SdkError } from '../errors';
 import { KeyManager } from '../crypto/keyManager';
 import { CryptoToolkit } from '../crypto/cryptoToolkit';
@@ -26,7 +26,7 @@ export class WalletService {
   constructor(
     private readonly assets: AssetsApi,
     private readonly storage: StorageAdapter,
-    private readonly emit: (evt: any) => void,
+    private readonly emit: (evt: SdkEvent) => void,
   ) {}
 
   async open(session: WalletSessionInput) {
@@ -42,6 +42,8 @@ export class WalletService {
 
   async close() {
     this.opened = false;
+    // JS BigInt is immutable — cannot be securely zeroed in-place.
+    // Setting to null removes the reference; actual memory clearing depends on GC.
     this.secretKey = null;
     this.address = null;
     await this.storage.close?.();

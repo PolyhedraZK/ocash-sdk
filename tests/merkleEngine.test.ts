@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { MerkleEngine } from '../src/merkle/merkleEngine';
-import type { ProofBridge } from '../src/types';
+import { KeyManager } from '../src/crypto/keyManager';
+import { MemoKit } from '../src/memo/memoKit';
+import { CryptoToolkit } from '../src/crypto/cryptoToolkit';
+import type { CommitmentData, ProofBridge } from '../src/types';
 
 const bridge: ProofBridge = {
   init: async () => undefined,
@@ -14,6 +17,11 @@ const bridge: ProofBridge = {
   nullifier: () => '0x0',
   createDummyRecordOpening: async () => ({} as any),
   createDummyInputSecret: async () => ({ dummy: true } as any),
+};
+
+const deriveOwner = () => {
+  const kp = KeyManager.deriveKeyPair('merkle-engine-test');
+  return { user_pk: kp.user_pk, user_sk: kp.user_sk };
 };
 
 describe('MerkleEngine', () => {
@@ -41,9 +49,9 @@ describe('MerkleEngine', () => {
     expect(fetchMock).toHaveBeenCalledWith('https://merkle.invalid/api/v1/merkle?cid=7', expect.objectContaining({ signal: expect.anything() }));
   });
 
-  it('builds input secrets with dummy for missing memo', async () => {
+  it('throws SdkError(MERKLE) when all utxos lack memos', async () => {
     const engine = new MerkleEngine(() => ({ merkleProofUrl: 'https://x.invalid' }), bridge);
-    const owner = { user_pk: { user_address: [1n, 2n] }, user_sk: { address_sk: 1n } } as any;
+    const owner = deriveOwner();
     const remote = { proof: [{ path: ['0', '1'], leaf_index: 0 }], merkle_root: '0x01', latest_cid: 0 } as any;
 
     await expect(
@@ -65,24 +73,23 @@ describe('MerkleEngine', () => {
   });
 
   it('pads input secrets to maxInputs for transfer circuit', async () => {
-    const engine = new MerkleEngine(() => ({ merkleProofUrl: 'https://x.invalid' }), {
-      ...bridge,
-      decryptMemo: () =>
-        ({
-          asset_id: 1n,
-          asset_amount: 2n,
-          user_pk: { user_address: [1n, 2n] },
-          blinding_factor: 3n,
-          is_frozen: false,
-        }) as any,
-    });
+    const owner = deriveOwner();
+    const ro: CommitmentData = {
+      asset_id: 1n,
+      asset_amount: 2n,
+      user_pk: { user_address: owner.user_pk.user_address },
+      blinding_factor: 3n,
+      is_frozen: false,
+    };
+    const memo = MemoKit.createMemo(ro);
 
-    const owner = { user_pk: { user_address: [1n, 2n] }, user_sk: { address_sk: 1n } } as any;
+    const engine = new MerkleEngine(() => ({ merkleProofUrl: 'https://x.invalid' }), bridge);
+
     const remote = { proof: [{ path: ['0x02', '0x03'], leaf_index: 0 }], merkle_root: '0x01', latest_cid: 0 } as any;
 
     const out = await engine.buildInputSecretsFromUtxos({
       remote,
-      utxos: [{ commitment: '0x02', mkIndex: 0, memo: '0x1234' }],
+      utxos: [{ commitment: '0x02', mkIndex: 0, memo }],
       ownerKeyPair: owner,
       arrayHash: 0n,
       totalElements: 1n,

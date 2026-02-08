@@ -8,6 +8,7 @@ import { toHex } from 'viem';
 const HKDF_INFO = 'OCash.KeyGen';
 
 const deriveSeed = (seed: string, nonce?: string): `0x${string}` => {
+  if (seed.length < 16) throw new Error('Seed must be at least 16 characters');
   const ikm = utf8ToBytes(seed);
   const info = utf8ToBytes(nonce ? `${HKDF_INFO}:${nonce}` : HKDF_INFO);
   const okm = hkdf(sha256, ikm, undefined, info, 32);

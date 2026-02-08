@@ -1,38 +1,12 @@
 import type { Hex, RelayerRequest } from '../types';
 import { SdkError } from '../errors';
 import { isHexStrict } from '../utils/hex';
+import { signalTimeout, signalAny } from '../utils/signal';
+import { joinUrl } from '../utils/url';
 
 type ApiResponse<T> = { code?: number; message?: string; user_message?: string; data?: T };
 
-const joinUrl = (base: string, path: string) => `${base.replace(/\/$/, '')}${path}`;
-
 const DEFAULT_RELAYER_REQUEST_TIMEOUT_MS = 60_000;
-
-const signalTimeout = (ms: number): AbortSignal => {
-  const anyAbortSignal = AbortSignal as any;
-  if (typeof anyAbortSignal?.timeout === 'function') return anyAbortSignal.timeout(ms) as AbortSignal;
-  const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(new Error('timeout')), ms);
-  controller.signal.addEventListener('abort', () => clearTimeout(t), { once: true });
-  return controller.signal;
-};
-
-const signalAny = (signals: Array<AbortSignal | undefined>): AbortSignal | undefined => {
-  const list = signals.filter(Boolean) as AbortSignal[];
-  if (!list.length) return undefined;
-  const anyAbortSignal = AbortSignal as any;
-  if (typeof anyAbortSignal?.any === 'function') return anyAbortSignal.any(list) as AbortSignal;
-  const controller = new AbortController();
-  const onAbort = (s: AbortSignal) => controller.abort((s as any).reason);
-  for (const s of list) {
-    if (s.aborted) {
-      onAbort(s);
-      break;
-    }
-    s.addEventListener('abort', () => onAbort(s), { once: true });
-  }
-  return controller.signal;
-};
 
 export class RelayerClient {
   constructor(private readonly baseUrl: string) {}

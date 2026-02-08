@@ -132,18 +132,12 @@ export function createKeyPairFromSeed(seed: Hash): UserKeyPair {
   // 计算公钥: addressPk = addressSk * G
   const [pubX, pubY] = babyJubjubScalarMult(addressSk);
 
-  // 生成 Curve25519 密钥对用于 AEAD (与Go的box.GenerateKey保持一致)
-  // const privateKey = seedHash.slice(0, 32); // Curve25519 私钥长度为 32 字节
-  // const naclKeyPair = nacl.box.keyPair.fromSecretKey(privateKey);
-
   return {
     user_pk: {
       user_address: [pubX, pubY],
-      // aead_encryption_key: BigInt(toHex(naclKeyPair.publicKey)),
     },
     user_sk: {
       address_sk: addressSk,
-      // aead_decryption_key: BigInt(toHex(naclKeyPair.secretKey)),
     },
   };
 }
@@ -203,29 +197,16 @@ export function validateKeyPair(keyPair: UserKeyPair): boolean {
     const actualY = BigInt(keyPair.user_pk.user_address[1]);
 
     if (pubX !== actualX || pubY !== actualY) {
-      console.error('BabyJubjub key pair validation failed');
       return false;
     }
 
     // 验证点是否在曲线上
     if (!isPointOnCurve([actualX, actualY])) {
-      console.error('Public key point is not on the curve');
       return false;
     }
 
-    // 验证 Curve25519 密钥对
-    // 确保密钥长度为32字节，使用固定长度转换
-    // const sk = numberToBytes(keyPair.user_sk.aead_decryption_key);
-    // const naclKeyPair = nacl.box.keyPair.fromSecretKey(sk);
-    // const actualPublicKey = BigInt(toHex(naclKeyPair.publicKey));
-    // if (actualPublicKey !== keyPair.user_pk.aead_encryption_key) {
-    //   console.error('Curve25519 key pair validation failed');
-    //   return false;
-    // }
-
     return true;
-  } catch (error) {
-    console.error('Key pair validation error:', error);
+  } catch {
     return false;
   }
 }
@@ -240,9 +221,11 @@ export function isInPrimeSubgroup(point: [bigint, bigint]): boolean {
     return false;
   }
 
-  // 计算 COFACTOR * point，应该等于单位元 [0, 1]
+  // A point in the prime-order subgroup has order l (prime).
+  // cofactor * P = O only for points in the small (cofactor) subgroup.
+  // For prime-subgroup points, cofactor * P ≠ O.
   const cofactorPoint = mulPoint(point, BABYJUBJUB_COFACTOR);
-  return cofactorPoint[0] === 0n && cofactorPoint[1] === 1n;
+  return !(cofactorPoint[0] === 0n && cofactorPoint[1] === 1n);
 }
 
 /**
@@ -372,44 +355,6 @@ function recoverXCoordinate(y: bigint, isXLexLargest: boolean): bigint {
 
   return xActual;
 }
-
-/**
- * 从X坐标和奇偶性恢复Y坐标
- * BabyJubjub 曲线方程: ax^2 + y^2 = 1 + dx^2y^2
- * 重新整理: y^2 = (1 - ax^2) / (1 - dx^2)
- * @param x X坐标
- * @param yParity Y坐标的奇偶性 (0 或 1)
- * @returns Y坐标
- */
-// function recoverYCoordinate(x: bigint, yParity: number): bigint {
-//   const p = BABYJUBJUB_SCALAR_FIELD;
-//   const a = BABYJUBJUB_A;
-//   const d = BABYJUBJUB_D;
-
-//   // 计算 x^2 mod p
-//   const x2 = (x * x) % p;
-
-//   // 计算分子: 1 - ax^2
-//   const numerator = (1n - ((a * x2) % p) + p) % p;
-
-//   // 计算分母: 1 - dx^2
-//   const denominator = (1n - ((d * x2) % p) + p) % p;
-
-//   // 计算 y^2 = numerator / denominator
-//   const y2 = (numerator * modInverse(denominator, p)) % p;
-
-//   // 计算 y^2 的平方根
-//   const y = modSqrt(y2, p);
-
-//   if (y === null) {
-//     throw new Error('No square root exists for the given x coordinate');
-//   }
-
-//   // 根据奇偶性选择正确的根
-//   const yActual = (y & 1n) === BigInt(yParity) ? y : (p - y) % p;
-
-//   return yActual;
-// }
 
 /**
  * 将 BigInt 转换为固定长度的字节数组（小端序）

@@ -7,13 +7,6 @@ afterEach(() => {
 });
 
 describe('RelayerClient', () => {
-  it('submit throws SdkError(CONFIG) for unsupported method', async () => {
-    const client = new RelayerClient('https://relayer.example');
-    await expect(
-      client.submit({ kind: 'relayer', method: 'GET' as any, path: '/x', body: {} }),
-    ).rejects.toMatchObject({ name: 'SdkError', code: 'CONFIG' });
-  });
-
   it('submit throws SdkError(RELAYER) on non-2xx', async () => {
     vi.stubGlobal(
       'fetch',

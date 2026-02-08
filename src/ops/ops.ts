@@ -32,6 +32,7 @@ import { RelayerClient } from './relayerClient';
 import type { StorageAdapter } from '../types';
 import { pickMerkleRootIndex } from './pickMerkleRootIndex';
 import { isHexStrict } from '../utils/hex';
+import { toBigintOrThrow } from '../utils/bigint';
 
 const ARRAY_HASH_SIZE = 2048n;
 const NATIVE_ADDRESS = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE' as const;
@@ -40,17 +41,6 @@ const isHex = (value: unknown): value is Hex => isHexStrict(value);
 const toFrPointJson = (input: [string, string]) => ({ X: BigInt(input[0]), Y: BigInt(input[1]) });
 const toViewerPkJson = (input: [string, string]) => ({ EncryptionKey: { Key: toFrPointJson(input) } });
 const toFreezerPkJson = (input: [string, string]) => ({ Point: toFrPointJson(input) });
-
-const toBigintOrThrow = (value: unknown, input: { code: SdkErrorCode; name: string; detail: Record<string, unknown> }): bigint => {
-  if (typeof value === 'bigint') return value;
-  try {
-    if (typeof value === 'string' && value.length) return BigInt(value);
-    if (typeof value === 'number' && Number.isFinite(value)) return BigInt(value);
-    return BigInt(value as any);
-  } catch (error) {
-    throw new SdkError(input.code, `Invalid ${input.name}`, { ...input.detail, value }, error);
-  }
-};
 
 const buildTransferWitness = (input: { token: TokenMetadata; inputSecrets: any[]; outputs: any[]; array: any; relayerFee: bigint; proofBinding: string }): TransferWitnessInput => {
   const token = input.token;
@@ -569,7 +559,6 @@ export class Ops implements OpsApi {
     updateOperation: (patch: Parameters<StorageAdapter['updateOperation']>[1]) => void;
     waitRelayerTxHash: Promise<Hex>;
     transactionReceipt?: Promise<Awaited<ReturnType<PublicClient['waitForTransactionReceipt']>>>;
-    TransactionReceipt?: Promise<Awaited<ReturnType<PublicClient['waitForTransactionReceipt']>>>;
   }> {
     const prepared = input.prepared;
     if (prepared?.kind === 'merge') {
@@ -667,7 +656,6 @@ export class Ops implements OpsApi {
         updateOperation,
         waitRelayerTxHash,
         transactionReceipt: autoMarkReceipt,
-        TransactionReceipt: autoMarkReceipt,
       };
     } catch (error) {
       if (error instanceof SdkError) {

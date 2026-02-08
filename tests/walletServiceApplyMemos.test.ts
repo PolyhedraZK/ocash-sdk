@@ -8,7 +8,7 @@ import { BabyJubjub } from '../src/crypto/babyJubjub';
 
 describe('WalletService.applyMemos', () => {
   it('skips memos with cid=null (non-spendable)', async () => {
-    const seed = 'wallet_seed';
+    const seed = 'wallet-seed-test-key';
     const keyPair = KeyManager.deriveKeyPair(seed);
     const ro = CryptoToolkit.createRecordOpening({
       asset_id: 1n,
@@ -29,7 +29,7 @@ describe('WalletService.applyMemos', () => {
   });
 
   it('uses chain-scoped asset lookup and refreshes lookup when chains update', async () => {
-    const seed = 'wallet_seed';
+    const seed = 'wallet-seed-test-key';
     const keyPair = KeyManager.deriveKeyPair(seed);
 
     // Same policy/address on two chains, different token ids -> must pick by chainId.

@@ -6,6 +6,21 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+const makePlan = () => ({
+  chainId: 1,
+  action: 'withdraw' as const,
+  assetId: 'eth',
+  selectedInput: { commitment: '0x01' },
+  outputRecordOpening: { asset_amount: 0n },
+  feeSummary: { relayerFeeTotal: 0n, protocolFeeTotal: 0n, mergeCount: 0, feeCount: 0 },
+  token: { symbol: 'ETH' },
+  requestedAmount: 0n,
+  burnAmount: 0n,
+  protocolFee: 0n,
+  relayerFee: 0n,
+  recipient: '0x0000000000000000000000000000000000000000',
+});
+
 const makeOps = () => new Ops({} as any, {} as any, {} as any, {} as any, new TxBuilder(), { markSpent: async () => {} }, undefined, undefined);
 
 describe('Ops.submitRelayerRequest', () => {
@@ -23,7 +38,7 @@ describe('Ops.submitRelayerRequest', () => {
     const ops = makeOps();
     const { result } = await ops.submitRelayerRequest({
       prepared: {
-        plan: { chainId: 1 } as any,
+        plan: makePlan() as any,
         request: { kind: 'relayer', method: 'POST', path: '/api/v1/transfer', body: { a: 1 } },
       },
       relayerUrl: 'https://relayer.example',
@@ -38,7 +53,7 @@ describe('Ops.submitRelayerRequest', () => {
     await expect(
       ops.submitRelayerRequest({
         prepared: {
-          plan: { chainId: 1 } as any,
+          plan: makePlan() as any,
           request: { kind: 'relayer', method: 'POST', path: '/api/v1/transfer', body: { a: 1 } },
         },
         relayerUrl: 'https://relayer.example',
@@ -65,7 +80,7 @@ describe('Ops.submitRelayerRequest', () => {
     await expect(
       ops.submitRelayerRequest({
         prepared: {
-          plan: { chainId: 1 } as any,
+          plan: makePlan() as any,
           request: { kind: 'relayer', method: 'POST', path: '/api/v1/transfer', body: { a: 1 } },
         },
         relayerUrl: 'https://relayer.example',

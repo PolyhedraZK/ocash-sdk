@@ -82,29 +82,26 @@ export class KeyValueStore implements StorageAdapter {
       const operations = Array.isArray(parsed.operations) ? (parsed.operations as StoredOperation[]) : [];
       this.operations = operations;
 
-      const merkleLeavesRaw = (parsed as any).merkleLeaves;
-      if (merkleLeavesRaw && typeof merkleLeavesRaw === 'object') {
-        this.merkleLeaves = merkleLeavesRaw as any;
+      const extra = parsed as Record<string, unknown>;
+
+      if (extra.merkleLeaves && typeof extra.merkleLeaves === 'object' && !Array.isArray(extra.merkleLeaves)) {
+        this.merkleLeaves = extra.merkleLeaves as typeof this.merkleLeaves;
       }
 
-      const merkleTreesRaw = (parsed as any).merkleTrees;
-      if (merkleTreesRaw && typeof merkleTreesRaw === 'object') {
-        this.merkleTrees = merkleTreesRaw as any;
+      if (extra.merkleTrees && typeof extra.merkleTrees === 'object' && !Array.isArray(extra.merkleTrees)) {
+        this.merkleTrees = extra.merkleTrees as typeof this.merkleTrees;
       }
 
-      const merkleNodesRaw = (parsed as any).merkleNodes;
-      if (merkleNodesRaw && typeof merkleNodesRaw === 'object') {
-        this.merkleNodes = merkleNodesRaw as any;
+      if (extra.merkleNodes && typeof extra.merkleNodes === 'object' && !Array.isArray(extra.merkleNodes)) {
+        this.merkleNodes = extra.merkleNodes as typeof this.merkleNodes;
       }
 
-      const entryMemosRaw = (parsed as any).entryMemos;
-      if (entryMemosRaw && typeof entryMemosRaw === 'object') {
-        this.entryMemos = entryMemosRaw as any;
+      if (extra.entryMemos && typeof extra.entryMemos === 'object' && !Array.isArray(extra.entryMemos)) {
+        this.entryMemos = extra.entryMemos as typeof this.entryMemos;
       }
 
-      const entryNullifiersRaw = (parsed as any).entryNullifiers;
-      if (entryNullifiersRaw && typeof entryNullifiersRaw === 'object') {
-        this.entryNullifiers = entryNullifiersRaw as any;
+      if (extra.entryNullifiers && typeof extra.entryNullifiers === 'object' && !Array.isArray(extra.entryNullifiers)) {
+        this.entryNullifiers = extra.entryNullifiers as typeof this.entryNullifiers;
       }
     } catch {
       // ignore bad state

@@ -1,4 +1,4 @@
-import type { AssetsApi, StorageAdapter, SyncApi, SyncChainStatus, SyncCursor } from '../types';
+import type { AssetsApi, SdkEvent, StorageAdapter, SyncApi, SyncChainStatus, SyncCursor } from '../types';
 import { SdkError } from '../errors';
 import { EntryClient } from './entryClient';
 import { WalletService } from '../wallet/walletService';
@@ -92,31 +92,7 @@ const sampleCids = (memos: Array<{ cid: number | null }>, limit = 10): number[] 
   return out.slice(0, limit);
 };
 
-const signalTimeout = (ms: number): AbortSignal => {
-  const anyAbortSignal = AbortSignal as any;
-  if (typeof anyAbortSignal?.timeout === 'function') return anyAbortSignal.timeout(ms) as AbortSignal;
-  const controller = new AbortController();
-  const t = setTimeout(() => controller.abort(new Error('timeout')), ms);
-  controller.signal.addEventListener('abort', () => clearTimeout(t), { once: true });
-  return controller.signal;
-};
-
-const signalAny = (signals: Array<AbortSignal | undefined>): AbortSignal | undefined => {
-  const list = signals.filter(Boolean) as AbortSignal[];
-  if (!list.length) return undefined;
-  const anyAbortSignal = AbortSignal as any;
-  if (typeof anyAbortSignal?.any === 'function') return anyAbortSignal.any(list) as AbortSignal;
-  const controller = new AbortController();
-  const onAbort = (s: AbortSignal) => controller.abort((s as any).reason);
-  for (const s of list) {
-    if (s.aborted) {
-      onAbort(s);
-      break;
-    }
-    s.addEventListener('abort', () => onAbort(s), { once: true });
-  }
-  return controller.signal;
-};
+import { signalTimeout, signalAny } from '../utils/signal';
 
 const findDuplicate = (values: string[]): string | null => {
   const seen = new Set<string>();
@@ -164,6 +140,7 @@ const formatSyncErrorMessage = (error: unknown): string => {
 export class SyncEngine implements SyncApi {
   private readonly status: Record<number, SyncChainStatus> = {};
   private timer: ReturnType<typeof setInterval> | null = null;
+  private abortController: AbortController | null = null;
   private readonly runningChains = new Set<number>();
   private readonly options: NormalizedSyncEngineOptions;
 
@@ -171,7 +148,7 @@ export class SyncEngine implements SyncApi {
     private readonly assets: AssetsApi,
     private readonly storage: StorageAdapter,
     private readonly wallet: WalletService,
-    private readonly emit: (evt: any) => void,
+    private readonly emit: (evt: SdkEvent) => void,
     private readonly merkle?: Pick<MerkleEngine, 'ingestEntryMemos'>,
     options?: SyncEngineOptions,
   ) {
@@ -184,15 +161,19 @@ export class SyncEngine implements SyncApi {
 
   async start(options?: { chainIds?: number[]; pollMs?: number }) {
     if (this.timer) return;
-    await this.syncOnce({ chainIds: options?.chainIds, continueOnError: true });
+    this.abortController = new AbortController();
+    const signal = this.abortController.signal;
+    await this.syncOnce({ chainIds: options?.chainIds, signal, continueOnError: true });
     const pollMs = options?.pollMs != null ? toBoundedInt(options.pollMs, this.options.pollMs, { min: 250 }) : this.options.pollMs;
     this.timer = setInterval(() => {
       if (this.runningChains.size) return;
-      void this.syncOnce({ chainIds: options?.chainIds, continueOnError: true }).catch(() => undefined);
+      void this.syncOnce({ chainIds: options?.chainIds, signal, continueOnError: true }).catch(() => undefined);
     }, pollMs);
   }
 
   stop() {
+    this.abortController?.abort();
+    this.abortController = null;
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
   }
