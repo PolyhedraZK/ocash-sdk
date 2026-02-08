@@ -6,3 +6,4 @@ demos/node/.ocash-demo/
 .DS_Store
 docs/.vitepress/cache
 docs/.vitepress/dist
+.vscode/
