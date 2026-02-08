@@ -23,3 +23,13 @@ features:
   - title: 模块化架构
     details: 工厂模式配合事件驱动的模块体系 — core、wallet、sync、planner、ops 等。按需组合使用。
 ---
+
+<div style="margin-top: 2rem; padding: 1.5rem; border-radius: 8px; background: var(--vp-c-bg-soft); text-align: center;">
+
+### AI 编程工具上下文
+
+使用 AI 编程工具？将 SDK 上下文喂给它，获得准确的代码生成。
+
+[`llms.txt`](/llms.txt) — 索引 &nbsp;&nbsp;|&nbsp;&nbsp; [`llms-full.txt`](/llms-full.txt) — 完整 API 上下文
+
+</div>

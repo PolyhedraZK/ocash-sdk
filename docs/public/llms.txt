@@ -1,44 +1,31 @@
 # @ocash/sdk
 
-> TypeScript ZKP SDK for privacy-preserving token operations via UTXO model and zk-SNARK proofs.
+> TypeScript ZKP SDK for privacy-preserving token operations — deposit, transfer, and withdraw via UTXO model and zk-SNARK proofs (Groth16, Go WASM). Headless, multi-environment (browser, Node.js, Electron/Tauri), modular factory pattern.
 
-## Install
+## Docs
 
-```bash
-pnpm add @ocash/sdk
-```
+- [Getting Started](https://docs.o.cash/guide/getting-started): Installation, quick start, lifecycle
+- [Configuration](https://docs.o.cash/guide/configuration): OCashSdkConfig, chains, assetsOverride, sync, runtime
+- [Architecture](https://docs.o.cash/guide/architecture): Module system, crypto stack, proof flow
+- [UTXO Model](https://docs.o.cash/guide/utxo-model): Commitments, nullifiers, Merkle tree, transactions
+- [Storage Adapters](https://docs.o.cash/guide/storage): MemoryStore, IndexedDbStore, FileStore, KV, Redis, SQLite
+- [Events & Errors](https://docs.o.cash/guide/events): SdkEvent union type, error codes
+- [Deposit](https://docs.o.cash/guide/deposit): Shield tokens into the privacy pool
+- [Transfer](https://docs.o.cash/guide/transfer): Private transfers with auto-merge
+- [Withdraw](https://docs.o.cash/guide/withdraw): Unshield tokens to EVM address
 
-Three entry points:
-- `@ocash/sdk` — universal (MemoryStore)
-- `@ocash/sdk/browser` — browser (+ IndexedDbStore)
-- `@ocash/sdk/node` — Node.js (+ FileStore)
+## API Reference
 
-## Quick Start
+- [createSdk](https://docs.o.cash/api/sdk): Factory function, OCashSdk modules
+- [Core](https://docs.o.cash/api/core): ready(), reset()
+- [Wallet](https://docs.o.cash/api/wallet): open, close, getUtxos, getBalance, markSpent
+- [Keys & Crypto](https://docs.o.cash/api/crypto): deriveKeyPair, commitment, nullifier, MemoKit
+- [Sync](https://docs.o.cash/api/sync): start, stop, syncOnce, getStatus
+- [Planner](https://docs.o.cash/api/planner): estimate, estimateMax, plan
+- [Ops](https://docs.o.cash/api/ops): prepareTransfer, prepareWithdraw, prepareDeposit, submitRelayerRequest
+- [Storage](https://docs.o.cash/api/storage): StorageAdapter interface, built-in adapters
+- [Types](https://docs.o.cash/api/types): Hex, UtxoRecord, CommitmentData, SyncCursor, ProofResult
 
-```ts
-import { createSdk } from '@ocash/sdk';
+## Optional
 
-const sdk = createSdk({
-  chains: [{
-    chainId: 11155111,
-    entryUrl: 'https://entry.example.com',
-    ocashContractAddress: '0x...',
-    relayerUrl: 'https://relayer.example.com',
-    merkleProofUrl: 'https://merkle.example.com',
-    tokens: [],
-  }],
-  onEvent: (event) => console.log(event.type, event.payload),
-});
-
-await sdk.core.ready();
-await sdk.wallet.open({ seed: 'your-secret-seed' });
-await sdk.sync.syncOnce();
-const balance = await sdk.wallet.getBalance({ chainId: 11155111 });
-await sdk.wallet.close();
-```
-
-## Lifecycle
-
-createSdk(config) → sdk.core.ready() → sdk.wallet.open({ seed }) → sdk.sync.start() → sdk.ops.* → sdk.wallet.close()
-
-## Full API Reference: docs.o.cash
+- [Full LLM context](https://docs.o.cash/llms-full.txt): Complete API signatures, examples, and type definitions

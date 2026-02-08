@@ -23,3 +23,13 @@ features:
   - title: Modular Architecture
     details: Factory pattern with event-driven modules — core, wallet, sync, planner, ops, and more. Compose what you need.
 ---
+
+<div style="margin-top: 2rem; padding: 1.5rem; border-radius: 8px; background: var(--vp-c-bg-soft); text-align: center;">
+
+### AI-Friendly Context
+
+Building with AI coding tools? Feed them our SDK context for accurate code generation.
+
+[`llms.txt`](/llms.txt) — Index &nbsp;&nbsp;|&nbsp;&nbsp; [`llms-full.txt`](/llms-full.txt) — Full API context
+
+</div>
