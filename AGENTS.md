@@ -13,7 +13,6 @@ The repository is a single-package layout. The root `package.json` is the only d
 - SDK source: `src/`
 - Build output: `dist/` (publish includes only `dist/` and `assets/`)
 - Demos: `demos/` (for showcase/debug only; not published with the SDK)
-- Asset build: `pnpm run build:assets` outputs to `assets/`
 - Browser demo: `pnpm run dev`
 - Node demo: `pnpm run demo:node -- <command>`
 
@@ -59,8 +58,6 @@ pnpm run dev                  # Browser demo (Vite, port 5173)
 pnpm run dev:sdk              # SDK watch mode (tsup --watch)
 pnpm run demo:node -- <cmd>   # Run Node demo (requires build)
 pnpm run demo:node:tsx -- <cmd> # Run Node demo via tsx
-pnpm run build:assets         # Build WASM/circuit assets
-pnpm run build:assets:local   # Build assets including wasm_exec.js
 ```
 
 ## Tech Stack

@@ -111,8 +111,6 @@ pnpm run dev                      # 启动浏览器 demo（Vite，端口 5173）
 pnpm run dev:sdk                  # SDK watch 模式（tsup --watch）
 pnpm run demo:node -- <command>   # 运行 Node demo（先 build）
 pnpm run demo:node:tsx -- <cmd>   # 运行 Node demo（tsx，更快）
-pnpm run build:assets             # 构建 WASM/电路资产
-pnpm run build:assets:local       # 构建含 wasm_exec.js 的资产
 ```
 
 ## 会咬你的坑（别踩）
