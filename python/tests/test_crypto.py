@@ -111,9 +111,12 @@ class TestRecordCodec:
             assert encoded == v["encoded"], f"{v['name']} encode: {encoded} != {v['encoded']}"
 
             decoded = ocash.record_decode(encoded)
-            assert decoded["asset_id"] == r["asset_id"]
-            assert decoded["asset_amount"] == r["asset_amount"]
-            assert decoded["is_frozen"] == r["is_frozen"]
+            assert decoded["asset_id"] == r["asset_id"], f"{v['name']} decode asset_id"
+            assert decoded["asset_amount"] == r["asset_amount"], f"{v['name']} decode asset_amount"
+            assert decoded["user_pk_x"] == r["user_pk_x"], f"{v['name']} decode user_pk_x"
+            assert decoded["user_pk_y"] == r["user_pk_y"], f"{v['name']} decode user_pk_y"
+            assert decoded["blinding_factor"] == r["blinding_factor"], f"{v['name']} decode blinding_factor"
+            assert decoded["is_frozen"] == r["is_frozen"], f"{v['name']} decode is_frozen"
 
 
 class TestMemoNonce:
@@ -145,4 +148,7 @@ class TestMemoRoundtrip:
         assert decoded is not None
         assert decoded["asset_id"] == record_dict["asset_id"]
         assert decoded["asset_amount"] == record_dict["asset_amount"]
+        assert decoded["user_pk_x"] == record_dict["user_pk_x"]
+        assert decoded["user_pk_y"] == record_dict["user_pk_y"]
+        assert decoded["blinding_factor"] == record_dict["blinding_factor"]
         assert decoded["is_frozen"] == record_dict["is_frozen"]

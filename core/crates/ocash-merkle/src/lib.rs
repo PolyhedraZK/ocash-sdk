@@ -8,7 +8,6 @@
 use ark_bn254::Fr;
 use ocash_crypto::poseidon2::{self, Poseidon2Domain};
 use ocash_types::{field_to_hex, hex_to_field, Hex};
-use std::collections::HashMap;
 
 pub const TREE_DEPTH_DEFAULT: usize = 32;
 
@@ -50,8 +49,6 @@ pub struct MerkleProof {
 pub struct LocalMerkleTree {
     depth: usize,
     leaves: Vec<Fr>,
-    /// Cache: "level:position" → hash
-    node_cache: HashMap<(usize, usize), Fr>,
     /// Pre-computed zero hashes
     zero_hashes: Vec<Fr>,
 }
@@ -62,7 +59,6 @@ impl LocalMerkleTree {
         Self {
             depth,
             leaves: Vec::new(),
-            node_cache: HashMap::new(),
             zero_hashes: zero_hashes(),
         }
     }
@@ -105,8 +101,6 @@ impl LocalMerkleTree {
             self.leaves.push(commitment);
             expected += 1;
         }
-        // Clear cache since leaves changed
-        self.node_cache.clear();
     }
 
     /// Append leaves from hex strings.
@@ -165,11 +159,6 @@ impl LocalMerkleTree {
         let first_leaf_in_subtree = position << level;
         if first_leaf_in_subtree >= self.leaves.len() {
             return self.zero_hashes[level];
-        }
-
-        // Check cache
-        if let Some(&cached) = self.node_cache.get(&(level, position)) {
-            return cached;
         }
 
         // Compute recursively
