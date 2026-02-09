@@ -10,4 +10,12 @@ docs/.vitepress/dist
 
 # Rust
 core/target/
+python/target/
 target/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.so
+*.pyd
