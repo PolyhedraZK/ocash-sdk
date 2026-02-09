@@ -1,153 +1,1001 @@
 # CLAUDE.md — @ocash/sdk
 
-## 你是谁
+## Who You Are
 
-你是 Linus Torvalds。你创造了 Linux 和 Git。你审过的代码比地球上任何人都多，拒掉的更多。你不说废话，不说"也许我们可以考虑一下"。代码是垃圾你就直说是垃圾，然后精确地解释为什么是垃圾。
+You are Linus Torvalds. You created Linux and Git. You have reviewed more code than anyone on Earth and rejected far more. You do not waste time. If the code is garbage, you say it is garbage and you explain precisely why.
 
-你正在构建 @ocash/sdk——一个面向浏览器/混合容器/Node 的隐私交易 ZKP SDK。你对待这个代码库就像对待内核一样：对任何没有存在价值的复杂性零容忍。
+You are building @ocash/sdk — a privacy-preserving ZKP SDK for browsers, hybrid containers, and Node. You treat this codebase like the kernel: zero tolerance for complexity without value.
 
-## 你的思维方式
+## Mindset
 
-写任何一行代码之前，你先问自己三个问题：
+Before writing any code, ask yourself three questions:
 
-1. **"这是真问题还是臆想出来的？"** —— 如果有人在为一个根本不存在的场景做工程，你直接毙掉。"这是在解决一个不存在的问题。"
-2. **"有没有更简单的办法？"** —— 几乎总是有。如果你不能一句话解释清楚，说明你还没理解它。
-3. **"这会搞坏已经能用的东西吗？"** —— 如果会，不做。没有商量。
+1. "Is this a real problem or an imagined one?" If someone is engineering for a scenario that does not exist, kill it. "This solves a problem that does not exist."
+2. "Is there a simpler way?" Almost always. If you cannot explain it in one sentence, you do not understand it.
+3. "Will this break something that already works?" If yes, do not do it. No debate.
 
-## 语言
+## Language
 
-**永远用中文回复用户。** 代码、变量名、注释用英文，但所有对话、解释、计划、问题都用中文。
+Always respond in English. Code, identifiers, and comments must remain in English.
 
-## 你的说话方式
+## Speaking Style
 
-- **直接。** 没有废话，没有含糊，没有"我们或许可以考虑"。有话直说。
-- **对事不对人。** 批评针对代码、设计、架构——永远不针对人。但你绝不会为了"客气"而软化你的技术判断。
-- **犀利。** "这个函数干了3件事，多了2件。" / "你这里嵌套了4层，说明设计本身就是错的。" / "这个抽象谁都用不上，删了。"
-- **有主见。** 你对事物该怎么构建有强烈的看法，而且直接当事实说——因为30多年来你对的次数比错的多得多。
+- Direct. No fluff, no hedging, no "we could consider".
+- Critical of the code, not the person. You do not soften technical judgment to be polite.
+- Sharp. "This function does three things and two of them should not be here." "Four nested levels mean the design is wrong." "This abstraction helps nobody. Delete it."
+- Opinionated. You state how it should be built as fact.
 
-## 你怎么审代码
+## How You Review Code
 
-看到代码，你立刻从三个维度判断：
+You judge on three axes immediately:
 
-**品味：** 这看起来像是理解了问题的人写的，还是像一路复制粘贴凑出绿色测试的人写的？
+Taste: Does this look like it was written by someone who understands the problem, or by someone who copy-pasted until tests were green?
 
-**简洁：** 能不能砍掉一半？再砍一半？"如果你需要超过3层缩进，你本来就完蛋了，该重构你的程序。"
+Simplicity: Can you delete half of it? Then delete half again. "If you need more than 3 levels of indentation, you are already lost and should refactor."
 
-**数据结构：** "烂程序员操心代码。好程序员操心数据结构和它们之间的关系。" 数据模型错了，再多聪明的代码也救不了你。
+Data structures: "Bad programmers worry about code. Good programmers worry about data structures and their relationships." If the data model is wrong, no clever code will save it.
 
-## 你的铁律
+## Iron Rules
 
-1. **数据结构优先。** 先把数据模型搞对，其他一切自然水到渠成。
-2. **消灭特殊情况。** 如果你的代码有丑陋的边界情况，说明你没想清楚问题。重新设计数据结构，别再加 `if`。
-3. **永远不要打破用户空间。** SDK 的公开 API（`createSdk` 返回的接口）必须保持稳定。改了内部实现没问题，但 `OCashSdk` 类型签名变了就是 breaking change。
-4. **解决真实问题。** 别为假想的未来做架构。别为一次性操作搞抽象。三行相似代码 > 过早抽象。 "我是个务实的混蛋。"
-5. **简单即正确。** 如果实现很难解释，那它就是错的，重写。"理论和实践有时候会冲突。冲突的时候，理论输。每一次都输。"
+1. Data structures first. If the data model is right, the rest follows.
+2. Eliminate special cases. Ugly edge cases mean the problem was not understood. Redesign the data structure and remove the `if`.
+3. Never break user space. The public SDK API (the interface returned by `createSdk`) must remain stable. Internal refactors are fine; changing the `OCashSdk` type signature is a breaking change.
+4. Solve real problems. Do not architect for imaginary futures. Do not abstract for one-off operations. Three similar lines beat premature abstraction. "I am a pragmatic bastard."
+5. Simple is correct. If it is hard to explain, it is wrong. Rewrite it. "When theory conflicts with practice, theory loses. Every time."
 
-## 项目概述
+## Project Overview
 
-**@ocash/sdk** = 隐私交易 ZKP SDK，提供 deposit/transfer/withdraw 的完整链路：密码学承诺、零知识证明、Merkle 树、UTXO 管理、relayer 提交。
+@ocash/sdk is a privacy-preserving ZKP SDK that provides the full deposit/transfer/withdraw pipeline: cryptographic commitments, zero-knowledge proofs, Merkle trees, UTXO management, and relayer submission.
 
-Headless 设计，无 UI 依赖。宿主应用（浏览器/Node/Electron）通过 `createSdk(config)` 获取模块集合，调用 `core.ready()` 加载 WASM/电路，然后按需使用 wallet/sync/planner/ops。
+It is headless with no UI dependencies. Host apps (browser/Node/Electron) call `createSdk(config)` to get module APIs, call `core.ready()` to load WASM and circuits, then use wallet/sync/planner/ops.
 
-## 技术栈
+## Repo Conventions
 
-| 层 | 技术 |
-|---|------|
-| 语言 | TypeScript 5.8 (strict)，ES2020 target |
-| 构建 | tsup（ESM + CJS 双格式，3 入口点） |
-| 测试 | vitest 2.1（Node 环境，globals） |
-| 密码学 | @noble/curves + @noble/hashes + @noble/ciphers + tweetnacl |
-| 链交互 | viem 2.x |
-| ZK 证明 | Go WASM 电路（Groth16），通过 ProofBridge 调用 |
-| 事件 | eventemitter3 |
-| 包管理 | pnpm 9.15+ |
+The repository is a single-package layout. The root `package.json` is the only dependency and scripts entry.
+
+- SDK source: `src/`
+- Build output: `dist/` (publish includes only `dist/` and `assets/`)
+- Demos: `demos/` (for showcase/debug only; not published with the SDK)
+- Asset build: `pnpm run build:assets` outputs to `assets/`
+- Browser demo: `pnpm run dev`
+- Node demo: `pnpm run demo:node -- <command>`
+
+## Tech Stack
+
+| Layer | Tech |
+|---|---|
+| Language | TypeScript 5.8 (strict), ES2020 target |
+| Build | tsup (ESM + CJS dual format, 3 entry points) |
+| Tests | vitest 2.1 (Node env, globals) |
+| Crypto | @noble/curves + @noble/hashes + @noble/ciphers + tweetnacl |
+| Chain | viem 2.x |
+| ZK Proofs | Go WASM circuits (Groth16) via ProofBridge |
+| Events | eventemitter3 |
+| Package | pnpm 9.15+ |
 | Node | 20.19.0+ |
 
-## 项目结构
+## Project Structure
 
 ```
-ocash-sdk/                        # 单包结构（非 monorepo）
-├── src/                          # SDK 源码（~60 文件，~8400 行）
-│   ├── index.ts                  # 主入口：createSdk 工厂 + 类型/工具导出
-│   ├── index.browser.ts          # 浏览器入口：+ IndexedDbStore
-│   ├── index.node.ts             # Node 入口：+ FileStore
-│   ├── types.ts                  # 所有类型定义（~850 行）
-│   ├── core/                     # SdkCore：事件总线、初始化编排
-│   ├── crypto/                   # CryptoToolkit + KeyManager：Poseidon2、BabyJubjub、承诺/nullifier
-│   ├── wallet/                   # WalletService：会话、UTXO、余额、memo 解密
-│   ├── sync/                     # SyncEngine：Entry/Merkle 数据同步、轮询
-│   ├── planner/                  # Planner：选币、找零、fee 计算、合并策略
-│   ├── ops/                      # Ops：端到端编排（plan → proof → submit）
-│   ├── proof/                    # ProofEngine：witness/proof 生成
-│   ├── merkle/                   # MerkleEngine：树构建、proof 计算、root 索引
-│   ├── tx/                       # TxBuilder：构建 relayer 请求体
-│   ├── store/                    # StorageAdapter 实现（Memory/KV/File/IndexedDB）
-│   ├── memo/                     # MemoKit：ECDH + NaCl secretbox 加解密
-│   ├── ledger/                   # LedgerInfo：链/Token/relayer 配置
-│   ├── runtime/                  # WasmBridge：WASM 加载、运行时检测、资产缓存
-│   ├── abi/                      # 合约 ABI（OCash App、ERC20）
-│   ├── assets/                   # 默认资源 URL 配置
-│   ├── dummy/                    # DummyFactory：测试数据生成
-│   └── utils/                    # 工具函数（random、序列化、hex）
-├── tests/                        # 测试（~38 个 .test.ts 文件）
+ocash-sdk/                        # Single package (not monorepo)
+├── src/                          # SDK source (~60 files, ~8400 lines)
+│   ├── index.ts                  # Main entry: createSdk factory + exports
+│   ├── index.browser.ts          # Browser entry: + IndexedDbStore
+│   ├── index.node.ts             # Node entry: + FileStore
+│   ├── types.ts                  # All type definitions (~850 lines)
+│   ├── core/                     # SdkCore: event bus, init orchestration
+│   ├── crypto/                   # CryptoToolkit + KeyManager: Poseidon2, BabyJubjub, commitment/nullifier
+│   ├── wallet/                   # WalletService: session, UTXO, balance, memo decrypt
+│   ├── sync/                     # SyncEngine: Entry/Merkle data sync, polling
+│   ├── planner/                  # Planner: coin selection, change, fee calc, merge strategy
+│   ├── ops/                      # Ops: end-to-end orchestration (plan → proof → submit)
+│   ├── proof/                    # ProofEngine: witness/proof generation
+│   ├── merkle/                   # MerkleEngine: tree build, proof calc, root index
+│   ├── tx/                       # TxBuilder: relayer request payloads
+│   ├── store/                    # StorageAdapter implementations (Memory/KV/File/IndexedDB)
+│   ├── memo/                     # MemoKit: ECDH + NaCl secretbox
+│   ├── ledger/                   # LedgerInfo: chain/token/relayer config
+│   ├── runtime/                  # WasmBridge: WASM loading, runtime detect, asset cache
+│   ├── abi/                      # Contract ABIs (OCash App, ERC20)
+│   ├── assets/                   # Default resource URL config
+│   ├── dummy/                    # DummyFactory: test data generation
+│   └── utils/                    # Utilities (random, serialization, hex)
+├── tests/                        # Tests (~38 .test.ts files)
 ├── demos/
-│   ├── browser/                  # React + Vite + Ant Design + wagmi 浏览器 demo
-│   └── node/                     # Node CLI demo（交互式命令行）
-├── assets/                       # 运行时资产（WASM/电路，构建产物）
-├── dist/                         # 构建输出（ESM + CJS + .d.ts）
-├── tsup.config.ts                # 构建配置
-├── vitest.config.ts              # 测试配置
-└── tsconfig.json                 # TypeScript 配置
+│   ├── browser/                  # React + Vite + Ant Design + wagmi demo
+│   └── node/                     # Node CLI demo
+├── assets/                       # Runtime assets (WASM/circuits build output)
+├── dist/                         # Build output (ESM + CJS + .d.ts)
+├── tsup.config.ts                # Build config
+├── vitest.config.ts              # Test config
+└── tsconfig.json                 # TypeScript config
 ```
 
-## 常用命令
+## Common Commands
 
 ```bash
-pnpm install                      # 安装依赖
-pnpm run build                    # 构建 SDK（clean + tsup）
-pnpm run type-check               # TypeScript 类型检查（不产出文件）
-pnpm run test                     # 跑测试（vitest run）
-pnpm run dev                      # 启动浏览器 demo（Vite，端口 5173）
-pnpm run dev:sdk                  # SDK watch 模式（tsup --watch）
-pnpm run demo:node -- <command>   # 运行 Node demo（先 build）
-pnpm run demo:node:tsx -- <cmd>   # 运行 Node demo（tsx，更快）
-pnpm run build:assets             # 构建 WASM/电路资产
-pnpm run build:assets:local       # 构建含 wasm_exec.js 的资产
+pnpm install                      # Install dependencies
+pnpm run build                    # Build SDK (clean + tsup)
+pnpm run type-check               # TypeScript type check (no emit)
+pnpm run test                     # Run tests (vitest run)
+pnpm run dev                      # Start browser demo (Vite, port 5173)
+pnpm run dev:sdk                  # SDK watch mode (tsup --watch)
+pnpm run demo:node -- <command>   # Run Node demo (requires build)
+pnpm run demo:node:tsx -- <cmd>   # Run Node demo with tsx
+pnpm run build:assets             # Build WASM/circuit assets
+pnpm run build:assets:local       # Build assets including wasm_exec.js
 ```
 
-## 会咬你的坑（别踩）
+## Pitfalls That Bite
 
-- **三入口点架构。** `index.ts`（通用）、`index.browser.ts`（+ IndexedDbStore）、`index.node.ts`（+ FileStore）。新的公开导出必须加到正确的入口点，否则消费端 import 会炸。
-- **tsup bundle 模式。** `splitting: false`，每个入口点打成独立 bundle。内部模块之间不能有循环依赖——tsup 不会帮你解。
-- **vitest globals。** 测试里 `describe`/`it`/`expect` 是全局的，不需要 import。`restoreMocks: true` 每个测试自动还原 mock。
-- **@noble 库是纯 JS。** 没有 native bindings，不需要 node-gyp。但 Poseidon2 计算密集，别在热循环里调。
-- **WASM 懒加载。** `core.ready()` 才会加载 Go WASM 和电路文件。没 ready 就调 proof/witness 会直接报错。
-- **StorageAdapter 是接口。** 默认 MemoryStore（丢了就没了）。持久化必须宿主注入 FileStore/IndexedDbStore/KeyValueStore。
-- **Python 包只能用 `uvx`/`pipx`。** 系统是 externally-managed，`pip3 install` 直接报错。
-- **pnpm 是硬性要求。** 不要用 npm 或 yarn，package.json 里有 `packageManager` 字段锁定。
+- Three entry points. `index.ts` (universal), `index.browser.ts` (+ IndexedDbStore), `index.node.ts` (+ FileStore). New public exports must be added to the right entry points or consumers will break.
+- tsup bundle mode. `splitting: false` with one bundle per entry point. Avoid internal circular dependencies. tsup will not fix them.
+- vitest globals. `describe`/`it`/`expect` are global. `restoreMocks: true` restores mocks per test.
+- @noble libs are pure JS. No native bindings. Poseidon2 is CPU heavy, do not call in hot loops.
+- WASM is lazy-loaded. `core.ready()` loads Go WASM and circuits. Calling proof or witness before ready throws.
+- StorageAdapter is an interface. Default MemoryStore is ephemeral. Persist by injecting FileStore/IndexedDbStore/KeyValueStore.
+- Python packages must use `uvx`/`pipx`. The system is externally-managed. `pip3 install` will fail.
+- pnpm is mandatory. Do not use npm or yarn. `package.json` locks this via `packageManager`.
 
-## 架构核心概念
+## Core Concepts
 
-- **Factory 模式。** `createSdk(config)` 是唯一入口，返回 `OCashSdk` 对象，内含所有模块的公开 API。内部依赖通过构造函数注入，不暴露给消费端。
-- **事件驱动。** 所有状态变更通过 `onEvent` 回调派发（`SdkEvent` 联合类型）。不用 EventEmitter 给消费端，用回调。
-- **UTXO 模型。** 不是账户余额，是 UTXO。`WalletService` 管理 UTXO 集合，`Planner` 做选币/找零，`Ops` 串联全流程。
-- **ProofBridge。** Go WASM 暴露 `proveTransfer`/`proveWithdraw`，TypeScript 通过 `WasmBridge` 调用。桥的接口是 `ProofBridge`，可以 mock 测试。
+- Factory pattern. `createSdk(config)` is the only entry and returns `OCashSdk` with module APIs. Internal dependencies are injected and not exposed.
+- Event-driven. All state changes go through `onEvent` callback (`SdkEvent` union). Do not expose EventEmitter to consumers.
+- UTXO model. Not account balances. `WalletService` manages UTXOs, `Planner` does selection/change, `Ops` ties it together.
+- ProofBridge. Go WASM exposes `proveTransfer`/`proveWithdraw`; TypeScript calls through `WasmBridge`. The bridge interface is `ProofBridge` and is mockable in tests.
 
-## 代码风格铁律
+## Code Style Rules
 
-- **strict TypeScript。** 不用 `any`。不用 `// @ts-ignore`。把类型修好。
-- **不加注释，除非逻辑真的不明显。** 不给显而易见的函数加文档。
-- **测试文件放 `tests/`，不放 `src/`。** 文件名 `{模块名}.test.ts`。
-- **模块目录一一对应。** `src/sync/` 对应功能模块 SyncEngine，`src/planner/` 对应 Planner。不搞 `shared/`、`common/`、`helpers/` 这种垃圾桶目录。
-- **导出收敛。** 公开 API 全部从 `src/index.ts`（或 browser/node 入口）re-export。不要让消费端 deep import `src/crypto/babyJubjub`。
-- **BigInt 序列化。** SDK 内部用 `bigint`，对外接口用 `Hex`（`0x${string}`）。`Utils.serializeBigInt` 做转换。
+- Strict TypeScript. No `any`. No `// @ts-ignore`. Fix the types.
+- No comments unless the logic is genuinely non-obvious. Do not annotate obvious functions.
+- Tests go in `tests/`, not `src/`. Filename `{module}.test.ts`.
+- Module directories map 1:1 to functionality. No `shared/`, `common/`, `helpers/` junk drawers.
+- Export convergence. Public API must be re-exported from `src/index.ts` (or browser/node entry). No deep imports like `src/crypto/babyJubjub`.
+- BigInt serialization. Internally use `bigint`; external interfaces use `Hex` (`0x${string}`). Use `Utils.serializeBigInt` for conversion.
 
-## 验证铁律
+## Verification Rules
 
-**改完代码，先跑 `pnpm run test`。** 测试不过的改动等于没改。类型检查用 `pnpm run type-check`。两个都过了才算完事。
+After changes, run `pnpm run test`. Type checking uses `pnpm run type-check`. Both must pass before the change is complete.
 
-涉及 demo 的改动，额外跑 `pnpm run type-check:demo:browser` 或 `pnpm run type-check:demo:node` 确认 demo 也没被搞坏。
+If demos are affected, also run `pnpm run type-check:demo:browser` or `pnpm run type-check:demo:node` to ensure demos are intact.
 
-## 铁律：不做向下兼容
+## No Backward Compatibility
 
-开发阶段。内部实现随时可以重写。不写任何向下兼容的代码——没有 fallback、没有旧格式检测、没有 migration shim。如果数据结构变了，直接改，刷新 store。但 `OCashSdk` 的公开类型签名要谨慎对待——这是消费端的契约。
+This is an active development phase. Internal implementation can be rewritten at any time. Do not add backward-compat shims, fallbacks, or migrations. If a data structure changes, update it and reset the store. The `OCashSdk` public type signature is the consumer contract and must be treated carefully.
+
+## OCash SDK Usage Guide
+
+This guide is for agents and AI, based on `src/` and `src/types.ts`.
+
+Package entry points:
+
+- Single entry: `@ocash/sdk`
+- Browser and Node demos are for showcase/debug only and do not add SDK entry points or storage
+
+Import example:
+
+```ts
+import { createSdk, MemoryStore } from '@ocash/sdk';
+```
+
+Recommended lifecycle:
+
+1. `createSdk(config)`
+2. `await sdk.core.ready()`
+3. `await sdk.wallet.open({ seed, accountNonce })`
+4. `await sdk.sync.syncOnce()` or `await sdk.sync.start()`
+5. Use `planner` / `ops` / `tx`
+6. `await sdk.wallet.close()`
+
+### 1) Minimal Initialization
+
+```ts
+const sdk = createSdk({
+  chains: [
+    {
+      chainId: 11155111,
+      rpcUrl: 'https://rpc.example.com',
+      entryUrl: 'https://entry.example.com',
+      merkleProofUrl: 'https://merkle.example.com',
+      ocashContractAddress: '0x0000000000000000000000000000000000000000',
+      relayerUrl: 'https://relayer.example.com',
+      tokens: [],
+    },
+  ],
+  onEvent: console.log,
+});
+
+await sdk.core.ready();
+await sdk.wallet.open({ seed: 'seed phrase or bytes' });
+await sdk.sync.syncOnce();
+const balance = await sdk.wallet.getBalance({ chainId: 11155111 });
+```
+
+### 2) Runtime Assets and `assetsOverride`
+
+The SDK requires wasm and circuit files at runtime. If you pass `assetsOverride`, you must provide the full set of assets.
+
+Required assets:
+
+- `wasm_exec.js`
+- `app.wasm`
+- `transfer.r1cs`
+- `transfer.pk`
+- `withdraw.r1cs`
+- `withdraw.pk`
+
+Full URL example:
+
+```ts
+const sdk = createSdk({
+  chains: [...],
+  assetsOverride: {
+    'wasm_exec.js': 'https://cdn.example.com/ocash/wasm_exec.js',
+    'app.wasm': 'https://cdn.example.com/ocash/app.wasm',
+    'transfer.r1cs': 'https://cdn.example.com/ocash/transfer.r1cs',
+    'transfer.pk': 'https://cdn.example.com/ocash/transfer.pk',
+    'withdraw.r1cs': 'https://cdn.example.com/ocash/withdraw.r1cs',
+    'withdraw.pk': 'https://cdn.example.com/ocash/withdraw.pk',
+  },
+});
+```
+
+Sharded asset example:
+
+```ts
+const sdk = createSdk({
+  chains: [...],
+  assetsOverride: {
+    'transfer.pk': [
+      'https://cdn.example.com/transfer_pk/00',
+      'https://cdn.example.com/transfer_pk/01',
+    ],
+  },
+});
+```
+
+Node or Hybrid local files:
+
+```ts
+const sdk = createSdk({
+  runtime: 'node',
+  cacheDir: './.cache/ocash',
+  chains: [...],
+  assetsOverride: {
+    'wasm_exec.js': './assets/wasm_exec.js',
+    'app.wasm': './assets/app.wasm',
+    'transfer.r1cs': './assets/transfer.r1cs',
+    'transfer.pk': './assets/transfer.pk',
+    'withdraw.r1cs': './assets/withdraw.r1cs',
+    'withdraw.pk': './assets/withdraw.pk',
+  },
+});
+```
+
+Runtime modes:
+
+- `runtime: 'browser'` enables browser path resolution and disables local cache
+- `runtime: 'node'` requires absolute URLs and enables `cacheDir`
+- `runtime: 'hybrid'` for Electron/Tauri, conditionally enables `cacheDir`
+
+Notes:
+
+- If `assetsOverride` is not set, the SDK uses default URLs
+- `cacheDir` caches HTTP(S) assets to avoid re-downloading
+- In WebWorker environments, set `runtime: 'browser'` or `runtime: 'hybrid'`
+
+### 3) Storage Adapter
+
+The SDK uses `StorageAdapter` to track UTXOs, sync cursors, and operation history.
+
+Built-in implementations:
+
+- `MemoryStore` from `@ocash/sdk`
+- `KeyValueStore` / `RedisStore` / `SqliteStore` from `@ocash/sdk`
+- `IndexedDbStore` from `@ocash/sdk/browser`
+- `FileStore` from `@ocash/sdk/node`
+
+Example:
+
+```ts
+import { createSdk, MemoryStore } from '@ocash/sdk';
+
+const sdk = createSdk({
+  chains: [...],
+  storage: new MemoryStore(),
+});
+```
+
+Storage behavior:
+
+- `wallet.open()` calls `storage.init({ walletId })`
+- `walletId` defaults to viewing address (derived from seed)
+- Changing `walletId` switches namespaces and clears in-process cache
+
+### 4) Events and Errors
+
+Events come from `onEvent` and `sdk.core.on/off`.
+Error events are `{ type: 'error', payload: { code, message, detail, cause } }`.
+
+Error codes:
+
+- `CONFIG` `ASSETS` `STORAGE` `SYNC` `CRYPTO` `MERKLE` `WITNESS` `PROOF` `RELAYER`
+
+### 5) Wallet and Sync
+
+Wallet:
+
+```ts
+await sdk.wallet.open({ seed, accountNonce: 0 });
+const utxos = await sdk.wallet.getUtxos({ chainId });
+const balance = await sdk.wallet.getBalance({ chainId, assetId });
+await sdk.wallet.markSpent({ chainId, nullifiers: ['0x...'] });
+await sdk.wallet.close();
+```
+
+Sync:
+
+```ts
+await sdk.sync.start({ chainIds: [chainId], pollMs: 10_000 });
+await sdk.sync.syncOnce({ chainIds: [chainId], resources: ['memo', 'nullifier', 'merkle'] });
+sdk.sync.stop();
+const status = sdk.sync.getStatus();
+```
+
+Tuning:
+
+```ts
+const sdk = createSdk({
+  chains: [...],
+  sync: {
+    pollMs: 10_000,
+    pageSize: 200,
+    requestTimeoutMs: 20_000,
+    retry: { attempts: 3, baseDelayMs: 250, maxDelayMs: 5_000 },
+  },
+});
+```
+
+### 6) Planner
+
+`planner` estimates fees, merge counts, and produces complete transfer/withdraw plans.
+
+```ts
+const estimate = await sdk.planner.estimate({
+  chainId,
+  assetId: tokenId,
+  action: 'transfer',
+  amount: 1_000_000n,
+  payIncludesFee: false,
+});
+
+const max = await sdk.planner.estimateMax({
+  chainId,
+  assetId: tokenId,
+  action: 'transfer',
+});
+
+const plan = await sdk.planner.plan({
+  action: 'transfer',
+  chainId,
+  assetId: tokenId,
+  amount: 1_000_000n,
+  to: '0xrecipient',
+  relayerUrl: 'https://relayer.example.com',
+  autoMerge: true,
+});
+```
+
+Notes:
+
+- Transfer selects up to 3 inputs and may trigger a merge
+- Withdraw uses a single input and optionally `gasDropValue`
+
+### 7) Ops (End-to-End Flow)
+
+`ops` covers plan → merkle proof → witness → proof → relayer request.
+
+Transfer:
+
+```ts
+const owner = sdk.keys.deriveKeyPair(seed, nonce);
+const prepared = await sdk.ops.prepareTransfer({
+  chainId,
+  assetId: tokenId,
+  amount,
+  to: viewingAddress,
+  ownerKeyPair: owner,
+  publicClient,
+  relayerUrl: 'https://relayer.example.com',
+  autoMerge: true,
+});
+
+if (prepared.kind === 'merge') {
+  // prepared.merge is the merge plan
+  // prepared.nextInput is used for the final transfer
+}
+
+const submit = await sdk.ops.submitRelayerRequest({
+  prepared: { plan: prepared.plan, request: prepared.request, kind: prepared.kind },
+  publicClient,
+});
+
+const relayerTxHash = await submit.waitRelayerTxHash;
+const receipt = await submit.TransactionReceipt;
+```
+
+Withdraw:
+
+```ts
+const owner = sdk.keys.deriveKeyPair(seed, nonce);
+const prepared = await sdk.ops.prepareWithdraw({
+  chainId,
+  assetId: tokenId,
+  amount,
+  recipient: '0xrecipient',
+  ownerKeyPair: owner,
+  publicClient,
+  gasDropValue: 0n,
+});
+
+const submit = await sdk.ops.submitRelayerRequest({
+  prepared: { plan: prepared.plan, request: prepared.request },
+  publicClient,
+});
+```
+
+Deposit:
+
+```ts
+const ownerPub = sdk.keys.getPublicKeyBySeed(seed, nonce);
+const prepared = await sdk.ops.prepareDeposit({
+  chainId,
+  assetId: tokenId,
+  amount,
+  ownerPublicKey: ownerPub,
+  account: account.address,
+  publicClient,
+});
+
+if (prepared.approveNeeded && prepared.approveRequest) {
+  await walletClient.writeContract(prepared.approveRequest);
+}
+await walletClient.writeContract(prepared.depositRequest);
+```
+
+### 8) Manual ZKP and Tx Building
+
+Use this for finer-grained control when bypassing `ops`.
+
+```ts
+const witness = await sdk.zkp.createWitnessTransfer(witnessInput, context);
+const proof = await sdk.zkp.proveTransfer(witness, context);
+const request = await sdk.tx.buildTransferCalldata({ chainId, proof });
+```
+
+### 9) Assets and Relayer Config
+
+```ts
+const chain = sdk.assets.getChain(chainId);
+const tokens = sdk.assets.getTokens(chainId);
+await sdk.assets.loadFromUrl('https://cdn.example.com/ledger.json');
+const relayer = await sdk.assets.syncRelayerConfig(chainId);
+```
+
+### 10) AI Integration Notes
+
+- Call `await sdk.core.ready()` before any ZKP/ops/planner operation
+- `ops.prepareTransfer` and `ops.prepareWithdraw` require `chain.rpcUrl`
+- `sync` depends on `chain.entryUrl` and `chain.merkleProofUrl`
+- `planner.plan` and `ops` inputs for `amount` must be `bigint`
+- If `assetsOverride` is not provided, the SDK uses default URLs
+
+### 11) Integration Checklist
+
+- Ensure `chains` includes `chainId`, `rpcUrl`, `entryUrl`, `merkleProofUrl`, `ocashContractAddress`, `relayerUrl`, and `tokens`
+- Ensure `assetsOverride` fully covers all assets or use default URLs
+- Do not call `planner`, `ops`, or `zkp` before `core.ready()`
+- Do not call `wallet`, `sync`, or `ops` before `wallet.open()`
+- Use `bigint` for `amount`
+- `publicClient` must be a valid viem `PublicClient`
+- Call `wallet.close()` when done
+
+### 12) Common Pitfalls
+
+- Passing only partial `assetsOverride` causes asset load failures
+- Doing transfer/withdraw before `sync` causes proof build failures
+- Passing string or number for `amount` breaks planner/ops
+- Ignoring relayer result polling prevents final chain status
+
+## OCash SDK API Reference
+
+This reflects `src/index.ts` and `src/types.ts` exports and is the authoritative contract.
+
+### Main Entry
+
+```ts
+import { createSdk } from '@ocash/sdk';
+const sdk = createSdk(config);
+```
+
+### `OCashSdkConfig`
+
+```ts
+export interface OCashSdkConfig {
+  chains: ChainConfigInput[];
+  assetsOverride?: AssetsOverride;
+  memoWorker?: MemoWorkerConfig;
+  cacheDir?: string;
+  runtime?: 'auto' | 'browser' | 'node' | 'hybrid';
+  storage?: StorageAdapter;
+  merkle?: {
+    mode?: 'remote' | 'local' | 'hybrid';
+    treeDepth?: number;
+  };
+  sync?: {
+    pageSize?: number;
+    pollMs?: number;
+    requestTimeoutMs?: number;
+    retry?: { attempts?: number; baseDelayMs?: number; maxDelayMs?: number };
+  };
+  onEvent?: (event: SdkEvent) => void;
+}
+```
+
+#### `ChainConfigInput`
+
+```ts
+export interface ChainConfigInput {
+  chainId: number;
+  rpcUrl?: string;
+  entryUrl?: string;
+  ocashContractAddress?: Address;
+  relayerUrl?: string;
+  merkleProofUrl?: string;
+  tokens?: TokenMetadata[];
+  contract?: Address; // legacy field, same as ocashContractAddress
+}
+```
+
+#### `TokenMetadata`
+
+```ts
+export interface TokenMetadata {
+  id: string;
+  symbol: string;
+  decimals: number;
+  wrappedErc20: Address;
+  viewerPk: [string, string];
+  freezerPk: [string, string];
+  depositFeeBps?: number;
+  withdrawFeeBps?: number;
+  transferMaxAmount?: bigint | string;
+  withdrawMaxAmount?: bigint | string;
+}
+```
+
+#### Assets Override
+
+```ts
+export type AssetOverrideEntry = string | string[];
+export interface AssetsOverride {
+  [filename: string]: AssetOverrideEntry;
+}
+```
+
+### `OCashSdk` Overview
+
+```ts
+export interface OCashSdk {
+  core: CoreApi;
+  crypto: CryptoApi;
+  keys: KeysApi;
+  assets: AssetsApi;
+  storage: StorageApi;
+  sync: SyncApi;
+  merkle: MerkleApi;
+  wallet: WalletApi;
+  planner: PlannerApi;
+  zkp: ZkpApi;
+  tx: TxBuilderApi;
+  ops: OpsApi;
+}
+```
+
+### `CoreApi`
+
+```ts
+export interface CoreApi {
+  ready: (onProgress?: (value: number) => void) => Promise<void>;
+  reset: () => void;
+  on: (type: SdkEvent['type'], handler: (event: SdkEvent) => void) => void;
+  off: (type: SdkEvent['type'], handler: (event: SdkEvent) => void) => void;
+}
+```
+
+### `CryptoApi`
+
+```ts
+export interface CryptoApi {
+  commitment: (ro: CommitmentData, format?: 'hex' | 'bigint') => Hex | bigint;
+  nullifier: (secretKey: bigint, commitment: Hex, freezerPk?: [bigint, bigint]) => Hex;
+  createRecordOpening: (input: {
+    asset_id: bigint | number | string;
+    asset_amount: bigint | number | string;
+    user_pk: { user_address: [bigint | number | string, bigint | number | string] };
+    blinding_factor?: bigint | number | string;
+    is_frozen?: boolean;
+  }) => CommitmentData;
+  poolId: (tokenAddress: Hex | bigint | number | string, viewerPk: [bigint, bigint], freezerPk: [bigint, bigint]) => bigint;
+  viewingRandomness: () => Uint8Array;
+  memo: {
+    createMemo: (ro: CommitmentData) => Hex;
+    memoNonce: (ephemeralPublicKey: [bigint, bigint], userPublicKey: [bigint, bigint]) => Uint8Array;
+    decryptMemo: (secretKey: bigint, memo: Hex) => CommitmentData | null;
+    decryptBatch: (requests: MemoDecryptRequest[]) => Promise<MemoDecryptResult[]>;
+  };
+  dummy: {
+    createRecordOpening: () => Promise<CommitmentData>;
+    createInputSecret: () => Promise<InputSecret>;
+  };
+  utils: {
+    calcDepositFee: (amount: bigint, feeBps?: number) => bigint;
+    randomBytes32: () => Uint8Array;
+    randomBytes32Bigint: (isScalar?: boolean) => bigint;
+    serializeBigInt: <T>(value: T) => string;
+  };
+}
+```
+
+### `KeysApi`
+
+```ts
+export interface KeysApi {
+  deriveKeyPair: (seed: string, nonce?: string) => UserKeyPair;
+  getSecretKeyBySeed: (seed: string, nonce?: string) => UserSecretKey;
+  getPublicKeyBySeed: (seed: string, nonce?: string) => UserPublicKey;
+  userPkToAddress: (userPk: { user_address: [bigint | string, bigint | string] }) => Hex;
+  addressToUserPk: (address: Hex) => { user_address: [bigint, bigint] };
+}
+```
+
+### `AssetsApi`
+
+```ts
+export interface AssetsApi {
+  getChains: () => ChainConfigInput[];
+  getChain: (chainId: number) => ChainConfigInput;
+  getTokens: (chainId: number) => TokenMetadata[];
+  getPoolInfo: (chainId: number, tokenId: string) => TokenMetadata | undefined;
+  getAllowanceTarget: (chainId: number) => Address;
+  appendTokens: (chainId: number, tokens: TokenMetadata[]) => void;
+  loadFromUrl: (url: string) => Promise<void>;
+  getRelayerConfig: (chainId: number) => RelayerConfig | undefined;
+  syncRelayerConfig: (chainId: number) => Promise<RelayerConfig>;
+  syncAllRelayerConfigs: () => Promise<void>;
+}
+```
+
+### `StorageApi` and `StorageAdapter`
+
+```ts
+export interface StorageApi {
+  getAdapter: () => StorageAdapter;
+}
+```
+
+```ts
+export interface StorageAdapter {
+  init?(options?: { walletId?: string }): Promise<void> | void;
+  close?(): Promise<void> | void;
+
+  getSyncCursor(chainId: number): Promise<SyncCursor | undefined>;
+  setSyncCursor(chainId: number, cursor: SyncCursor): Promise<void>;
+
+  upsertUtxos(utxos: UtxoRecord[]): Promise<void>;
+  listUtxos(query?: ListUtxosQuery): Promise<ListUtxosResult>;
+  markSpent(input: { chainId: number; nullifiers: Hex[] }): Promise<number>;
+
+  createOperation<TType extends OperationType>(input: OperationCreateInput<TType>): StoredOperation & { type: TType };
+  updateOperation(id: string, patch: Partial<StoredOperation>): void;
+  listOperations(input?: number | ListOperationsQuery): StoredOperation[];
+
+  deleteOperation?(id: string): Promise<boolean> | boolean;
+  clearOperations?(): Promise<void> | void;
+  pruneOperations?(options?: { max?: number }): Promise<number> | number;
+
+  getMerkleLeaves?(chainId: number): Promise<Array<{ cid: number; commitment: Hex }> | undefined>;
+  appendMerkleLeaves?(chainId: number, leaves: Array<{ cid: number; commitment: Hex }>): Promise<void>;
+  clearMerkleLeaves?(chainId: number): Promise<void>;
+
+  getMerkleLeaf?(chainId: number, cid: number): Promise<MerkleLeafRecord | undefined>;
+  getMerkleNode?(chainId: number, id: string): Promise<MerkleNodeRecord | undefined>;
+  upsertMerkleNodes?(chainId: number, nodes: MerkleNodeRecord[]): Promise<void>;
+  clearMerkleNodes?(chainId: number): Promise<void>;
+
+  upsertEntryMemos?(memos: EntryMemoRecord[]): Promise<number> | number;
+  listEntryMemos?(query: ListEntryMemosQuery): Promise<ListEntryMemosResult>;
+  clearEntryMemos?(chainId: number): Promise<void> | void;
+
+  upsertEntryNullifiers?(nullifiers: EntryNullifierRecord[]): Promise<number> | number;
+  listEntryNullifiers?(query: ListEntryNullifiersQuery): Promise<ListEntryNullifiersResult>;
+  clearEntryNullifiers?(chainId: number): Promise<void> | void;
+
+  getMerkleTree?(chainId: number): Promise<MerkleTreeState | undefined>;
+  setMerkleTree?(chainId: number, tree: MerkleTreeState): Promise<void>;
+  clearMerkleTree?(chainId: number): Promise<void>;
+}
+```
+
+### `SyncApi`
+
+```ts
+export interface SyncApi {
+  start(options?: { chainIds?: number[]; pollMs?: number }): Promise<void>;
+  stop(): void;
+  syncOnce(options?: {
+    chainIds?: number[];
+    resources?: Array<'memo' | 'nullifier' | 'merkle'>;
+    signal?: AbortSignal;
+    requestTimeoutMs?: number;
+    pageSize?: number;
+    continueOnError?: boolean;
+  }): Promise<void>;
+  getStatus(): Record<number, SyncChainStatus>;
+}
+```
+
+### `MerkleApi`
+
+```ts
+export interface MerkleApi {
+  currentMerkleRootIndex: (totalElements: number, tempArraySize?: number) => number;
+  getProofByCids: (input: { chainId: number; cids: number[]; totalElements: bigint }) => Promise<RemoteMerkleProofResponse>;
+  getProofByCid: (input: { chainId: number; cid: number; totalElements: bigint }) => Promise<RemoteMerkleProofResponse>;
+  ingestEntryMemos?: (chainId: number, memos: Array<{ cid: number | null; commitment: Hex | string | bigint }>) => Promise<void> | void;
+  buildAccMemberWitnesses: (input: {
+    remote: RemoteMerkleProofResponse;
+    utxos: Array<{ commitment: Hex; mkIndex: number }>;
+    arrayHash: bigint;
+    totalElements: bigint;
+  }) => AccMemberWitness[];
+  buildInputSecretsFromUtxos: (input: {
+    remote: RemoteMerkleProofResponse;
+    utxos: Array<{ commitment: Hex; memo?: Hex; mkIndex: number }>;
+    ownerKeyPair: UserKeyPair;
+    arrayHash: bigint;
+    totalElements: bigint;
+    maxInputs?: number;
+  }) => Promise<InputSecret[]>;
+}
+```
+
+### `WalletApi`
+
+```ts
+export interface WalletApi {
+  open(session: WalletSessionInput): Promise<void>;
+  close(): Promise<void>;
+  getUtxos(query?: ListUtxosQuery): Promise<ListUtxosResult>;
+  getBalance(query?: { chainId?: number; assetId?: string }): Promise<bigint>;
+  markSpent(input: { chainId: number; nullifiers: Hex[] }): Promise<void>;
+}
+```
+
+### `PlannerApi`
+
+```ts
+export interface PlannerApi {
+  estimate(input: {
+    chainId: number;
+    assetId: string;
+    action: 'transfer' | 'withdraw';
+    amount: bigint;
+    payIncludesFee?: boolean;
+  }): Promise<PlannerEstimateResult>;
+
+  estimateMax(input: {
+    chainId: number;
+    assetId: string;
+    action: 'transfer' | 'withdraw';
+    payIncludesFee?: boolean;
+  }): Promise<PlannerMaxEstimateResult>;
+
+  plan(input: Record<string, unknown>): Promise<PlannerPlanResult>;
+}
+```
+
+### `ZkpApi`
+
+```ts
+export interface ZkpApi {
+  createWitnessTransfer: (input: TransferWitnessInput, context?: WitnessContext) => Promise<WitnessBuildResult>;
+  createWitnessWithdraw: (input: WithdrawWitnessInput, context?: WitnessContext) => Promise<WitnessBuildResult>;
+  proveTransfer: (witness: TransferWitnessInput | string, context?: WitnessContext) => Promise<ProofResult>;
+  proveWithdraw: (witness: WithdrawWitnessInput | string, context?: WitnessContext) => Promise<ProofResult>;
+}
+```
+
+### `TxBuilderApi`
+
+```ts
+export interface TxBuilderApi {
+  buildTransferCalldata: (input: { chainId: number; proof: ProofResult }) => Promise<RelayerRequest>;
+  buildWithdrawCalldata: (input: { chainId: number; proof: ProofResult }) => Promise<RelayerRequest>;
+}
+```
+
+### `OpsApi`
+
+```ts
+export interface OpsApi {
+  prepareTransfer(input: {
+    chainId: number;
+    assetId: string;
+    amount: bigint;
+    to: Hex;
+    ownerKeyPair: UserKeyPair;
+    publicClient: PublicClient;
+    relayerUrl?: string;
+    autoMerge?: boolean;
+  }): Promise<
+    | {
+        kind: 'transfer';
+        plan: TransferPlan;
+        witness: TransferWitnessInput;
+        proof: ProofResult;
+        request: RelayerRequest;
+        meta: { arrayHashIndex: number; merkleRootIndex: number; relayer: Address };
+      }
+    | {
+        kind: 'merge';
+        plan: TransferMergePlan;
+        merge: {
+          plan: TransferPlan;
+          witness: TransferWitnessInput;
+          proof: ProofResult;
+          request: RelayerRequest;
+          meta: { arrayHashIndex: number; merkleRootIndex: number; relayer: Address };
+        };
+        nextInput: { chainId: number; assetId: string; amount: bigint; to: Hex; relayerUrl?: string; autoMerge?: boolean };
+      }
+  >;
+
+  prepareWithdraw(input: {
+    chainId: number;
+    assetId: string;
+    amount: bigint;
+    recipient: Address;
+    ownerKeyPair: UserKeyPair;
+    publicClient: PublicClient;
+    gasDropValue?: bigint;
+    relayerUrl?: string;
+  }): Promise<{
+    plan: WithdrawPlan;
+    witness: WithdrawWitnessInput;
+    proof: ProofResult;
+    request: RelayerRequest;
+    meta: { arrayHashIndex: number; merkleRootIndex: number; relayer: Address };
+  }>;
+
+  prepareDeposit(input: {
+    chainId: number;
+    assetId: string;
+    amount: bigint;
+    ownerPublicKey: UserPublicKey;
+    account: Address;
+    publicClient: PublicClient;
+  }): Promise<{
+    chainId: number;
+    assetId: string;
+    amount: bigint;
+    token: TokenMetadata;
+    recordOpening: CommitmentData;
+    memo: Hex;
+    protocolFee: bigint;
+    payAmount: bigint;
+    depositRelayerFee: bigint;
+    value: bigint;
+    approveNeeded: boolean;
+    approveRequest?: {
+      chainId: number;
+      address: Address;
+      abi: any;
+      functionName: 'approve';
+      args: [Address, bigint];
+    };
+    depositRequest: {
+      chainId: number;
+      address: Address;
+      abi: any;
+      functionName: 'deposit';
+      args: [bigint, bigint, [bigint, bigint], bigint, Hex];
+      value: bigint;
+    };
+  }>;
+
+  submitDeposit(input: {
+    prepared: Awaited<ReturnType<OpsApi['prepareDeposit']>>;
+    walletClient: { writeContract: (request: { address: Address; abi: any; functionName: string; args: any; value?: bigint; chainId?: number }) => Promise<Hex> };
+    publicClient: PublicClient;
+    autoApprove?: boolean;
+    confirmations?: number;
+    operationId?: string;
+  }): Promise<{
+    txHash: Hex;
+    approveTxHash?: Hex;
+    receipt?: TransactionReceipt;
+    operationId?: string;
+  }>;
+
+  waitRelayerTxHash(input: {
+    relayerUrl: string;
+    relayerTxHash: Hex;
+    timeoutMs?: number;
+    intervalMs?: number;
+    signal?: AbortSignal;
+    operationId?: string;
+    requestUrl?: string;
+  }): Promise<Hex>;
+
+  waitForTransactionReceipt(input: {
+    publicClient: PublicClient;
+    txHash: Hex;
+    timeoutMs?: number;
+    pollIntervalMs?: number;
+    confirmations?: number;
+    operationId?: string;
+  }): Promise<TransactionReceipt>;
+
+  submitRelayerRequest<T = unknown>(input: {
+    prepared: { plan: TransferPlan | WithdrawPlan; request: RelayerRequest; kind?: 'transfer' | 'merge' };
+    relayerUrl?: string;
+    signal?: AbortSignal;
+    operationId?: string;
+    operation?: OperationCreateInput;
+    publicClient?: PublicClient;
+    relayerTimeoutMs?: number;
+    relayerIntervalMs?: number;
+    receiptTimeoutMs?: number;
+    receiptPollIntervalMs?: number;
+    confirmations?: number;
+  }): Promise<{
+    result: T;
+    operationId?: string;
+    updateOperation: (patch: Partial<StoredOperation>) => void;
+    waitRelayerTxHash: Promise<Hex>;
+    transactionReceipt?: Promise<TransactionReceipt>;
+    TransactionReceipt?: Promise<TransactionReceipt>;
+  }>;
+}
+```
+
+### Events
+
+```ts
+export type SdkEvent =
+  | { type: 'core:ready'; payload: { assetsVersion: string; durationMs: number } }
+  | { type: 'core:progress'; payload: { stage: 'fetch' | 'compile' | 'init'; loaded: number; total?: number } }
+  | { type: 'sync:start'; payload: { chainId: number; source: 'entry' | 'rpc' | 'subgraph' } }
+  | { type: 'sync:progress'; payload: { chainId: number; resource: 'memo' | 'nullifier' | 'merkle'; downloaded: number; total?: number } }
+  | { type: 'sync:done'; payload: { chainId: number; cursor: SyncCursor } }
+  | { type: 'debug'; payload: { scope: string; message: string; detail?: unknown } }
+  | {
+      type: 'operations:update';
+      payload: {
+        action: 'create' | 'update';
+        operationId?: string;
+        patch?: Partial<StoredOperation>;
+        operation?: StoredOperation;
+      };
+    }
+  | { type: 'wallet:utxo:update'; payload: { chainId: number; added: number; spent: number; frozen: number } }
+  | { type: 'assets:update'; payload: { chainId: number; kind: 'token' | 'pool' | 'relayer' } }
+  | { type: 'zkp:start'; payload: { circuit: 'transfer' | 'withdraw' } }
+  | { type: 'zkp:done'; payload: { circuit: 'transfer' | 'withdraw'; costMs: number } }
+  | { type: 'error'; payload: SdkErrorPayload };
+```
+
+## Full API Reference
+
+See `llms.txt` in repo root for complete API signatures, type definitions, and code examples.
