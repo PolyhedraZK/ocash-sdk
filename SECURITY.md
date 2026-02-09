@@ -11,7 +11,7 @@
 If you discover a security vulnerability in @ocash/sdk, please report it responsibly:
 
 1. **Do NOT** open a public GitHub issue
-2. Email security concerns to: **security@ocash.io**
+2. Email security concerns to: **tc@polyhedra.network**
 3. Include a description of the vulnerability, steps to reproduce, and potential impact
 4. You will receive an acknowledgment within 48 hours
 
