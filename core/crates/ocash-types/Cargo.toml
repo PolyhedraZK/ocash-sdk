@@ -1,0 +1,12 @@
+[package]
+name = "ocash-types"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ark-ff.workspace = true
+ark-bn254.workspace = true
+serde.workspace = true
+hex.workspace = true
+thiserror.workspace = true

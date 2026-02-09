@@ -1,0 +1,28 @@
+[
+  {
+    "name": "default_freezer",
+    "secret_key": "0x00d5a1320ff22782a8eafa7d0efdd16413515f55139f7cd7a03c17bca3270bb5",
+    "commitment": "0x12f9dc4b4d9d50dcc218f83cb602e32c023d59ddcfa2532882eec617650394c9",
+    "expected": "0x11f71d46c476e5fecba55c143b9097a0e7d1b9435ecec00932ecff8730e0ceeb"
+  },
+  {
+    "name": "identity_freezer",
+    "secret_key": "0x00d5a1320ff22782a8eafa7d0efdd16413515f55139f7cd7a03c17bca3270bb5",
+    "commitment": "0x12f9dc4b4d9d50dcc218f83cb602e32c023d59ddcfa2532882eec617650394c9",
+    "freezer_pk": {
+      "x": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "y": "0x0000000000000000000000000000000000000000000000000000000000000001"
+    },
+    "expected": "0x11f71d46c476e5fecba55c143b9097a0e7d1b9435ecec00932ecff8730e0ceeb"
+  },
+  {
+    "name": "custom_freezer",
+    "secret_key": "0x00d5a1320ff22782a8eafa7d0efdd16413515f55139f7cd7a03c17bca3270bb5",
+    "commitment": "0x12f9dc4b4d9d50dcc218f83cb602e32c023d59ddcfa2532882eec617650394c9",
+    "freezer_pk": {
+      "x": "0x0ee41078a82784cb55c8970fd3e491fd2b500e9eb78be89911f8502c3b1d6ae4",
+      "y": "0x2243d2388a85e1dacfd8d64ad8a5372b123c1cdd4b2a6943d74adf03fd112d9b"
+    },
+    "expected": "0x0161f10ef9ce33d0483859bf52702c1dbaf8f2d4e946b14ec3d2e3293e142ab7"
+  }
+]

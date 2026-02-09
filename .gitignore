@@ -7,3 +7,7 @@ demos/node/.ocash-demo/
 docs/.vitepress/cache
 docs/.vitepress/dist
 .vscode/
+
+# Rust
+core/target/
+target/

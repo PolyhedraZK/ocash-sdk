@@ -1,0 +1,20 @@
+[package]
+name = "ocash-ops"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ocash-types.workspace = true
+ocash-crypto = { path = "../ocash-crypto" }
+ocash-merkle = { path = "../ocash-merkle" }
+ocash-store = { path = "../ocash-store" }
+ocash-planner = { path = "../ocash-planner" }
+ocash-tx = { path = "../ocash-tx" }
+ark-ff.workspace = true
+ark-bn254.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+hex.workspace = true
+thiserror.workspace = true
+async-trait = "0.1"
