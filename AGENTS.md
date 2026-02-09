@@ -25,6 +25,7 @@ src/                          # SDK source (~60 files, ~8400 lines)
   index.browser.ts            # Browser entry: + IndexedDbStore
   index.node.ts               # Node entry: + FileStore
   types.ts                    # All type definitions (~850 lines)
+  errors.ts                   # Error codes and SdkError
   core/                       # SdkCore: event bus, init orchestration
   crypto/                     # Poseidon2, BabyJubjub, key derivation, commitments
   wallet/                     # WalletService: session, UTXO, balance, memo decrypt
@@ -37,6 +38,10 @@ src/                          # SDK source (~60 files, ~8400 lines)
   store/                      # StorageAdapter impls (Memory/KV/File/IndexedDB)
   memo/                       # MemoKit: ECDH + NaCl secretbox encrypt/decrypt
   runtime/                    # WasmBridge: WASM loading, runtime detect, asset cache
+  ledger/                     # Chain/token/relayer configuration
+  assets/                     # Default assets metadata
+  abi/                        # Contract ABIs
+  dummy/                      # Test data helpers
   utils/                      # Shared utilities (random, signal, url, bigint)
 tests/                        # Vitest tests (~38 files)
 demos/browser/                # React + Vite + wagmi browser demo
