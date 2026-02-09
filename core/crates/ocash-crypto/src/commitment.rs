@@ -7,7 +7,7 @@
 
 use ark_bn254::Fr;
 use ark_ff::PrimeField;
-use ocash_types::{field_to_hex, hex_to_field, Hex};
+use ocash_types::{field_to_hex, Hex};
 
 use crate::poseidon2::{self, Poseidon2Domain};
 use crate::record::RecordOpening;
@@ -60,6 +60,7 @@ pub fn compute(ro: &RecordOpening) -> ocash_types::Result<Fr> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ocash_types::hex_to_field;
 
     #[test]
     fn test_commitment_vectors_from_json() {
