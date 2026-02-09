@@ -37,6 +37,88 @@ const balance = await sdk.wallet.getBalance({ chainId: 11155111 });
 await sdk.wallet.close();                                  // Release keys, flush storage
 ```
 
+## Recommended Lifecycle
+
+1. `createSdk(config)`
+2. `await sdk.core.ready()`
+3. `await sdk.wallet.open({ seed, accountNonce })`
+4. `await sdk.sync.syncOnce()` or `await sdk.sync.start()`
+5. Use `planner` / `ops` / `tx`
+6. `await sdk.wallet.close()`
+
+## Runtime Assets and `assetsOverride`
+
+The SDK requires wasm and circuit files at runtime. If you pass `assetsOverride`, you must provide the full asset set.
+
+Required assets:
+
+- `wasm_exec.js`
+- `app.wasm`
+- `transfer.r1cs`
+- `transfer.pk`
+- `withdraw.r1cs`
+- `withdraw.pk`
+
+Full URL example:
+
+```ts
+const sdk = createSdk({
+  chains: [...],
+  assetsOverride: {
+    'wasm_exec.js': 'https://cdn.example.com/ocash/wasm_exec.js',
+    'app.wasm': 'https://cdn.example.com/ocash/app.wasm',
+    'transfer.r1cs': 'https://cdn.example.com/ocash/transfer.r1cs',
+    'transfer.pk': 'https://cdn.example.com/ocash/transfer.pk',
+    'withdraw.r1cs': 'https://cdn.example.com/ocash/withdraw.r1cs',
+    'withdraw.pk': 'https://cdn.example.com/ocash/withdraw.pk',
+  },
+});
+```
+
+Sharded asset example:
+
+```ts
+const sdk = createSdk({
+  chains: [...],
+  assetsOverride: {
+    'transfer.pk': [
+      'https://cdn.example.com/transfer_pk/00',
+      'https://cdn.example.com/transfer_pk/01',
+    ],
+  },
+});
+```
+
+Node or Hybrid local files:
+
+```ts
+const sdk = createSdk({
+  runtime: 'node',
+  cacheDir: './.cache/ocash',
+  chains: [...],
+  assetsOverride: {
+    'wasm_exec.js': './assets/wasm_exec.js',
+    'app.wasm': './assets/app.wasm',
+    'transfer.r1cs': './assets/transfer.r1cs',
+    'transfer.pk': './assets/transfer.pk',
+    'withdraw.r1cs': './assets/withdraw.r1cs',
+    'withdraw.pk': './assets/withdraw.pk',
+  },
+});
+```
+
+Runtime modes:
+
+- `runtime: 'browser'` enables browser path resolution and disables local cache
+- `runtime: 'node'` requires absolute URLs and enables `cacheDir`
+- `runtime: 'hybrid'` for Electron/Tauri, conditionally enables `cacheDir`
+
+Notes:
+
+- If `assetsOverride` is not set, the SDK uses default URLs
+- `cacheDir` caches HTTP(S) assets to avoid re-downloading
+- In WebWorker environments, set `runtime: 'browser'` or `runtime: 'hybrid'`
+
 ## SDK Modules
 
 sdk.core      — WASM & circuit initialization (ready, reset)
@@ -201,6 +283,11 @@ new IndexedDbStore({ dbName: 'myapp', maxOperations: 200 })
 new FileStore({ baseDir: './data', maxOperations: 500 })
 ```
 
+Storage behavior:
+- `wallet.open()` calls `storage.init({ walletId })`
+- `walletId` defaults to viewing address (derived from seed)
+- Changing `walletId` switches namespaces and clears in-process cache
+
 Required interface methods:
 - upsertUtxos(utxos: UtxoRecord[]): Promise<void>
 - listUtxos(query?: ListUtxosQuery): Promise<{ total: number; rows: UtxoRecord[] }>
@@ -275,3 +362,20 @@ CryptoToolkit.createRecordOpening({ assetId, amount, userPk })
 Utils.calcDepositFee(amount, feeBps)                 // Protocol fee calculation
 Utils.randomBytes32Bigint()                          // Cryptographic random bigint
 ```
+
+## Integration Checklist
+
+- Ensure `chains` includes `chainId`, `rpcUrl`, `entryUrl`, `merkleProofUrl`, `ocashContractAddress`, `relayerUrl`, and `tokens`
+- Ensure `assetsOverride` fully covers all assets or use default URLs
+- Do not call `planner`, `ops`, or `zkp` before `core.ready()`
+- Do not call `wallet`, `sync`, or `ops` before `wallet.open()`
+- Use `bigint` for `amount`
+- `publicClient` must be a valid viem `PublicClient`
+- Call `wallet.close()` when done
+
+## Common Pitfalls
+
+- Passing only partial `assetsOverride` causes asset load failures
+- Doing transfer/withdraw before `sync` causes proof build failures
+- Passing string or number for `amount` breaks planner/ops
+- Ignoring relayer result polling prevents final chain status
