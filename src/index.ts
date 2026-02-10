@@ -32,7 +32,10 @@ export type {
   OpsApi,
   RelayerRequest,
 } from './types';
-export { defaultAssetsOverride } from './assets/defaultAssetsOverride';
+export {
+  defaultAssetsOverrideMainnet,
+  defaultAssetsOverrideTestnet,
+} from './assets/defaultAssetsOverride';
 export { MemoKit } from './memo/memoKit';
 export { CryptoToolkit } from './crypto/cryptoToolkit';
 export { KeyManager } from './crypto/keyManager';
@@ -63,7 +66,7 @@ export {
 } from './store/operationTypes';
 
 import type { AssetsApi, CommitmentData, Hex, OCashSdk, OCashSdkConfig, SdkEvent, StorageAdapter } from './types';
-import { defaultAssetsOverride } from './assets/defaultAssetsOverride';
+import { defaultAssetsOverrideMainnet } from './assets/defaultAssetsOverride';
 import { UniversalWasmBridge } from './runtime/wasmBridge';
 import { SdkCore } from './core/sdk-core';
 import { ProofEngine } from './proof/proofEngine';
@@ -102,7 +105,7 @@ function commitment(ro: CommitmentData, format?: 'hex' | 'bigint') {
 export const createSdk = (config: OCashSdkConfig): OCashSdk => {
   const normalizedConfig: OCashSdkConfig = {
     ...config,
-    assetsOverride: config.assetsOverride ?? defaultAssetsOverride,
+    assetsOverride: config.assetsOverride ?? defaultAssetsOverrideMainnet,
   };
   const bridge = new UniversalWasmBridge({
     assetsOverride: normalizedConfig.assetsOverride,

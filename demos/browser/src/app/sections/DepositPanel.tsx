@@ -9,20 +9,7 @@ import { formatFeeRows, formatNativeAmount, formatTokenAmount, useDebouncedValue
 import { useDemoStore } from '../state/demoStore';
 
 export function DepositPanel() {
-  const {
-    sdk,
-    walletOpened,
-    currentToken,
-    currentChain,
-    config,
-    publicClient,
-    address,
-    isConnected,
-    walletChainId,
-    selectedChainId,
-    walletClient,
-    wagmiConfig,
-  } = useDemoStore();
+  const { sdk, walletOpened, currentToken, currentChain, config, publicClient, address, isConnected, walletChainId, selectedChainId, walletClient, wagmiConfig } = useDemoStore();
 
   const [depositAmount, setDepositAmount] = useState('0.1');
   const [depositEstimate, setDepositEstimate] = useState<DepositEstimate | null>(null);
@@ -139,7 +126,7 @@ export function DepositPanel() {
       return;
     }
     const activeWalletClient = walletClient ?? (await getWalletClient(wagmiConfig, { chainId: selectedChainId ?? undefined }).catch(() => undefined));
-    if (!activeWalletClient) {
+    if (!activeWalletClient?.writeContract) {
       message.error('Wallet client not available');
       return;
     }
@@ -215,7 +202,7 @@ export function DepositPanel() {
         { label: 'value', value: depositEstimate ? formatNativeAmount(depositEstimate.value) : '' },
         { label: 'approveNeeded', value: depositEstimate ? String(Boolean(depositEstimate.approveNeeded)) : '' },
       ]),
-    [depositEstimate, currentToken]
+    [depositEstimate, currentToken],
   );
 
   const chainMismatch = Boolean(walletChainId && selectedChainId && walletChainId !== selectedChainId);
