@@ -100,7 +100,7 @@ export function WithdrawPanel() {
       setWithdrawProgress('Submitting to relayer...');
       const submit = await sdk.ops.submitRelayerRequest<Hex>({ prepared, publicClient });
       setWithdrawProgress('Waiting for receipt...');
-      await submit.TransactionReceipt;
+      await submit.transactionReceipt;
       setWithdrawProgress('Withdraw confirmed.');
       message.success('Withdraw successful.');
     } catch (error) {

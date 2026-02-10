@@ -446,7 +446,7 @@ async function main() {
         pushLog({ level: 'info', scope: 'rpc:transfer', message: 'waitRelayerTxHash:done', detail: { txhash } });
 
         pushLog({ level: 'info', scope: 'rpc:transfer', message: 'waitForTransactionReceipt:start' });
-        const receipt = await submit.TransactionReceipt;
+        const receipt = await submit.transactionReceipt;
         const ok = receipt?.status === 'success';
         if (ok) {
           const selected = prepared.plan.selectedInputs;
@@ -527,7 +527,7 @@ async function main() {
         pushLog({ level: 'info', scope: 'rpc:withdraw', message: 'waitRelayerTxHash:done', detail: { txhash } });
 
         pushLog({ level: 'info', scope: 'rpc:withdraw', message: 'waitForTransactionReceipt:start' });
-        const receipt = await submit.TransactionReceipt;
+        const receipt = await submit.transactionReceipt;
         const ok = receipt?.status === 'success';
         if (ok) {
           const utxo = prepared.plan.selectedInput;
