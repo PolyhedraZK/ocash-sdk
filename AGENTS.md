@@ -36,6 +36,7 @@ src/                          # SDK source (~60 files, ~8400 lines)
   tx/                         # TxBuilder: relayer request payloads
   store/                      # StorageAdapter impls (Memory/KV/File/IndexedDB)
   memo/                       # MemoKit: ECDH + NaCl secretbox encrypt/decrypt
+  abi/                        # Contract ABIs (Ocash.json compiled ABI, ERC20)
   runtime/                    # WasmBridge: WASM loading, runtime detect, asset cache
   utils/                      # Shared utilities (random, signal, url, bigint)
 tests/                        # Vitest tests (~38 files)
@@ -75,6 +76,21 @@ pnpm run build:assets:local   # Build assets including wasm_exec.js
 - UTXO model: not account balances — unspent transaction outputs
 - 12 modules: core, keys, crypto, assets, storage, wallet, sync, merkle, planner, zkp, tx, ops
 - 3 entry points: `@ocash/sdk` (universal), `@ocash/sdk/browser` (+IndexedDbStore), `@ocash/sdk/node` (+FileStore)
+
+## Contract ABI
+
+`App_ABI` is the complete Foundry-compiled ABI of the OCash contract (95 entries: 49 functions, 17 events, 29 errors). Source: `src/abi/Ocash.json`, imported by `src/abi/app.ts`, exported from `@ocash/sdk`.
+
+All contract functions (`deposit`, `transfer`, `withdraw`, `freeze`) are public with no access control — the ZK proof IS the authorization. This enables external composability: anyone can build SwapOrchestrators, bridges, or custom relayers that call the contract directly with a valid proof.
+
+```ts
+import { App_ABI } from '@ocash/sdk';
+import { getContract } from 'viem';
+
+const ocash = getContract({ address: contractAddress, abi: App_ABI, client: publicClient });
+```
+
+The ABI JSON is extracted from the Foundry compiled output (`Ocash.sol/Ocash.json`), stripped of `internalType` fields and `constructor`/`receive` entries. When the contract is recompiled, regenerate the JSON from the Foundry output.
 
 ## Key Patterns
 
@@ -385,7 +401,7 @@ const submit = await sdk.ops.submitRelayerRequest({
 });
 
 const relayerTxHash = await submit.waitRelayerTxHash;
-const receipt = await submit.TransactionReceipt;
+const receipt = await submit.transactionReceipt;
 ```
 
 Withdraw:
@@ -929,7 +945,6 @@ export interface OpsApi {
     updateOperation: (patch: Partial<StoredOperation>) => void;
     waitRelayerTxHash: Promise<Hex>;
     transactionReceipt?: Promise<TransactionReceipt>;
-    TransactionReceipt?: Promise<TransactionReceipt>;
   }>;
 }
 ```

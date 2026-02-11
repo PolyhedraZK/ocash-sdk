@@ -96,7 +96,7 @@ ocash-sdk/                        # Single package (not monorepo)
 │   ├── memo/                     # MemoKit: ECDH + NaCl secretbox
 │   ├── ledger/                   # LedgerInfo: chain/token/relayer config
 │   ├── runtime/                  # WasmBridge: WASM loading, runtime detect, asset cache
-│   ├── abi/                      # Contract ABIs (OCash App, ERC20)
+│   ├── abi/                      # Contract ABIs (Ocash.json compiled ABI, ERC20)
 │   ├── assets/                   # Default resource URL config
 │   ├── dummy/                    # DummyFactory: test data generation
 │   └── utils/                    # Utilities (random, serialization, hex)
@@ -143,6 +143,21 @@ pnpm run build:assets:local       # Build assets including wasm_exec.js
 - Event-driven. All state changes go through `onEvent` callback (`SdkEvent` union). Do not expose EventEmitter to consumers.
 - UTXO model. Not account balances. `WalletService` manages UTXOs, `Planner` does selection/change, `Ops` ties it together.
 - ProofBridge. Go WASM exposes `proveTransfer`/`proveWithdraw`; TypeScript calls through `WasmBridge`. The bridge interface is `ProofBridge` and is mockable in tests.
+
+## Contract ABI
+
+`App_ABI` is the complete Foundry-compiled ABI of the OCash contract (95 entries: 49 functions, 17 events, 29 errors). Source: `src/abi/Ocash.json`, imported by `src/abi/app.ts`, exported from `@ocash/sdk`.
+
+All contract functions (`deposit`, `transfer`, `withdraw`, `freeze`) are public with no access control — the ZK proof IS the authorization. This enables external composability: anyone can build SwapOrchestrators, bridges, or custom relayers that call the contract directly with a valid proof.
+
+```ts
+import { App_ABI } from '@ocash/sdk';
+import { getContract } from 'viem';
+
+const ocash = getContract({ address: contractAddress, abi: App_ABI, client: publicClient });
+```
+
+The ABI JSON is extracted from the Foundry compiled output (`Ocash.sol/Ocash.json`), stripped of `internalType` fields and `constructor`/`receive` entries. When the contract is recompiled, regenerate the JSON from the Foundry output.
 
 ## Code Style Rules
 
@@ -421,7 +436,7 @@ const submit = await sdk.ops.submitRelayerRequest({
 });
 
 const relayerTxHash = await submit.waitRelayerTxHash;
-const receipt = await submit.TransactionReceipt;
+const receipt = await submit.transactionReceipt;
 ```
 
 Withdraw:
@@ -965,7 +980,6 @@ export interface OpsApi {
     updateOperation: (patch: Partial<StoredOperation>) => void;
     waitRelayerTxHash: Promise<Hex>;
     transactionReceipt?: Promise<TransactionReceipt>;
-    TransactionReceipt?: Promise<TransactionReceipt>;
   }>;
 }
 ```

@@ -260,6 +260,33 @@ interface RelayerRequest { kind: 'relayer'; method: 'POST'; path: string; body: 
 - commitment = Poseidon2(asset_id, amount, pk.x, pk.y, blinding_factor)
 - nullifier = Poseidon2(commitment, secret_key, merkle_index)
 
+## Contract ABI
+
+`App_ABI` is the complete Foundry-compiled ABI of the OCash contract (95 entries: 49 functions, 17 events, 29 errors). All contract functions (`deposit`, `transfer`, `withdraw`, `freeze`) are public — the ZK proof IS the authorization.
+
+```ts
+import { App_ABI } from '@ocash/sdk';
+import { getContract } from 'viem';
+
+const ocash = getContract({ address: contractAddress, abi: App_ABI, client: publicClient });
+
+// Direct contract calls (no relayer needed if you pay your own gas)
+await ocash.read.totalElements();
+await ocash.read.merkleRoots([index]);
+await ocash.read.getPoolInfo([poolId]);
+await ocash.read.nullifiers([nullifierHash]);
+```
+
+Key contract functions available via `App_ABI`:
+- `deposit(poolId, amount, userPK, nonce, data)` — payable
+- `transfer(poolId, merkleRootIndex, arrayHashIndex, inputNullifiers, outputs, proof, viewerData, extraData, relayer, relayerFee)`
+- `withdraw(WithdrawInput)` — payable (struct with poolId, proof, recipient, amount, etc.)
+- `freeze(poolId, merkleRootIndex, arrayHashIndex, inputNullifiers, outputs, proof, viewerData, extraData)`
+- `claimRelayerFees(token)`, `registerUser(userKey)`, `processPendingDeposits(maxBatchSize, relayer)`
+- View functions: `totalElements`, `merkleRoots`, `getPoolInfo`, `digest`, `getArray`, `nullifiers`, `commitments`, etc.
+- 17 events: `Transfer`, `Withdraw`, `Deposit`, `Freeze`, `ArrayMergedToTree`, etc.
+- 29 custom errors for ABI-decoded revert parsing
+
 ## Static Utilities
 
 ```ts
