@@ -168,7 +168,7 @@ export function DepositPanel() {
 
       const submit = await sdk.ops.submitDeposit({
         prepared,
-        walletClient: activeWalletClient,
+        walletClient: activeWalletClient as any,
         publicClient,
         autoApprove: true,
       });

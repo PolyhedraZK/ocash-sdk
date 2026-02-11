@@ -120,7 +120,7 @@ export function TransferPanel() {
       setTransferProgress('Submitting to relayer...');
       const submit = await sdk.ops.submitRelayerRequest<Hex>({ prepared, publicClient });
       setTransferProgress('Waiting for receipt...');
-      await submit.TransactionReceipt;
+      await submit.transactionReceipt;
       setTransferProgress('Transfer confirmed.');
       message.success('Transfer successful.');
     } catch (error) {
