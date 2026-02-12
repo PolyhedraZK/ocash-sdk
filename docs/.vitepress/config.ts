@@ -25,6 +25,7 @@ export default defineConfig({
               items: [
                 { text: 'Getting Started', link: '/guide/getting-started' },
                 { text: 'Configuration', link: '/guide/configuration' },
+                { text: 'Deployments', link: '/guide/deployments' },
               ],
             },
             {
@@ -80,6 +81,7 @@ export default defineConfig({
               items: [
                 { text: '快速开始', link: '/zh/guide/getting-started' },
                 { text: '配置', link: '/zh/guide/configuration' },
+                { text: '部署信息', link: '/zh/guide/deployments' },
               ],
             },
             {

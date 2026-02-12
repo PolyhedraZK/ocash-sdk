@@ -47,6 +47,7 @@ export { calcTransferProofBinding, calcWithdrawProofBinding } from './utils/ocas
 export { App_ABI } from './abi/app';
 export { ERC20_ABI } from './abi/erc20';
 export { MemoryStore } from './store/memoryStore';
+export { ETH_MAINNET, BSC_MAINNET, BASE_MAINNET, SEPOLIA_TESTNET, BSC_TESTNET, MAINNET_CHAINS, TESTNET_CHAINS } from './deployments';
 export { KeyValueStore, RedisStore, SqliteStore, type KeyValueStoreOptions, type RedisStoreOptions, type SqliteStoreOptions, type KeyValueClient } from './store/keyValueStore';
 export {
   type StoredOperation,
