@@ -33,7 +33,7 @@ const sdk = createSdk({
 await sdk.core.ready();                                    // Load WASM & circuits
 await sdk.wallet.open({ seed: 'your-secret-seed' });      // Derive keys, init storage
 await sdk.sync.syncOnce();                                 // Sync memos, nullifiers, merkle
-const balance = await sdk.wallet.getBalance({ chainId: 11155111 });
+const balance = await sdk.wallet.getBalance({ chainId, assetId });
 await sdk.wallet.close();                                  // Release keys, flush storage
 ```
 

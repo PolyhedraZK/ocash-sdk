@@ -68,10 +68,10 @@ export class WalletService {
     return this.storage.listUtxos(query);
   }
 
-  async getBalance(query?: { chainId?: number; assetId?: string }): Promise<bigint> {
+  async getBalance(query: { chainId: number; assetId: string }): Promise<bigint> {
     const utxosResult = await this.storage.listUtxos({
-      chainId: query?.chainId,
-      assetId: query?.assetId,
+      chainId: query.chainId,
+      assetId: query.assetId,
       includeSpent: false,
       includeFrozen: false,
     });

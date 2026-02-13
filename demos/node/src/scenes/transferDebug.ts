@@ -102,5 +102,6 @@ export async function demoTransferDebug(ctx: DemoContext) {
   const txhash = await submit.waitRelayerTxHash;
   console.log(c.green('chain tx:'), txhash);
 
-  const receipt = await submit.TransactionReceipt;
+  const receipt = await submit.transactionReceipt;
+  console.log(c.green('tx receipt:'), receipt);
 }

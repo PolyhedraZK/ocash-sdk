@@ -188,7 +188,7 @@ const sdk = createSdk({
 await sdk.core.ready();
 await sdk.wallet.open({ seed: 'seed phrase or bytes' });
 await sdk.sync.syncOnce();
-const balance = await sdk.wallet.getBalance({ chainId: 11155111 });
+const balance = await sdk.wallet.getBalance({ chainId, assetId });
 ```
 
 ### 2) Runtime Assets and `assetsOverride`
@@ -733,12 +733,7 @@ export interface MerkleApi {
   getProofByCids: (input: { chainId: number; cids: number[]; totalElements: bigint }) => Promise<RemoteMerkleProofResponse>;
   getProofByCid: (input: { chainId: number; cid: number; totalElements: bigint }) => Promise<RemoteMerkleProofResponse>;
   ingestEntryMemos?: (chainId: number, memos: Array<{ cid: number | null; commitment: Hex | string | bigint }>) => Promise<void> | void;
-  buildAccMemberWitnesses: (input: {
-    remote: RemoteMerkleProofResponse;
-    utxos: Array<{ commitment: Hex; mkIndex: number }>;
-    arrayHash: bigint;
-    totalElements: bigint;
-  }) => AccMemberWitness[];
+  buildAccMemberWitnesses: (input: { remote: RemoteMerkleProofResponse; utxos: Array<{ commitment: Hex; mkIndex: number }>; arrayHash: bigint; totalElements: bigint }) => AccMemberWitness[];
   buildInputSecretsFromUtxos: (input: {
     remote: RemoteMerkleProofResponse;
     utxos: Array<{ commitment: Hex; memo?: Hex; mkIndex: number }>;
@@ -757,7 +752,7 @@ export interface WalletApi {
   open(session: WalletSessionInput): Promise<void>;
   close(): Promise<void>;
   getUtxos(query?: ListUtxosQuery): Promise<ListUtxosResult>;
-  getBalance(query?: { chainId?: number; assetId?: string }): Promise<bigint>;
+  getBalance(query: { chainId: number; assetId: string }): Promise<bigint>;
   markSpent(input: { chainId: number; nullifiers: Hex[] }): Promise<void>;
 }
 ```
@@ -766,20 +761,9 @@ export interface WalletApi {
 
 ```ts
 export interface PlannerApi {
-  estimate(input: {
-    chainId: number;
-    assetId: string;
-    action: 'transfer' | 'withdraw';
-    amount: bigint;
-    payIncludesFee?: boolean;
-  }): Promise<PlannerEstimateResult>;
+  estimate(input: { chainId: number; assetId: string; action: 'transfer' | 'withdraw'; amount: bigint; payIncludesFee?: boolean }): Promise<PlannerEstimateResult>;
 
-  estimateMax(input: {
-    chainId: number;
-    assetId: string;
-    action: 'transfer' | 'withdraw';
-    payIncludesFee?: boolean;
-  }): Promise<PlannerMaxEstimateResult>;
+  estimateMax(input: { chainId: number; assetId: string; action: 'transfer' | 'withdraw'; payIncludesFee?: boolean }): Promise<PlannerMaxEstimateResult>;
 
   plan(input: Record<string, unknown>): Promise<PlannerPlanResult>;
 }
@@ -809,16 +793,7 @@ export interface TxBuilderApi {
 
 ```ts
 export interface OpsApi {
-  prepareTransfer(input: {
-    chainId: number;
-    assetId: string;
-    amount: bigint;
-    to: Hex;
-    ownerKeyPair: UserKeyPair;
-    publicClient: PublicClient;
-    relayerUrl?: string;
-    autoMerge?: boolean;
-  }): Promise<
+  prepareTransfer(input: { chainId: number; assetId: string; amount: bigint; to: Hex; ownerKeyPair: UserKeyPair; publicClient: PublicClient; relayerUrl?: string; autoMerge?: boolean }): Promise<
     | {
         kind: 'transfer';
         plan: TransferPlan;
@@ -858,14 +833,7 @@ export interface OpsApi {
     meta: { arrayHashIndex: number; merkleRootIndex: number; relayer: Address };
   }>;
 
-  prepareDeposit(input: {
-    chainId: number;
-    assetId: string;
-    amount: bigint;
-    ownerPublicKey: UserPublicKey;
-    account: Address;
-    publicClient: PublicClient;
-  }): Promise<{
+  prepareDeposit(input: { chainId: number; assetId: string; amount: bigint; ownerPublicKey: UserPublicKey; account: Address; publicClient: PublicClient }): Promise<{
     chainId: number;
     assetId: string;
     amount: bigint;
@@ -908,24 +876,9 @@ export interface OpsApi {
     operationId?: string;
   }>;
 
-  waitRelayerTxHash(input: {
-    relayerUrl: string;
-    relayerTxHash: Hex;
-    timeoutMs?: number;
-    intervalMs?: number;
-    signal?: AbortSignal;
-    operationId?: string;
-    requestUrl?: string;
-  }): Promise<Hex>;
+  waitRelayerTxHash(input: { relayerUrl: string; relayerTxHash: Hex; timeoutMs?: number; intervalMs?: number; signal?: AbortSignal; operationId?: string; requestUrl?: string }): Promise<Hex>;
 
-  waitForTransactionReceipt(input: {
-    publicClient: PublicClient;
-    txHash: Hex;
-    timeoutMs?: number;
-    pollIntervalMs?: number;
-    confirmations?: number;
-    operationId?: string;
-  }): Promise<TransactionReceipt>;
+  waitForTransactionReceipt(input: { publicClient: PublicClient; txHash: Hex; timeoutMs?: number; pollIntervalMs?: number; confirmations?: number; operationId?: string }): Promise<TransactionReceipt>;
 
   submitRelayerRequest<T = unknown>(input: {
     prepared: { plan: TransferPlan | WithdrawPlan; request: RelayerRequest; kind?: 'transfer' | 'merge' };

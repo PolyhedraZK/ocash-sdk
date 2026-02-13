@@ -699,12 +699,7 @@ export interface MerkleApi {
    * When supported by the implementation, callers may feed memo batches to enable local proof generation.
    */
   ingestEntryMemos?: (chainId: number, memos: Array<{ cid: number | null; commitment: Hex | string | bigint }>) => Promise<void> | void;
-  buildAccMemberWitnesses: (input: {
-    remote: RemoteMerkleProofResponse;
-    utxos: Array<{ commitment: Hex; mkIndex: number }>;
-    arrayHash: bigint;
-    totalElements: bigint;
-  }) => AccMemberWitness[];
+  buildAccMemberWitnesses: (input: { remote: RemoteMerkleProofResponse; utxos: Array<{ commitment: Hex; mkIndex: number }>; arrayHash: bigint; totalElements: bigint }) => AccMemberWitness[];
   buildInputSecretsFromUtxos: (input: {
     remote: RemoteMerkleProofResponse;
     utxos: Array<{ commitment: Hex; memo?: Hex; mkIndex: number }>;
@@ -746,7 +741,7 @@ export interface WalletApi {
   /** Query unspent UTXOs with optional filters. */
   getUtxos(query?: ListUtxosQuery): Promise<ListUtxosResult>;
   /** Get total balance (sum of unspent, unfrozen UTXO amounts). */
-  getBalance(query?: { chainId?: number; assetId?: string }): Promise<bigint>;
+  getBalance(query: { chainId: number; assetId: string }): Promise<bigint>;
   /** Mark UTXOs as spent by their nullifiers. */
   markSpent(input: { chainId: number; nullifiers: Hex[] }): Promise<void>;
 }
@@ -870,13 +865,7 @@ export type PlannerPlanResult = TransferPlan | TransferMergePlan | WithdrawPlan;
 /** Coin selection, fee estimation, and transaction planning. */
 export interface PlannerApi {
   /** Estimate fees and check if balance is sufficient for an operation. */
-  estimate(input: {
-    chainId: number;
-    assetId: string;
-    action: 'transfer' | 'withdraw';
-    amount: bigint;
-    payIncludesFee?: boolean;
-  }): Promise<PlannerEstimateResult>;
+  estimate(input: { chainId: number; assetId: string; action: 'transfer' | 'withdraw'; amount: bigint; payIncludesFee?: boolean }): Promise<PlannerEstimateResult>;
   /** Calculate the maximum transferable/withdrawable amount after fees. */
   estimateMax(input: { chainId: number; assetId: string; action: 'transfer' | 'withdraw'; payIncludesFee?: boolean }): Promise<PlannerMaxEstimateResult>;
   /** Build a full transaction plan (coin selection, outputs, proof binding). */
@@ -906,34 +895,28 @@ export interface TxBuilderApi {
 /** End-to-end operation orchestration: plan → Merkle proof → witness → zk-SNARK proof → relayer request. */
 export interface OpsApi {
   /** Prepare a private transfer (auto-merges UTXOs if needed when `autoMerge: true`). */
-  prepareTransfer(input: {
-    chainId: number;
-    assetId: string;
-    amount: bigint;
-    to: Hex;
-    ownerKeyPair: UserKeyPair;
-    publicClient: PublicClient;
-    relayerUrl?: string;
-    autoMerge?: boolean;
-  }): Promise<{
-    kind: 'transfer';
-    plan: TransferPlan;
-    witness: TransferWitnessInput;
-    proof: ProofResult;
-    request: RelayerRequest;
-    meta: { arrayHashIndex: number; merkleRootIndex: number; relayer: Address };
-  } | {
-    kind: 'merge';
-    plan: TransferMergePlan;
-    merge: {
-      plan: TransferPlan;
-      witness: TransferWitnessInput;
-      proof: ProofResult;
-      request: RelayerRequest;
-      meta: { arrayHashIndex: number; merkleRootIndex: number; relayer: Address };
-    };
-  nextInput: { chainId: number; assetId: string; amount: bigint; to: Hex; relayerUrl?: string; autoMerge?: boolean };
-  }>;
+  prepareTransfer(input: { chainId: number; assetId: string; amount: bigint; to: Hex; ownerKeyPair: UserKeyPair; publicClient: PublicClient; relayerUrl?: string; autoMerge?: boolean }): Promise<
+    | {
+        kind: 'transfer';
+        plan: TransferPlan;
+        witness: TransferWitnessInput;
+        proof: ProofResult;
+        request: RelayerRequest;
+        meta: { arrayHashIndex: number; merkleRootIndex: number; relayer: Address };
+      }
+    | {
+        kind: 'merge';
+        plan: TransferMergePlan;
+        merge: {
+          plan: TransferPlan;
+          witness: TransferWitnessInput;
+          proof: ProofResult;
+          request: RelayerRequest;
+          meta: { arrayHashIndex: number; merkleRootIndex: number; relayer: Address };
+        };
+        nextInput: { chainId: number; assetId: string; amount: bigint; to: Hex; relayerUrl?: string; autoMerge?: boolean };
+      }
+  >;
 
   /** Prepare a withdrawal to an EVM address. Optionally includes gas drop. */
   prepareWithdraw(input: {
@@ -954,14 +937,7 @@ export interface OpsApi {
   }>;
 
   /** Prepare a deposit: compute commitment, memo, and build contract call requests. */
-  prepareDeposit(input: {
-    chainId: number;
-    assetId: string;
-    amount: bigint;
-    ownerPublicKey: UserPublicKey;
-    account: Address;
-    publicClient: PublicClient;
-  }): Promise<{
+  prepareDeposit(input: { chainId: number; assetId: string; amount: bigint; ownerPublicKey: UserPublicKey; account: Address; publicClient: PublicClient }): Promise<{
     chainId: number;
     assetId: string;
     amount: bigint;
@@ -1005,23 +981,8 @@ export interface OpsApi {
     operationId?: string;
   }>;
 
-  waitRelayerTxHash(input: {
-    relayerUrl: string;
-    relayerTxHash: Hex;
-    timeoutMs?: number;
-    intervalMs?: number;
-    signal?: AbortSignal;
-    operationId?: string;
-    requestUrl?: string;
-  }): Promise<Hex>;
-  waitForTransactionReceipt(input: {
-    publicClient: PublicClient;
-    txHash: Hex;
-    timeoutMs?: number;
-    pollIntervalMs?: number;
-    confirmations?: number;
-    operationId?: string;
-  }): Promise<TransactionReceipt>;
+  waitRelayerTxHash(input: { relayerUrl: string; relayerTxHash: Hex; timeoutMs?: number; intervalMs?: number; signal?: AbortSignal; operationId?: string; requestUrl?: string }): Promise<Hex>;
+  waitForTransactionReceipt(input: { publicClient: PublicClient; txHash: Hex; timeoutMs?: number; pollIntervalMs?: number; confirmations?: number; operationId?: string }): Promise<TransactionReceipt>;
   /** Submit prepared transfer/withdraw to relayer and optionally wait for tx confirmation. */
   submitRelayerRequest<T = unknown>(input: {
     prepared: { plan: TransferPlan | WithdrawPlan; request: RelayerRequest; kind?: 'transfer' | 'merge' };
