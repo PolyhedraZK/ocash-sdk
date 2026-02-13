@@ -36,7 +36,6 @@ import { toBigintOrThrow } from '../utils/bigint';
 
 const ARRAY_HASH_SIZE = 2048n;
 const NATIVE_ADDRESS = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE' as const;
-const isHex = (value: unknown): value is Hex => isHexStrict(value);
 
 const toFrPointJson = (input: [string, string]) => ({ X: BigInt(input[0]), Y: BigInt(input[1]) });
 const toViewerPkJson = (input: [string, string]) => ({ EncryptionKey: { Key: toFrPointJson(input) } });
@@ -587,13 +586,13 @@ export class Ops implements OpsApi {
       this.updateOperation(operationId, {
         status: 'submitted',
         requestUrl,
-        relayerTxHash: isHex(result) ? (result as Hex) : undefined,
+        relayerTxHash: isHexStrict(result) ? result : undefined,
       });
       const updateOperation = (patch: Parameters<StorageAdapter['updateOperation']>[1]) => {
         this.updateOperation(operationId, patch);
       };
       const waitRelayerTxHash = (() => {
-        const relayerTxHash = isHex(result) ? (result as Hex) : undefined;
+        const relayerTxHash = isHexStrict(result) ? result : undefined;
         if (!relayerTxHash) {
           return Promise.reject(new SdkError('RELAYER', 'relayerTxHash unavailable', { relayerUrl, requestUrl }));
         }

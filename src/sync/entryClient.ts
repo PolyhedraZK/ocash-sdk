@@ -38,11 +38,9 @@ const withQuery = (url: string, params: Record<string, string | number | undefin
   return qs ? `${url}?${qs}` : url;
 };
 
-const isHex = (value: unknown): value is Hex => isHexStrict(value);
-
 const normalizeOptionalHex = (value: unknown): Hex | null | undefined => {
   if (value == null) return undefined;
-  if (isHex(value)) return value;
+  if (isHexStrict(value)) return value;
   return null;
 };
 
@@ -56,8 +54,8 @@ const normalizeMemoEntry = (raw: any): EntryMemo => {
   if (!raw || typeof raw !== 'object') {
     throw new SdkError('SYNC', 'Invalid entry memo item', { item: raw });
   }
-  if (!isHex(raw.commitment)) throw new SdkError('SYNC', 'Invalid entry memo commitment', { commitment: raw.commitment });
-  if (!isHex(raw.memo)) throw new SdkError('SYNC', 'Invalid entry memo payload', { memo: raw.memo });
+  if (!isHexStrict(raw.commitment)) throw new SdkError('SYNC', 'Invalid entry memo commitment', { commitment: raw.commitment });
+  if (!isHexStrict(raw.memo)) throw new SdkError('SYNC', 'Invalid entry memo payload', { memo: raw.memo });
   const cid = raw.cid;
   if (cid != null && !(typeof cid === 'number' && Number.isInteger(cid) && cid >= 0)) {
     throw new SdkError('SYNC', 'Invalid entry memo cid', { cid });
@@ -91,7 +89,7 @@ const normalizeNullifierEntry = (raw: any): EntryNullifier => {
   if (!raw || typeof raw !== 'object') {
     throw new SdkError('SYNC', 'Invalid entry nullifier item', { item: raw });
   }
-  if (!isHex(raw.nullifier)) throw new SdkError('SYNC', 'Invalid entry nullifier', { nullifier: raw.nullifier });
+  if (!isHexStrict(raw.nullifier)) throw new SdkError('SYNC', 'Invalid entry nullifier', { nullifier: raw.nullifier });
   const createdAt = raw.created_at;
   if (createdAt != null && !(typeof createdAt === 'number' && Number.isInteger(createdAt) && createdAt >= 0)) {
     throw new SdkError('SYNC', 'Invalid entry nullifier created_at', { created_at: createdAt });

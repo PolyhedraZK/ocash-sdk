@@ -68,14 +68,7 @@ export class TxBuilder implements TxBuilderApi {
     const relayerFee = requireBigint(proof.relayer_fee, 'relayer_fee');
     const gasDropValue = requireBigint(proof.gas_drop_value ?? 0n, 'gas_drop_value');
 
-    const burnAmount =
-      proof.withdraw_amount ??
-      (proof.public_input && Object.prototype.hasOwnProperty.call(proof.public_input, 'amount')
-        ? requireBigint((proof.public_input as any).amount, 'input.amount')
-        : undefined);
-    if (burnAmount == null) {
-      throw new SdkError('CONFIG', 'Missing withdraw_amount (burn_amount)');
-    }
+    const burnAmount = requireBigint(proof.withdraw_amount, 'withdraw_amount (burn_amount)');
 
     const extraData = proof.extra_data;
     if (Array.isArray(extraData)) {
