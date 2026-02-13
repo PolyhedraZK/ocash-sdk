@@ -117,13 +117,10 @@ export async function fetchPoolTokensFromContract(input: { publicClient: PublicC
     { chainId: input.chainId, address, abi: erc20Abi, functionName: 'decimals' as const, args: [] },
   ]);
 
-  let erc20Res: any[];
-  try {
-    erc20Res = await input.publicClient.multicall({ contracts: erc20Req, allowFailure: true });
-  } catch (error) {
-    // Metadata is best-effort. Return bare tokens.
-    return tokens;
-  }
+  const erc20Res = await input.publicClient.multicall({ contracts: erc20Req, allowFailure: true }).catch(() => {
+    console.warn(`Failed to fetch ERC20 metadata for tokens on chain ${input.chainId}. Returning pool info without symbol/decimals.`);
+    return Promise.resolve([]);
+  });
 
   for (let i = 0; i < tokens.length; i++) {
     const symbolRow = erc20Res[i * 2];
