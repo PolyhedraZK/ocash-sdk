@@ -3,41 +3,32 @@ import type { TokenMetadata } from '../types';
 import { SdkError } from '../errors';
 import { isHexStrict } from '../utils/hex';
 
-const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object';
+export type TokenMetadataInput = Omit<TokenMetadata, 'viewerPk' | 'freezerPk' | 'depositFeeBps' | 'withdrawFeeBps'> & {
+  viewerPk: readonly [string, string] | readonly [bigint, bigint];
+  freezerPk: readonly [string, string] | readonly [bigint, bigint];
+  depositFeeBps?: number | bigint;
+  withdrawFeeBps?: number | bigint;
+};
 
-const get = (obj: Record<string, unknown>, key: string): unknown => obj[key];
-
-const getFirstDefined = (obj: Record<string, unknown>, keys: string[]): unknown => {
-  for (const k of keys) {
-    const v = get(obj, k);
-    if (v !== undefined) return v;
+const toStringPair = (value: readonly [string, string] | readonly [bigint, bigint], name: string): [string, string] => {
+  if (!Array.isArray(value) || value.length !== 2) {
+    throw new SdkError('CONFIG', `Invalid ${name}: expected [x,y]`, { value });
   }
-  return undefined;
+  return [String(value[0] ?? ''), String(value[1] ?? '')];
 };
 
-const toStringPair = (value: unknown, name: string): [string, string] => {
-  const arr = Array.isArray(value) ? value : null;
-  if (!arr || arr.length !== 2) throw new SdkError('CONFIG', `Invalid ${name}: expected [x,y]`, { value });
-  return [String(arr[0] ?? ''), String(arr[1] ?? '')];
-};
-
-const toFiniteNumberOrUndefined = (value: unknown): number | undefined => {
+const toFiniteNumberOrUndefined = (value: number | bigint | undefined): number | undefined => {
   if (value == null) return undefined;
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value === 'bigint') return Number(value);
-  if (typeof value === 'string' && value.length) {
-    const n = Number(value);
-    if (Number.isFinite(n)) return n;
-  }
-  return undefined;
+  const n = typeof value === 'bigint' ? Number(value) : value;
+  return Number.isFinite(n) ? n : undefined;
 };
 
-const toAddressOrThrow = (value: unknown, name: string): Address => {
+const toAddressOrThrow = (value: Address, name: string): Address => {
   if (isHexStrict(value, { minBytes: 20 })) return value as Address;
   throw new SdkError('CONFIG', `Invalid ${name}: expected 20-byte hex address`, { value });
 };
 
-const toBigintStringOrUndefined = (value: unknown): bigint | string | undefined => {
+const toBigintStringOrUndefined = (value: bigint | string | undefined): bigint | string | undefined => {
   if (value == null) return undefined;
   if (typeof value === 'bigint') return value;
   if (typeof value === 'string' && value.length) {
@@ -52,35 +43,26 @@ const toBigintStringOrUndefined = (value: unknown): bigint | string | undefined 
   return undefined;
 };
 
-/**
- * Normalize token metadata from app-style or sdk-style shapes.
- *
- * Supported legacy fields (app):
- * - `wrapped_erc20` (instead of `wrappedErc20`)
- * - `viewerPK` / `freezerPK` (instead of `viewerPk` / `freezerPk`)
- * - `depositFeeBPS` / `withdrawFeeBPS` (instead of `depositFeeBps` / `withdrawFeeBps`)
- */
-export const normalizeTokenMetadata = (input: unknown): TokenMetadata => {
-  if (!isRecord(input)) throw new SdkError('CONFIG', 'Invalid token metadata', { input });
+export const normalizeTokenMetadata = (input: TokenMetadataInput): TokenMetadata => {
+  if (!input || typeof input !== 'object') {
+    throw new SdkError('CONFIG', 'Invalid token metadata', { input });
+  }
 
-  const idRaw = getFirstDefined(input, ['id', 'poolId']);
-  const id = typeof idRaw === 'string' ? idRaw : idRaw != null ? String(idRaw) : '';
+  const id = typeof input.id === 'string' ? input.id : '';
   if (!id.length) throw new SdkError('CONFIG', 'Token id is required', { input });
 
-  const wrappedErc20 = toAddressOrThrow(getFirstDefined(input, ['wrappedErc20', 'wrapped_erc20', 'token']), 'token.wrappedErc20');
-  const viewerPk = toStringPair(getFirstDefined(input, ['viewerPk', 'viewerPK']), 'token.viewerPk');
-  const freezerPk = toStringPair(getFirstDefined(input, ['freezerPk', 'freezerPK']), 'token.freezerPk');
+  const wrappedErc20 = toAddressOrThrow(input.wrappedErc20, 'token.wrappedErc20');
+  const viewerPk = toStringPair(input.viewerPk, 'token.viewerPk');
+  const freezerPk = toStringPair(input.freezerPk, 'token.freezerPk');
 
-  const symbolRaw = get(input, 'symbol');
-  const symbol = typeof symbolRaw === 'string' ? symbolRaw : '';
-  const decimalsRaw = get(input, 'decimals');
-  const decimals = typeof decimalsRaw === 'number' && Number.isFinite(decimalsRaw) ? decimalsRaw : 0;
+  const symbol = typeof input.symbol === 'string' ? input.symbol : '';
+  const decimals = typeof input.decimals === 'number' && Number.isFinite(input.decimals) ? input.decimals : 0;
 
-  const depositFeeBps = toFiniteNumberOrUndefined(getFirstDefined(input, ['depositFeeBps', 'depositFeeBPS']));
-  const withdrawFeeBps = toFiniteNumberOrUndefined(getFirstDefined(input, ['withdrawFeeBps', 'withdrawFeeBPS']));
+  const depositFeeBps = toFiniteNumberOrUndefined(input.depositFeeBps);
+  const withdrawFeeBps = toFiniteNumberOrUndefined(input.withdrawFeeBps);
 
-  const transferMaxAmount = toBigintStringOrUndefined(get(input, 'transferMaxAmount'));
-  const withdrawMaxAmount = toBigintStringOrUndefined(get(input, 'withdrawMaxAmount'));
+  const transferMaxAmount = toBigintStringOrUndefined(input.transferMaxAmount);
+  const withdrawMaxAmount = toBigintStringOrUndefined(input.withdrawMaxAmount);
 
   return {
     id,

@@ -11,10 +11,23 @@ type PoolInfo = {
   token: Address;
   depositFeeBPS: number | bigint;
   withdrawFeeBPS: number | bigint;
-  viewerPK: readonly [bigint, bigint] | readonly [string, string] | readonly unknown[];
-  freezerPK: readonly [bigint, bigint] | readonly [string, string] | readonly unknown[];
+  viewerPK: readonly [bigint, bigint] | readonly [string, string];
+  freezerPK: readonly [bigint, bigint] | readonly [string, string];
   transferMaxAmount: bigint;
   withdrawMaxAmount: bigint;
+};
+
+const normalizePkPair = (value: unknown, name: string): readonly [bigint, bigint] | readonly [string, string] => {
+  if (!Array.isArray(value) || value.length !== 2) {
+    throw new Error(`invalid ${name}`);
+  }
+  const [x, y] = value;
+  const isBigintPair = typeof x === 'bigint' && typeof y === 'bigint';
+  const isStringPair = typeof x === 'string' && typeof y === 'string';
+  if (!isBigintPair && !isStringPair) {
+    throw new Error(`invalid ${name}`);
+  }
+  return value as any;
 };
 
 const toPoolInfo = (value: unknown): PoolInfo => {
@@ -26,8 +39,8 @@ const toPoolInfo = (value: unknown): PoolInfo => {
       token: v[0],
       depositFeeBPS: v[1],
       withdrawFeeBPS: v[2],
-      viewerPK: v[4],
-      freezerPK: v[5],
+      viewerPK: normalizePkPair(v[4], 'viewerPK'),
+      freezerPK: normalizePkPair(v[5], 'freezerPK'),
       transferMaxAmount: v[6],
       withdrawMaxAmount: v[7],
     } as PoolInfo;
@@ -35,13 +48,7 @@ const toPoolInfo = (value: unknown): PoolInfo => {
   return v as PoolInfo;
 };
 
-export async function fetchPoolTokensFromContract(input: {
-  publicClient: PublicClient;
-  chainId: number;
-  contractAddress: Address;
-  maxPools?: number;
-  includeErc20Metadata?: boolean;
-}) {
+export async function fetchPoolTokensFromContract(input: { publicClient: PublicClient; chainId: number; contractAddress: Address; maxPools?: number; includeErc20Metadata?: boolean }) {
   const maxPools = input.maxPools == null ? 16 : Math.max(1, Math.floor(input.maxPools));
   const includeErc20Metadata = Boolean(input.includeErc20Metadata);
 
@@ -60,9 +67,7 @@ export async function fetchPoolTokensFromContract(input: {
     throw new SdkError('CONFIG', 'Failed to fetch poolIds via multicall', { chainId: input.chainId, contract: input.contractAddress }, error);
   }
 
-  const poolIds = poolIdsRes
-    .map((r) => (r && r.status === 'success' ? (r.result as bigint) : null))
-    .filter((id): id is bigint => typeof id === 'bigint' && id !== 0n);
+  const poolIds = poolIdsRes.map((r) => (r && r.status === 'success' ? (r.result as bigint) : null)).filter((id): id is bigint => typeof id === 'bigint' && id !== 0n);
 
   if (!poolIds.length) return [];
 
@@ -99,10 +104,10 @@ export async function fetchPoolTokensFromContract(input: {
     const token: TokenMetadata = normalizeTokenMetadata({
       id: poolId.toString(),
       wrappedErc20: info.token,
-      viewerPk: info.viewerPK as any,
-      freezerPk: info.freezerPK as any,
-      depositFeeBPS: info.depositFeeBPS as any,
-      withdrawFeeBPS: info.withdrawFeeBPS as any,
+      viewerPk: info.viewerPK,
+      freezerPk: info.freezerPK,
+      depositFeeBps: info.depositFeeBPS,
+      withdrawFeeBps: info.withdrawFeeBPS,
       transferMaxAmount: info.transferMaxAmount,
       withdrawMaxAmount: info.withdrawMaxAmount,
       symbol: '',
@@ -142,4 +147,3 @@ export async function fetchPoolTokensFromContract(input: {
 
   return tokens;
 }
-

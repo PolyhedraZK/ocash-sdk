@@ -89,10 +89,10 @@ export class LedgerInfo {
     }
     const payloadUnknown = (await response.json()) as unknown;
     const payload = payloadUnknown as LedgerConfigResponse;
-    if (!payload || typeof payload !== 'object' || !Array.isArray((payload as any).chains)) {
+    if (!payload || typeof payload !== 'object' || !Array.isArray(payload.chains)) {
       throw new SdkError('CONFIG', 'INVALID_LEDGER_CONFIG', payloadUnknown);
     }
-    (payload as any).chains.forEach((chain: unknown) => this.upsertChain(chain as ChainConfigInput));
+    payload.chains.forEach((chain) => this.upsertChain(chain));
     await this.relayerManager.syncAll();
   }
 
