@@ -4,11 +4,7 @@ import { CryptoToolkit } from '../crypto/cryptoToolkit';
 import { toCommitmentData } from '../crypto/records';
 import { CacheController } from './cache';
 import { SdkError } from '../errors';
-
-const arrayBufferToHex = (buffer: ArrayBuffer): string => {
-  const view = new Uint8Array(buffer);
-  return Array.from(view, (byte) => byte.toString(16).padStart(2, '0')).join('');
-};
+import { bytesToHex } from '@noble/hashes/utils';
 
 export interface WasmBridgeConfig {
   assetsOverride?: AssetsOverride;
@@ -149,7 +145,7 @@ export class UniversalWasmBridge implements ProofBridge {
 
   private async fetchHex(filename: string): Promise<string> {
     const buffer = await this.fetchBinary(filename);
-    return arrayBufferToHex(buffer);
+    return bytesToHex(new Uint8Array(buffer));
   }
 
   private async fetchText(filename: string): Promise<string> {

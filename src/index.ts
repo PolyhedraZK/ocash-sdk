@@ -142,8 +142,8 @@ export const createSdk = (config: OCashSdkConfig): OCashSdk => {
     core: {
       ready: (cb) => core.ready(cb),
       reset: () => core.reset(),
-      on: (type, handler) => core.on(type, handler as any),
-      off: (type, handler) => core.off(type, handler as any),
+      on: (type, handler) => core.on(type, handler),
+      off: (type, handler) => core.off(type, handler),
     },
     crypto: {
       commitment,
