@@ -7,3 +7,15 @@ demos/node/.ocash-demo/
 docs/.vitepress/cache
 docs/.vitepress/dist
 .vscode/
+
+# Rust
+core/target/
+python/target/
+target/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.so
+*.pyd

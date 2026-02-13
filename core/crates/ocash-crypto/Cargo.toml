@@ -1,0 +1,25 @@
+[package]
+name = "ocash-crypto"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ocash-types.workspace = true
+ark-ff.workspace = true
+ark-bn254.workspace = true
+ark-ec.workspace = true
+ark-serialize.workspace = true
+ark-std.workspace = true
+hkdf.workspace = true
+sha2.workspace = true
+sha3.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+hex.workspace = true
+thiserror.workspace = true
+xsalsa20poly1305.workspace = true
+rand = "0.8"
+
+[dev-dependencies]
+serde_json.workspace = true

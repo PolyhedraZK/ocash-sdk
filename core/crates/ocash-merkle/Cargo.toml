@@ -1,0 +1,16 @@
+[package]
+name = "ocash-merkle"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+ocash-types.workspace = true
+ocash-crypto = { path = "../ocash-crypto" }
+ark-ff.workspace = true
+ark-bn254.workspace = true
+hex.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
