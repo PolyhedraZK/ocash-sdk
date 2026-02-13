@@ -1,4 +1,4 @@
-import { defaultAssetsOverrideTestnet, type AssetsOverride, type ChainConfigInput } from '@ocash/sdk';
+import { defaultAssetsOverrideTestnet, SEPOLIA_TESTNET, type AssetsOverride, type ChainConfigInput } from '@ocash/sdk';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

@@ -10,6 +10,8 @@ const getRandomBytes = (size: number): Uint8Array => {
   return array;
 };
 
+export const randomBytes32 = (): Uint8Array => getRandomBytes(32);
+
 /**
  * 生成 32 字节随机数，并根据需要截断为 BN254 有限域元素
  */
