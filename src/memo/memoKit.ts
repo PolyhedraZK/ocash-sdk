@@ -69,7 +69,7 @@ export class MemoKit {
       return tryTransparent();
     }
 
-    const decrypted = MemoKit.decryptMemo(input.secretKey, input.memo as `0x${string}`);
+    const decrypted = MemoKit.decryptMemo(input.secretKey, input.memo);
     if (decrypted) return decrypted;
     return tryTransparent();
   }

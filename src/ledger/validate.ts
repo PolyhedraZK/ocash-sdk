@@ -68,7 +68,7 @@ const assertBigintPairStrings = (value: unknown, name: string): [string, string]
 
 export function assertTokenMetadata(value: unknown, name = 'token'): asserts value is TokenMetadata {
   if (!isRecord(value)) throw new SdkError('CONFIG', `Invalid ${name}: expected object`, { value });
-  const token = value as Record<string, unknown>;
+  const token = value;
 
   const id = assertString(token.id, `${name}.id`);
   const wrapped = token.wrappedErc20;
@@ -107,7 +107,7 @@ export function assertTokenList(value: unknown, name = 'tokens'): asserts value 
 
 export function assertChainConfigInput(value: unknown, name = 'chain'): asserts value is ChainConfigInput {
   if (!isRecord(value)) throw new SdkError('CONFIG', `Invalid ${name}: expected object`, { value });
-  const chain = value as Record<string, unknown>;
+  const chain = value;
 
   assertNumber(chain.chainId, `${name}.chainId`);
   assertOptionalString(chain.rpcUrl, `${name}.rpcUrl`);

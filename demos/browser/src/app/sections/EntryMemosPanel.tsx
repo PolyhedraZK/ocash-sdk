@@ -33,7 +33,7 @@ export function EntryMemosPanel() {
       setMemoTotal(0);
       return;
     }
-    const store = sdk.storage.getAdapter() as StorageAdapter;
+    const store = sdk.storage.getAdapter();
     if (!store.listEntryMemos) {
       setMemoRows([]);
       setMemoTotal(0);

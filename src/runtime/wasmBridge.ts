@@ -48,7 +48,7 @@ export class UniversalWasmBridge implements ProofBridge {
     if (typeof window !== 'undefined' && typeof window.document !== 'undefined') return 'browser';
     // Workers (no `window.document`) still behave like browsers.
     if (typeof globalThis.location !== 'undefined') return 'browser';
-    if (typeof process !== 'undefined' && Boolean((process as any)?.versions?.node)) return 'node';
+    if (typeof process !== 'undefined' && Boolean(process?.versions?.node)) return 'node';
     return 'browser';
   }
 

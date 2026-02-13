@@ -1,15 +1,5 @@
 import { maxUint256, toHex } from 'viem';
-import type {
-  AssetsApi,
-  CommitmentData,
-  PlannerApi,
-  PlannerFeeSummary,
-  PlannerMaxEstimateResult,
-  TransferPlan,
-  RelayerConfig,
-  TokenMetadata,
-  UtxoRecord,
-} from '../types';
+import type { AssetsApi, CommitmentData, PlannerApi, PlannerFeeSummary, PlannerMaxEstimateResult, TransferPlan, RelayerConfig, TokenMetadata, UtxoRecord } from '../types';
 import { SdkError } from '../errors';
 import { KeyManager } from '../crypto/keyManager';
 import { CryptoToolkit } from '../crypto/cryptoToolkit';
@@ -45,7 +35,7 @@ type PlanWithdrawInput = {
 type PlanInput = PlanTransferInput | PlanWithdrawInput;
 
 const requireHex = (value: unknown, name: string): `0x${string}` => {
-  if (isHexStrict(value, { minBytes: 1 })) return value as `0x${string}`;
+  if (isHexStrict(value, { minBytes: 1 })) return value;
   throw new SdkError('CONFIG', `${name} must be a hex string starting with 0x`);
 };
 
@@ -237,48 +227,20 @@ const estimateRecords = (input: {
 }) => {
   const sorted = [...input.records].sort((a, b) => (b > a ? 1 : b < a ? -1 : 0));
   const payRecords: bigint[] = [];
-  let payInfo = recordsFee(
-    { withdrawFeeBps: input.withdrawFeeBps },
-    [...payRecords],
-    input.expectedOutput,
-    input.action,
-    input.relayerFee,
-    input.expectedIsWithFee,
-  );
+  let payInfo = recordsFee({ withdrawFeeBps: input.withdrawFeeBps }, [...payRecords], input.expectedOutput, input.action, input.relayerFee, input.expectedIsWithFee);
 
   const maxRecords: bigint[] = [];
-  let maxInfo = recordsFee(
-    { withdrawFeeBps: input.withdrawFeeBps },
-    [...maxRecords],
-    maxUint256,
-    input.action,
-    input.relayerFee,
-    input.expectedIsWithFee,
-  );
+  let maxInfo = recordsFee({ withdrawFeeBps: input.withdrawFeeBps }, [...maxRecords], maxUint256, input.action, input.relayerFee, input.expectedIsWithFee);
 
   for (const record of sorted) {
     const isExceedPay = input.expectedIsWithFee ? payInfo.cost >= input.expectedOutput : payInfo.outputAmount >= input.expectedOutput;
     if (payInfo.cost === 0n || !isExceedPay) {
       payRecords.push(record);
-      payInfo = recordsFee(
-        { withdrawFeeBps: input.withdrawFeeBps },
-        [...payRecords],
-        input.expectedOutput,
-        input.action,
-        input.relayerFee,
-        input.expectedIsWithFee,
-      );
+      payInfo = recordsFee({ withdrawFeeBps: input.withdrawFeeBps }, [...payRecords], input.expectedOutput, input.action, input.relayerFee, input.expectedIsWithFee);
     }
 
     maxRecords.push(record);
-    const tempMax = recordsFee(
-      { withdrawFeeBps: input.withdrawFeeBps },
-      [...maxRecords],
-      maxUint256,
-      input.action,
-      input.relayerFee,
-      input.expectedIsWithFee,
-    );
+    const tempMax = recordsFee({ withdrawFeeBps: input.withdrawFeeBps }, [...maxRecords], maxUint256, input.action, input.relayerFee, input.expectedIsWithFee);
     if (maxInfo.cost === 0n || tempMax.outputAmount > maxInfo.outputAmount) {
       maxInfo = tempMax;
     }
@@ -504,12 +466,14 @@ export class Planner implements PlannerApi {
         throw new SdkError('CONFIG', 'amount is too small to cover relayer fee', { relayerFee: relayerFee.toString() });
       }
 
-      const utxos = (await this.wallet.getUtxos({
-        chainId: parsed.chainId,
-        assetId: parsed.assetId,
-        includeSpent: false,
-        includeFrozen: false,
-      })).rows;
+      const utxos = (
+        await this.wallet.getUtxos({
+          chainId: parsed.chainId,
+          assetId: parsed.assetId,
+          includeSpent: false,
+          includeFrozen: false,
+        })
+      ).rows;
       const { selected, sum } = selectTransferInputs(utxos, required, 3);
       const estimates = estimateRecords({
         records: utxos.map((u) => u.amount).filter((v) => v > 0n),
@@ -620,12 +584,14 @@ export class Planner implements PlannerApi {
     const protocolFee = (withdrawBase * BigInt(token.withdrawFeeBps ?? 0)) / 10000n;
     const burnAmount = parsed.payIncludesFee ? parsed.amount : parsed.amount + relayerFee + protocolFee;
 
-    const utxos = (await this.wallet.getUtxos({
-      chainId: parsed.chainId,
-      assetId: parsed.assetId,
-      includeSpent: false,
-      includeFrozen: false,
-    })).rows;
+    const utxos = (
+      await this.wallet.getUtxos({
+        chainId: parsed.chainId,
+        assetId: parsed.assetId,
+        includeSpent: false,
+        includeFrozen: false,
+      })
+    ).rows;
     const chosen = selectWithdrawInput(utxos, burnAmount);
     if (!chosen) {
       throw new SdkError('CONFIG', 'no single utxo can cover burn amount', { burnAmount: burnAmount.toString() });
@@ -701,7 +667,7 @@ export class Planner implements PlannerApi {
   private getRelayerFee(config: RelayerConfig, token: TokenMetadata, action: 'transfer' | 'withdraw'): bigint {
     const key = tokenFeeKey(token);
     const table = action === 'transfer' ? config.fee_configure.transfer : config.fee_configure.withdraw;
-    const fee = (table as any)?.[key]?.fee;
+    const fee = table?.[key]?.fee;
     // No fee entry → default to zero (favorable to user, no charge)
     return fee != null ? BigInt(fee) : 0n;
   }

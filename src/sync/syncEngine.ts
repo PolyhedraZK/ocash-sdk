@@ -361,7 +361,7 @@ export class SyncEngine implements SyncApi {
                     .filter((m): m is typeof m & { cid: number } => typeof m.cid === 'number' && Number.isInteger(m.cid) && m.cid >= 0)
                     .map((m) => ({
                       chainId,
-                      cid: m.cid as number,
+                      cid: m.cid,
                       commitment: m.commitment,
                       memo: m.memo,
                       isTransparent: m.is_transparent ?? undefined,
@@ -451,7 +451,7 @@ export class SyncEngine implements SyncApi {
             });
             if (!page.items.length) {
               if (page.total > offset) {
-                if ((page as any).ready === false) break;
+                if (page.ready === false) break;
                 throw new SdkError('SYNC', 'EntryService nullifiers returned empty page before reaching total', { chainId, offset, total: page.total, limit: pageSize });
               }
               break;
@@ -467,7 +467,7 @@ export class SyncEngine implements SyncApi {
                     chainId,
                     nid: offset + idx,
                     nullifier: n.nullifier,
-                    createdAt: (n as any).created_at ?? null,
+                    createdAt: n.created_at ?? null,
                   })),
                 );
               } catch {
@@ -477,7 +477,7 @@ export class SyncEngine implements SyncApi {
             await this.wallet.markSpent({ chainId, nullifiers: page.items.map((n) => n.nullifier) });
             this.emit({
               type: 'debug',
-              payload: { scope: 'sync:nullifier', message: 'page:applied', detail: { chainId, offset, returned: page.items.length, total: page.total, ready: (page as any).ready } },
+              payload: { scope: 'sync:nullifier', message: 'page:applied', detail: { chainId, offset, returned: page.items.length, total: page.total, ready: page.ready } },
             });
             offset += page.items.length;
             cursor.nullifier = offset;
@@ -510,7 +510,7 @@ export class SyncEngine implements SyncApi {
     const maxDelayMs = this.options.retry.maxDelayMs;
     let lastError: unknown;
     for (let attempt = 1; attempt <= attempts; attempt++) {
-      if (meta.signal?.aborted) throw (meta.signal as any).reason ?? new SdkError('SYNC', 'Aborted');
+      if (meta.signal?.aborted) throw meta.signal?.reason ?? new SdkError('SYNC', 'Aborted');
       try {
         return await fn();
       } catch (error) {
@@ -531,7 +531,7 @@ export class SyncEngine implements SyncApi {
           const t = setTimeout(resolve, delay);
           const onAbort = () => {
             clearTimeout(t);
-            reject((meta.signal as any).reason ?? new SdkError('SYNC', 'Aborted'));
+            reject(meta.signal?.reason ?? new SdkError('SYNC', 'Aborted'));
           };
           if (meta.signal) {
             if (meta.signal.aborted) return onAbort();

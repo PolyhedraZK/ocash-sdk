@@ -75,33 +75,33 @@ export class KeyValueStore implements StorageAdapter {
     if (!raw) return;
     try {
       const parsed = JSON.parse(raw) as Partial<PersistedStoreState>;
-      const hydrated = hydrateWalletState(parsed.wallet as PersistedWalletState | undefined);
+      const hydrated = hydrateWalletState(parsed.wallet);
       for (const [k, v] of hydrated.cursors.entries()) this.cursors.set(k, v);
       for (const [k, v] of hydrated.utxos.entries()) this.utxos.set(k, v);
 
-      const operations = Array.isArray(parsed.operations) ? (parsed.operations as StoredOperation[]) : [];
+      const operations = Array.isArray(parsed.operations) ? parsed.operations : [];
       this.operations = operations;
 
-      const extra = parsed as Record<string, unknown>;
+      const extra = parsed;
 
       if (extra.merkleLeaves && typeof extra.merkleLeaves === 'object' && !Array.isArray(extra.merkleLeaves)) {
-        this.merkleLeaves = extra.merkleLeaves as typeof this.merkleLeaves;
+        this.merkleLeaves = extra.merkleLeaves;
       }
 
       if (extra.merkleTrees && typeof extra.merkleTrees === 'object' && !Array.isArray(extra.merkleTrees)) {
-        this.merkleTrees = extra.merkleTrees as typeof this.merkleTrees;
+        this.merkleTrees = extra.merkleTrees;
       }
 
       if (extra.merkleNodes && typeof extra.merkleNodes === 'object' && !Array.isArray(extra.merkleNodes)) {
-        this.merkleNodes = extra.merkleNodes as typeof this.merkleNodes;
+        this.merkleNodes = extra.merkleNodes;
       }
 
       if (extra.entryMemos && typeof extra.entryMemos === 'object' && !Array.isArray(extra.entryMemos)) {
-        this.entryMemos = extra.entryMemos as typeof this.entryMemos;
+        this.entryMemos = extra.entryMemos;
       }
 
       if (extra.entryNullifiers && typeof extra.entryNullifiers === 'object' && !Array.isArray(extra.entryNullifiers)) {
-        this.entryNullifiers = extra.entryNullifiers as typeof this.entryNullifiers;
+        this.entryNullifiers = extra.entryNullifiers;
       }
     } catch {
       // ignore bad state
@@ -133,9 +133,9 @@ export class KeyValueStore implements StorageAdapter {
   async getMerkleNode(chainId: number, id: string): Promise<MerkleNodeRecord | undefined> {
     const node = this.merkleNodes[String(chainId)]?.[id];
     if (!node) return undefined;
-    const hash = (node as any).hash as Hex;
+    const hash = node.hash;
     if (typeof hash !== 'string' || !hash.startsWith('0x')) return undefined;
-    return { ...(node as any), chainId };
+    return { ...node, chainId };
   }
 
   async upsertMerkleNodes(chainId: number, nodes: MerkleNodeRecord[]): Promise<void> {
@@ -157,9 +157,9 @@ export class KeyValueStore implements StorageAdapter {
   async getMerkleTree(chainId: number): Promise<MerkleTreeState | undefined> {
     const row = this.merkleTrees[String(chainId)];
     if (!row) return undefined;
-    const totalElements = Number((row as any).totalElements);
-    const lastUpdated = Number((row as any).lastUpdated);
-    const root = (row as any).root as Hex;
+    const totalElements = Number(row.totalElements);
+    const lastUpdated = Number(row.lastUpdated);
+    const root = row.root;
     if (typeof root !== 'string' || !root.startsWith('0x')) return undefined;
     if (!Number.isFinite(totalElements) || totalElements < 0) return undefined;
     return { chainId, root, totalElements: Math.floor(totalElements), lastUpdated: Number.isFinite(lastUpdated) ? Math.floor(lastUpdated) : 0 };
@@ -189,9 +189,9 @@ export class KeyValueStore implements StorageAdapter {
       const existing = Array.isArray(this.entryMemos[key]) ? this.entryMemos[key]! : [];
       const byCid = new Map<number, EntryMemoRecord>();
       for (const row of existing) {
-        const cid = Number((row as any).cid);
+        const cid = Number(row.cid);
         if (!Number.isFinite(cid) || cid < 0) continue;
-        byCid.set(Math.floor(cid), row as any);
+        byCid.set(Math.floor(cid), row);
       }
       for (const row of list) {
         if (!byCid.has(row.cid)) updated++;
@@ -206,8 +206,8 @@ export class KeyValueStore implements StorageAdapter {
   async listEntryMemos(query: ListEntryMemosQuery): Promise<{ total: number; rows: EntryMemoRecord[] }> {
     const rows = this.entryMemos[String(query.chainId)];
     if (!Array.isArray(rows) || rows.length === 0) return { total: 0, rows: [] };
-    const paged = applyEntryMemoQuery(rows as EntryMemoRecord[], query);
-    return { total: paged.total, rows: paged.rows.map((r) => ({ ...(r as any) })) };
+    const paged = applyEntryMemoQuery(rows, query);
+    return { total: paged.total, rows: paged.rows.map((r) => ({ ...r })) };
   }
 
   async clearEntryMemos(chainId: number): Promise<void> {
@@ -228,9 +228,9 @@ export class KeyValueStore implements StorageAdapter {
       const existing = Array.isArray(this.entryNullifiers[key]) ? this.entryNullifiers[key]! : [];
       const byNid = new Map<number, EntryNullifierRecord>();
       for (const row of existing) {
-        const nid = Number((row as any).nid);
+        const nid = Number(row.nid);
         if (!Number.isFinite(nid) || nid < 0) continue;
-        byNid.set(Math.floor(nid), row as any);
+        byNid.set(Math.floor(nid), row);
       }
       for (const row of list) {
         if (!Number.isInteger(row.nid) || row.nid < 0) continue;
@@ -246,8 +246,8 @@ export class KeyValueStore implements StorageAdapter {
   async listEntryNullifiers(query: ListEntryNullifiersQuery): Promise<{ total: number; rows: EntryNullifierRecord[] }> {
     const rows = this.entryNullifiers[String(query.chainId)];
     if (!Array.isArray(rows) || rows.length === 0) return { total: 0, rows: [] };
-    const paged = applyEntryNullifierQuery(rows as EntryNullifierRecord[], query);
-    return { total: paged.total, rows: paged.rows.map((r) => ({ ...(r as any) })) };
+    const paged = applyEntryNullifierQuery(rows, query);
+    return { total: paged.total, rows: paged.rows.map((r) => ({ ...r })) };
   }
 
   async clearEntryNullifiers(chainId: number): Promise<void> {
@@ -260,8 +260,8 @@ export class KeyValueStore implements StorageAdapter {
     if (!Array.isArray(rows) || rows.length === 0) return undefined;
     const out: Array<{ cid: number; commitment: Hex }> = [];
     for (const row of rows) {
-      const cid = Number((row as any)?.cid);
-      const commitment = (row as any)?.commitment as Hex;
+      const cid = Number(row?.cid);
+      const commitment = row?.commitment;
       if (!Number.isFinite(cid) || cid < 0) continue;
       if (typeof commitment !== 'string' || !commitment.startsWith('0x')) continue;
       out.push({ cid: Math.floor(cid), commitment });
@@ -349,11 +349,11 @@ export class KeyValueStore implements StorageAdapter {
     input: Omit<StoredOperation<OperationDetailFor<TType>>, 'id' | 'createdAt' | 'status'> & Partial<Pick<StoredOperation<OperationDetailFor<TType>>, 'createdAt' | 'id' | 'status'>> & { type: TType },
   ) {
     const created = {
-      ...(input as StoredOperation<OperationDetailFor<TType>>),
+      ...input,
       id: input.id ?? newOperationId(),
       createdAt: input.createdAt ?? Date.now(),
       status: input.status ?? 'created',
-    } as StoredOperation<OperationDetailFor<TType>> & { type: TType };
+    };
     this.operations.unshift(created);
     this.pruneOperations();
     void this.save().catch(() => undefined);

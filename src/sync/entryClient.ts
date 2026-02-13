@@ -101,10 +101,10 @@ const unwrapList = <T>(payload: EntryListResponse<T>, detail: Record<string, unk
   if (typeof payload?.code === 'number' && payload.code !== 0) {
     throw new SdkError('SYNC', payload.message || 'EntryService request failed', payload);
   }
-  const itemsRaw = (payload as any)?.data?.data;
-  const totalRaw = (payload as any)?.data?.total;
+  const itemsRaw = payload?.data?.data;
+  const totalRaw = payload?.data?.total;
   if (itemsRaw != null && !Array.isArray(itemsRaw)) {
-    throw new SdkError('SYNC', 'Invalid entry response: data.data must be an array', { ...detail, data: (payload as any)?.data });
+    throw new SdkError('SYNC', 'Invalid entry response: data.data must be an array', { ...detail, data: payload?.data });
   }
   return { items: (itemsRaw ?? []) as T[], total: normalizeTotal(totalRaw) };
 };

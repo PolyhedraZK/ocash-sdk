@@ -49,8 +49,8 @@ const buildTransferWitness = (input: { token: TokenMetadata; inputSecrets: any[]
       viewer_pk: toViewerPkJson(token.viewerPk),
       freezer_pk: toFreezerPkJson(token.freezerPk),
     },
-    input_secrets: input.inputSecrets as any,
-    array: input.array as any,
+    input_secrets: input.inputSecrets,
+    array: input.array,
     fee: input.relayerFee,
     max_amount: token.transferMaxAmount
       ? toBigintOrThrow(token.transferMaxAmount, {
@@ -59,10 +59,10 @@ const buildTransferWitness = (input: { token: TokenMetadata; inputSecrets: any[]
           detail: { tokenId: token.id },
         })
       : 0n,
-    output_record_openings: input.outputs as any,
+    output_record_openings: input.outputs,
     viewing_memo_randomness: Array.from(CryptoToolkit.viewingRandomness()),
     proof_binding: input.proofBinding,
-  } as any;
+  };
 };
 
 const buildWithdrawWitness = (input: {
@@ -300,7 +300,7 @@ export class Ops implements OpsApi {
     }
 
     if (planAction === 'transfer-merge') {
-      const typedPlan = plan as TransferMergePlan;
+      const typedPlan = plan;
       const prepared = await this.prepareTransferFromPlan({
         plan: typedPlan.mergePlan,
         ownerKeyPair: input.ownerKeyPair,
@@ -321,7 +321,7 @@ export class Ops implements OpsApi {
       };
     }
 
-    const typedPlan = plan as TransferPlan;
+    const typedPlan = plan;
     const prepared = await this.prepareTransferFromPlan({
       plan: typedPlan,
       ownerKeyPair: input.ownerKeyPair,
@@ -798,7 +798,7 @@ export class Ops implements OpsApi {
     operationId?: string;
   }): Promise<{ txHash: Hex; approveTxHash?: Hex; receipt?: Awaited<ReturnType<PublicClient['waitForTransactionReceipt']>>; operationId?: string }> {
     const prepared = input.prepared;
-    const outputCommitments = [CryptoToolkit.commitment(prepared.recordOpening, 'hex') as Hex];
+    const outputCommitments = [CryptoToolkit.commitment(prepared.recordOpening, 'hex')];
     let operationId = input.operationId;
     if (!operationId) {
       const created = this.store?.createOperation({

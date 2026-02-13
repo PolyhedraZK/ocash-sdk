@@ -8,7 +8,7 @@ export const errorToDebug = (error: unknown) => {
 };
 
 export const nonOkResponseDetail = async (response: Response, url: string) => {
-  const statusText = (response as any)?.statusText;
+  const statusText = response?.statusText;
   const contentType = response.headers.get('content-type') ?? undefined;
   let bodyText: string | undefined;
   let bodyJson: unknown | undefined;

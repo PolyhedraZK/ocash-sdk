@@ -11,11 +11,11 @@ export async function demoMerkleListen(ctx: DemoContext) {
 
   const unwatch = publicClient.watchContractEvent({
     address: chain.ocashContractAddress,
-    abi: App_ABI as any,
+    abi: App_ABI,
     eventName: 'ArrayMergedToTree',
-    onLogs: (logs: any[]) => {
+    onLogs: (logs) => {
       for (const log of logs) {
-        console.log('[ArrayMergedToTree]', { batchIndex: (log.args as any).batchIndex?.toString?.(), newRoot: (log.args as any).newRoot?.toString?.(), txHash: log.transactionHash });
+        console.log('[ArrayMergedToTree]', { batchIndex: log.args.batchIndex?.toString?.(), newRoot: log.args.newRoot?.toString?.(), txHash: log.transactionHash });
       }
     },
   });

@@ -3,7 +3,7 @@ import type { Hex, RemoteMerkleProofResponse } from '../types';
 import { getZeroHash, TREE_DEPTH_DEFAULT } from './zeroHashes';
 
 const hashPair = (left: Hex, right: Hex): Hex => {
-  return Poseidon2.hashToHex(BigInt(left), BigInt(right), Poseidon2Domain.Merkle) as Hex;
+  return Poseidon2.hashToHex(BigInt(left), BigInt(right), Poseidon2Domain.Merkle);
 };
 
 export class LocalMerkleTree {

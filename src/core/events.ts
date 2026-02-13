@@ -9,11 +9,11 @@ export class SdkEventBus {
   }
 
   on<T extends SdkEvent['type']>(type: T, handler: (event: Extract<SdkEvent, { type: T }>) => void) {
-    this.emitter.on(type, handler as any);
+    this.emitter.on(type, handler);
   }
 
   off<T extends SdkEvent['type']>(type: T, handler: (event: Extract<SdkEvent, { type: T }>) => void) {
-    this.emitter.off(type, handler as any);
+    this.emitter.off(type, handler);
   }
 
   removeAllListeners() {

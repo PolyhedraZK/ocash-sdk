@@ -12,15 +12,9 @@ export class CryptoToolkit {
     if (record.is_frozen) {
       amount |= 1n << 128n;
     }
-    const elements = [
-      BigInt(record.user_pk.user_address[0]),
-      BigInt(record.user_pk.user_address[1]),
-      BigInt(record.blinding_factor),
-      BigInt(record.asset_id),
-      amount,
-    ];
+    const elements = [BigInt(record.user_pk.user_address[0]), BigInt(record.user_pk.user_address[1]), BigInt(record.blinding_factor), BigInt(record.asset_id), amount];
     const h = Poseidon2.hashSequenceWithDomain(elements, Poseidon2Domain.Record);
-    const hex = toHex(h, { size: 32 }) as Hex;
+    const hex = toHex(h, { size: 32 });
     return format === 'bigint' ? BigInt(hex) : hex;
   }
 
@@ -38,7 +32,7 @@ export class CryptoToolkit {
     }
 
     const n = Poseidon2.hashDomain(nullifierKey, BigInt(commitment), Poseidon2Domain.Nullifier);
-    return toHex(n, { size: 32 }) as `0x${string}`;
+    return toHex(n, { size: 32 });
   }
 
   static createRecordOpening(input: {
@@ -51,8 +45,7 @@ export class CryptoToolkit {
     const hasCustomBlinding = input.blinding_factor !== undefined;
     const attempts = hasCustomBlinding ? 1 : 5;
     for (let attempt = 0; attempt < attempts; attempt++) {
-      const blinding =
-        hasCustomBlinding && attempt === 0 ? BigInt(input.blinding_factor!) : randomBytes32Bigint(true);
+      const blinding = hasCustomBlinding && attempt === 0 ? BigInt(input.blinding_factor!) : randomBytes32Bigint(true);
       const record: CommitmentData = {
         asset_id: BigInt(input.asset_id),
         asset_amount: BigInt(input.asset_amount),
@@ -64,13 +57,7 @@ export class CryptoToolkit {
       };
       if (hasCustomBlinding) return record;
       const commitment = Poseidon2.hashSequenceWithDomain(
-        [
-          record.user_pk.user_address[0],
-          record.user_pk.user_address[1],
-          record.blinding_factor,
-          record.asset_id,
-          record.asset_amount,
-        ],
+        [record.user_pk.user_address[0], record.user_pk.user_address[1], record.blinding_factor, record.asset_id, record.asset_amount],
         Poseidon2Domain.Record,
       );
       if (commitment !== 0n) {

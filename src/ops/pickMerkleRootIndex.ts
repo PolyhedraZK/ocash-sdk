@@ -39,17 +39,12 @@ export async function pickMerkleRootIndex(input: {
       input.onDebug?.({ message: 'readContract merkleRoots', detail: { triedIndex: idx } });
       root = await input.publicClient.readContract({
         address: input.contractAddress,
-        abi: App_ABI as any,
+        abi: App_ABI,
         functionName: 'merkleRoots',
         args: [BigInt(idx)],
       });
     } catch (error) {
-      throw new SdkError(
-        'MERKLE',
-        'Failed to read on-chain merkleRoots',
-        { chainId: input.chainId, contractAddress: input.contractAddress, currentIndex: input.currentIndex, triedIndex: idx },
-        error,
-      );
+      throw new SdkError('MERKLE', 'Failed to read on-chain merkleRoots', { chainId: input.chainId, contractAddress: input.contractAddress, currentIndex: input.currentIndex, triedIndex: idx }, error);
     }
 
     const rootDec = toBigintOrThrow(root, {

@@ -23,12 +23,12 @@ export async function demoTransferDebug(ctx: DemoContext) {
 
   const { publicClient } = getClients(chain);
   const owner = ctx.sdk.keys.deriveKeyPair(ctx.config.seed, ctx.config.accountNonce != null ? String(ctx.config.accountNonce) : undefined);
-  const selfViewingAddress = ctx.sdk.keys.userPkToAddress(owner.user_pk) as Hex;
+  const selfViewingAddress = ctx.sdk.keys.userPkToAddress(owner.user_pk);
 
   // Debug: print current shielded assets/utxos before prepareTransfer
   {
     const allTokens = ctx.sdk.assets.getTokens(chain.chainId);
-    const tokenById = new Map(allTokens.map((t) => [t.id, t] as const));
+    const tokenById = new Map(allTokens.map((t) => [t.id, t]));
     const balances = await Promise.all(
       allTokens.map(async (t) => ({
         symbol: t.symbol,

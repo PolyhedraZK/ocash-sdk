@@ -147,7 +147,7 @@ export function DepositPanel() {
       });
       const recipient = sdk.keys.userPkToAddress(prepared.recordOpening.user_pk);
       console.log('Prepared deposit:', recipient, prepared);
-      const commitment = CryptoToolkit.commitment(prepared.recordOpening, 'hex') as Hex;
+      const commitment = CryptoToolkit.commitment(prepared.recordOpening, 'hex');
 
       const submit = await sdk.ops.submitDeposit({
         prepared,

@@ -24,7 +24,7 @@ const toFiniteNumberOrUndefined = (value: number | bigint | undefined): number |
 };
 
 const toAddressOrThrow = (value: Address, name: string): Address => {
-  if (isHexStrict(value, { minBytes: 20 })) return value as Address;
+  if (isHexStrict(value, { minBytes: 20 })) return value;
   throw new SdkError('CONFIG', `Invalid ${name}: expected 20-byte hex address`, { value });
 };
 

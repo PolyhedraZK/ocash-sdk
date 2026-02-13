@@ -72,7 +72,7 @@ export class MerkleEngine implements MerkleApi {
   }
 
   private static hashPair(left: Hex, right: Hex): Hex {
-    return Poseidon2.hashToHex(BigInt(left), BigInt(right), Poseidon2Domain.Merkle) as Hex;
+    return Poseidon2.hashToHex(BigInt(left), BigInt(right), Poseidon2Domain.Merkle);
   }
 
   private static buildSubtree(leafCommitments: Hex[], baseIndex: number): { subtreeRoot: Hex; nodesToStore: MerkleNodeRecord[] } {
@@ -295,7 +295,7 @@ export class MerkleEngine implements MerkleApi {
       }
     }
 
-    const totalElements = typeof input.totalElements === 'bigint' ? input.totalElements : BigInt(input.totalElements as any);
+    const totalElements = typeof input.totalElements === 'bigint' ? input.totalElements : BigInt(input.totalElements);
     const contractTreeElements = MerkleEngine.totalElementsInTree(totalElements);
     const needsTreeProof = cids.filter((cid) => cid < contractTreeElements);
 
@@ -322,7 +322,7 @@ export class MerkleEngine implements MerkleApi {
             const proof = [];
             for (const cid of cids) {
               if (cid >= contractTreeElements) {
-                proof.push({ leaf_index: cid, path: new Array(this.treeDepth + 1).fill('0') as any });
+                proof.push({ leaf_index: cid, path: new Array(this.treeDepth + 1).fill('0') });
                 continue;
               }
               const leaf = await this.storage!.getMerkleLeaf!(input.chainId, cid);
@@ -365,7 +365,7 @@ export class MerkleEngine implements MerkleApi {
       // If nothing has been merged into the tree yet, the root is the depth-level zero hash.
       const root = contractTreeElements === 0 ? getZeroHash(this.treeDepth) : await this.fetchRemoteRootOnly(input.chainId);
       return {
-        proof: cids.map((cid) => ({ leaf_index: cid, path: new Array(this.treeDepth + 1).fill('0') as any })),
+        proof: cids.map((cid) => ({ leaf_index: cid, path: new Array(this.treeDepth + 1).fill('0') })),
         merkle_root: root,
         latest_cid: totalElements > 0n ? Number(totalElements - 1n) : -1,
       };
@@ -377,7 +377,7 @@ export class MerkleEngine implements MerkleApi {
       merkle_root: remote.merkle_root,
       latest_cid: remote.latest_cid,
       proof: cids.map((cid) => {
-        if (cid >= contractTreeElements) return { leaf_index: cid, path: new Array(this.treeDepth + 1).fill('0') as any };
+        if (cid >= contractTreeElements) return { leaf_index: cid, path: new Array(this.treeDepth + 1).fill('0') };
         const hit = remote.proof[remoteIdx++];
         if (!hit) throw new SdkError('MERKLE', 'Remote merkle proof entry missing', { chainId: input.chainId, cid });
         return hit;

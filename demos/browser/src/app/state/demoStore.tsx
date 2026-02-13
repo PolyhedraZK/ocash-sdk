@@ -86,7 +86,7 @@ export function DemoProvider({ config, children }: { config: DemoConfig; childre
       storage,
       onEvent: (event) => {
         if (event.type === 'operations:update') {
-          const store = nextSdk.storage.getAdapter() as StorageAdapter;
+          const store = nextSdk.storage.getAdapter();
           setOperations(store.listOperations());
           return;
         }

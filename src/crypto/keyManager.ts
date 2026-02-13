@@ -12,7 +12,7 @@ const deriveSeed = (seed: string, nonce?: string): `0x${string}` => {
   const ikm = utf8ToBytes(seed);
   const info = utf8ToBytes(nonce ? `${HKDF_INFO}:${nonce}` : HKDF_INFO);
   const okm = hkdf(sha256, ikm, undefined, info, 32);
-  return `0x${bytesToHex(okm)}` as const;
+  return `0x${bytesToHex(okm)}`;
 };
 
 const seedToKeyPair = (seed: string, nonce?: string): UserKeyPair => {
@@ -21,7 +21,7 @@ const seedToKeyPair = (seed: string, nonce?: string): UserKeyPair => {
   if (!validateKeyPair(keyPair)) {
     throw new Error('Generated key pair validation failed');
   }
-  return keyPair as UserKeyPair;
+  return keyPair;
 };
 
 export class KeyManager {

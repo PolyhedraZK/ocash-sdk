@@ -233,11 +233,11 @@ export class MemoryStore implements StorageAdapter {
     input: Omit<StoredOperation<OperationDetailFor<TType>>, 'id' | 'createdAt' | 'status'> & Partial<Pick<StoredOperation<OperationDetailFor<TType>>, 'createdAt' | 'id' | 'status'>> & { type: TType },
   ): StoredOperation<OperationDetailFor<TType>> & { type: TType } {
     const created = {
-      ...(input as StoredOperation<OperationDetailFor<TType>>),
+      ...input,
       id: input.id ?? newOperationId(),
       createdAt: input.createdAt ?? Date.now(),
       status: input.status ?? 'created',
-    } as StoredOperation<OperationDetailFor<TType>> & { type: TType };
+    };
     this.operations.unshift(created);
     this.enforceMaxOperations();
     return created;

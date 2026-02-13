@@ -75,7 +75,7 @@ export class FileStore implements StorageAdapter {
         this.merkleNextCid.set(chainId, 0);
         return 0;
       }
-      const last = JSON.parse(lines[lines.length - 1]!) as any;
+      const last = JSON.parse(lines[lines.length - 1]!);
       const cid = Number(last?.cid);
       const next = Number.isFinite(cid) ? Math.max(0, Math.floor(cid) + 1) : 0;
       this.merkleNextCid.set(chainId, next);
@@ -100,31 +100,31 @@ export class FileStore implements StorageAdapter {
     try {
       const raw = await readFile(this.filePath(), 'utf8');
       const parsed = JSON.parse(raw) as Partial<PersistedStoreState>;
-      const hydrated = hydrateWalletState(parsed.wallet as PersistedWalletState | undefined);
+      const hydrated = hydrateWalletState(parsed.wallet);
       for (const [k, v] of hydrated.cursors.entries()) this.cursors.set(k, v);
       for (const [k, v] of hydrated.utxos.entries()) this.utxos.set(k, v);
 
-      const operations = Array.isArray(parsed.operations) ? (parsed.operations as StoredOperation[]) : [];
+      const operations = Array.isArray(parsed.operations) ? parsed.operations : [];
       this.operations = operations;
 
-      const merkleTreesRaw = (parsed as any).merkleTrees;
+      const merkleTreesRaw = parsed.merkleTrees;
       if (merkleTreesRaw && typeof merkleTreesRaw === 'object') {
-        this.merkleTrees = merkleTreesRaw as any;
+        this.merkleTrees = merkleTreesRaw;
       }
 
-      const merkleNodesRaw = (parsed as any).merkleNodes;
+      const merkleNodesRaw = parsed.merkleNodes;
       if (merkleNodesRaw && typeof merkleNodesRaw === 'object') {
-        this.merkleNodes = merkleNodesRaw as any;
+        this.merkleNodes = merkleNodesRaw;
       }
 
-      const entryMemosRaw = (parsed as any).entryMemos;
+      const entryMemosRaw = parsed.entryMemos;
       if (entryMemosRaw && typeof entryMemosRaw === 'object') {
-        this.entryMemos = entryMemosRaw as any;
+        this.entryMemos = entryMemosRaw;
       }
 
-      const entryNullifiersRaw = (parsed as any).entryNullifiers;
+      const entryNullifiersRaw = parsed.entryNullifiers;
       if (entryNullifiersRaw && typeof entryNullifiersRaw === 'object') {
-        this.entryNullifiers = entryNullifiersRaw as any;
+        this.entryNullifiers = entryNullifiersRaw;
       }
     } catch {
       // ignore missing/bad file
@@ -160,9 +160,9 @@ export class FileStore implements StorageAdapter {
   async getMerkleTree(chainId: number): Promise<MerkleTreeState | undefined> {
     const row = this.merkleTrees[String(chainId)];
     if (!row) return undefined;
-    const totalElements = Number((row as any).totalElements);
-    const lastUpdated = Number((row as any).lastUpdated);
-    const root = (row as any).root as Hex;
+    const totalElements = Number(row.totalElements);
+    const lastUpdated = Number(row.lastUpdated);
+    const root = row.root;
     if (typeof root !== 'string' || !root.startsWith('0x')) return undefined;
     if (!Number.isFinite(totalElements) || totalElements < 0) return undefined;
     return { chainId, root, totalElements: Math.floor(totalElements), lastUpdated: Number.isFinite(lastUpdated) ? Math.floor(lastUpdated) : 0 };
@@ -212,9 +212,9 @@ export class FileStore implements StorageAdapter {
       const existing = Array.isArray(this.entryMemos[key]) ? this.entryMemos[key]! : [];
       const byCid = new Map<number, EntryMemoRecord>();
       for (const row of existing) {
-        const cid = Number((row as any).cid);
+        const cid = Number(row.cid);
         if (!Number.isFinite(cid) || cid < 0) continue;
-        byCid.set(Math.floor(cid), row as any);
+        byCid.set(Math.floor(cid), row);
       }
       for (const row of list) {
         if (!byCid.has(row.cid)) updated++;
@@ -229,8 +229,8 @@ export class FileStore implements StorageAdapter {
   async listEntryMemos(query: ListEntryMemosQuery): Promise<{ total: number; rows: EntryMemoRecord[] }> {
     const rows = this.entryMemos[String(query.chainId)];
     if (!Array.isArray(rows) || rows.length === 0) return { total: 0, rows: [] };
-    const paged = applyEntryMemoQuery(rows as EntryMemoRecord[], query);
-    return { total: paged.total, rows: paged.rows.map((r) => ({ ...(r as any) })) };
+    const paged = applyEntryMemoQuery(rows, query);
+    return { total: paged.total, rows: paged.rows.map((r) => ({ ...r })) };
   }
 
   async clearEntryMemos(chainId: number): Promise<void> {
@@ -251,9 +251,9 @@ export class FileStore implements StorageAdapter {
       const existing = Array.isArray(this.entryNullifiers[key]) ? this.entryNullifiers[key]! : [];
       const byNid = new Map<number, EntryNullifierRecord>();
       for (const row of existing) {
-        const nid = Number((row as any).nid);
+        const nid = Number(row.nid);
         if (!Number.isFinite(nid) || nid < 0) continue;
-        byNid.set(Math.floor(nid), row as any);
+        byNid.set(Math.floor(nid), row);
       }
       for (const row of list) {
         if (!Number.isInteger(row.nid) || row.nid < 0) continue;
@@ -269,8 +269,8 @@ export class FileStore implements StorageAdapter {
   async listEntryNullifiers(query: ListEntryNullifiersQuery): Promise<{ total: number; rows: EntryNullifierRecord[] }> {
     const rows = this.entryNullifiers[String(query.chainId)];
     if (!Array.isArray(rows) || rows.length === 0) return { total: 0, rows: [] };
-    const paged = applyEntryNullifierQuery(rows as EntryNullifierRecord[], query);
-    return { total: paged.total, rows: paged.rows.map((r) => ({ ...(r as any) })) };
+    const paged = applyEntryNullifierQuery(rows, query);
+    return { total: paged.total, rows: paged.rows.map((r) => ({ ...r })) };
   }
 
   async clearEntryNullifiers(chainId: number): Promise<void> {
@@ -325,7 +325,7 @@ export class FileStore implements StorageAdapter {
       const lines = raw.split('\n').filter((l) => l.trim().length > 0);
       for (const line of lines) {
         try {
-          const row = JSON.parse(line) as any;
+          const row = JSON.parse(line);
           const cid = Number(row?.cid);
           const commitment = row?.commitment as Hex;
           if (!Number.isFinite(cid) || cid < 0) continue;
@@ -380,15 +380,14 @@ export class FileStore implements StorageAdapter {
   }
 
   createOperation<TType extends OperationType>(
-    input: Omit<StoredOperation<OperationDetailFor<TType>>, 'id' | 'createdAt' | 'status'> &
-      Partial<Pick<StoredOperation<OperationDetailFor<TType>>, 'createdAt' | 'id' | 'status'>> & { type: TType },
+    input: Omit<StoredOperation<OperationDetailFor<TType>>, 'id' | 'createdAt' | 'status'> & Partial<Pick<StoredOperation<OperationDetailFor<TType>>, 'createdAt' | 'id' | 'status'>> & { type: TType },
   ) {
     const created = {
-      ...(input as StoredOperation<OperationDetailFor<TType>>),
+      ...input,
       id: input.id ?? newOperationId(),
       createdAt: input.createdAt ?? Date.now(),
       status: input.status ?? 'created',
-    } as StoredOperation<OperationDetailFor<TType>> & { type: TType };
+    };
     this.operations.unshift(created);
     this.pruneOperations();
     void this.save().catch(() => undefined);

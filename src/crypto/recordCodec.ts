@@ -14,15 +14,9 @@ export class RecordCodec {
     }
 
     const compressedPoint = BabyJubjub.compressPoint([userAddressX, userAddressY]);
-    const compressedHex = toHex(compressedPoint) as `0x${string}`;
+    const compressedHex = toHex(compressedPoint);
 
-    return encodeAbiParameters(ABI_PARAMETERS, [
-      BigInt(ro.asset_id),
-      BigInt(ro.asset_amount),
-      BigInt(compressedHex),
-      BigInt(ro.blinding_factor),
-      ro.is_frozen,
-    ]) as Hash;
+    return encodeAbiParameters(ABI_PARAMETERS, [BigInt(ro.asset_id), BigInt(ro.asset_amount), BigInt(compressedHex), BigInt(ro.blinding_factor), ro.is_frozen]);
   }
 
   static decode(hexData: string): CommitmentData {

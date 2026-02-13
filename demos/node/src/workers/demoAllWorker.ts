@@ -29,8 +29,8 @@ const toJsonSafe = (value: any): any => {
 };
 
 const reply = (msg: RpcResponse) => {
-  if (typeof (process as any).send === 'function') {
-    (process as any).send(toJsonSafe(msg));
+  if (typeof process.send === 'function') {
+    process.send(toJsonSafe(msg));
   }
 };
 
@@ -83,21 +83,21 @@ async function main() {
     const log = { ts: Date.now(), ...entry };
     logBuffer.push(log);
     if (logBuffer.length > 500) logBuffer.splice(0, logBuffer.length - 500);
-    if (streamLogs && typeof (process as any).send === 'function') {
+    if (streamLogs && typeof process.send === 'function') {
       // avoid flooding the interactive terminal with high-volume sync/debug logs
       const allowSync = streamSyncLogs || activeRpcDepth > 0;
       if ((log.level !== 'debug' || activeRpcDepth > 0) && (log.scope !== 'sync' || allowSync)) {
-        (process as any).send({ type: 'log', log: toJsonSafe(log) });
+        process.send({ type: 'log', log: toJsonSafe(log) });
       }
     }
   };
 
   const lastSyncProgress = new Map<string, { ts: number; chainId: number; resource: string; downloaded: number; total?: number }>();
 
-  const canPersistMerkle = typeof (store as any).getMerkleLeaves === 'function' && typeof (store as any).appendMerkleLeaves === 'function';
+  const canPersistMerkle = typeof store.getMerkleLeaves === 'function' && typeof store.appendMerkleLeaves === 'function';
 
   const maybeResetCursorForMerkle = async (reason: string) => {
-    await (store as any).clearMerkleLeaves?.(chain.chainId);
+    await store.clearMerkleLeaves?.(chain.chainId);
     const prev = await store.getSyncCursor(chain.chainId).catch(() => undefined);
     await store.setSyncCursor(chain.chainId, { memo: 0, merkle: 0, nullifier: prev?.nullifier ?? 0 });
     pushLog({ level: 'warn', scope: 'merkle', message: `reset cursor to rebuild local merkle (${reason})` });
@@ -108,7 +108,7 @@ async function main() {
   } else if (canPersistMerkle) {
     const cursor = await store.getSyncCursor(chain.chainId).catch(() => undefined);
     const memoCursor = cursor?.memo ?? 0;
-    const persisted = (await (store as any).getMerkleLeaves?.(chain.chainId)) as any[] | undefined;
+    const persisted = await store.getMerkleLeaves?.(chain.chainId);
     const hasLeaves = Array.isArray(persisted) && persisted.length > 0;
     if (memoCursor > 0 && !hasLeaves) {
       await maybeResetCursorForMerkle('no persisted leaves');
@@ -167,17 +167,17 @@ async function main() {
     const { publicClient } = getClients(chain);
     unwatchContractEvent = publicClient.watchContractEvent({
       address: chain.ocashContractAddress,
-      abi: App_ABI as any,
+      abi: App_ABI,
       eventName: 'ArrayMergedToTree',
-      onLogs: (logs: any[]) => {
+      onLogs: (logs) => {
         for (const log of logs) {
           pushLog({
             level: 'info',
             scope: 'contract:ArrayMergedToTree',
             message: `tx=${log.transactionHash}`,
             detail: {
-              batchIndex: (log.args as any)?.batchIndex?.toString?.(),
-              newRoot: (log.args as any)?.newRoot?.toString?.(),
+              batchIndex: log.args?.batchIndex?.toString?.(),
+              newRoot: log.args?.newRoot?.toString?.(),
             },
           });
         }
@@ -186,10 +186,10 @@ async function main() {
   }
 
   const owner = sdk.keys.deriveKeyPair(config.seed, config.accountNonce != null ? String(config.accountNonce) : undefined);
-  const selfViewingAddress = sdk.keys.userPkToAddress(owner.user_pk) as Hex;
+  const selfViewingAddress = sdk.keys.userPkToAddress(owner.user_pk);
 
-  if (typeof (process as any).send === 'function') {
-    (process as any).send({ type: 'ready', chainId: chain.chainId, viewingAddress: selfViewingAddress });
+  if (typeof process.send === 'function') {
+    process.send({ type: 'ready', chainId: chain.chainId, viewingAddress: selfViewingAddress });
   }
 
   const shutdown = async () => {
@@ -261,7 +261,7 @@ async function main() {
       await pauseSyncAndSyncOnce();
       try {
         const utxos = (await sdk.wallet.getUtxos({ chainId: chain.chainId, includeSpent: false, includeFrozen: true })).rows;
-        const tokens = new Map(sdk.assets.getTokens(chain.chainId).map((t) => [t.id, t] as const));
+        const tokens = new Map(sdk.assets.getTokens(chain.chainId).map((t) => [t.id, t]));
         return utxos
           .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
           .map((u) => {
@@ -285,7 +285,7 @@ async function main() {
       await pauseSyncAndSyncOnce();
       try {
         const utxos = (await sdk.wallet.getUtxos({ chainId: chain.chainId, includeSpent: true, includeFrozen: true })).rows;
-        const tokens = new Map(sdk.assets.getTokens(chain.chainId).map((t) => [t.id, t] as const));
+        const tokens = new Map(sdk.assets.getTokens(chain.chainId).map((t) => [t.id, t]));
         const totals = new Map<string, bigint>();
         for (const u of utxos) {
           if (!u.isSpent) continue;
@@ -307,7 +307,7 @@ async function main() {
       await pauseSyncAndSyncOnce();
       try {
         const utxos = (await sdk.wallet.getUtxos({ chainId: chain.chainId, includeSpent: true, includeFrozen: true })).rows;
-        const tokens = new Map(sdk.assets.getTokens(chain.chainId).map((t) => [t.id, t] as const));
+        const tokens = new Map(sdk.assets.getTokens(chain.chainId).map((t) => [t.id, t]));
         return utxos
           .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
           .map((u) => {
@@ -405,7 +405,7 @@ async function main() {
       if (!amountIn) throw new Error('missing amount');
 
       const toRaw = params?.to?.trim();
-      const to = toRaw ? (toRaw as Hex) : selfViewingAddress;
+      const to = toRaw ? toRaw : selfViewingAddress;
       if (!isViewingAddress(to)) throw new Error('invalid to (expected 0x + 64 hex chars viewing address)');
 
       const { publicClient } = getClients(chain);
