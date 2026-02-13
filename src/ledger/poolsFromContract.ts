@@ -62,7 +62,7 @@ export async function fetchPoolTokensFromContract(input: { publicClient: PublicC
 
   let poolIdsRes: any[];
   try {
-    poolIdsRes = (await (input.publicClient as any).multicall({ contracts: poolIdsReq, allowFailure: true })) as any[];
+    poolIdsRes = await input.publicClient.multicall({ contracts: poolIdsReq, allowFailure: true });
   } catch (error) {
     throw new SdkError('CONFIG', 'Failed to fetch poolIds via multicall', { chainId: input.chainId, contract: input.contractAddress }, error);
   }
@@ -81,7 +81,7 @@ export async function fetchPoolTokensFromContract(input: { publicClient: PublicC
 
   let poolInfoRes: any[];
   try {
-    poolInfoRes = (await (input.publicClient as any).multicall({ contracts: poolInfoReq, allowFailure: true })) as any[];
+    poolInfoRes = await input.publicClient.multicall({ contracts: poolInfoReq, allowFailure: true });
   } catch (error) {
     throw new SdkError('CONFIG', 'Failed to fetch getPoolInfo via multicall', { chainId: input.chainId, contract: input.contractAddress }, error);
   }
