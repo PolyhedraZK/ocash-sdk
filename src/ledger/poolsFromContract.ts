@@ -1,8 +1,7 @@
-import type { Address, PublicClient } from 'viem';
+import { erc20Abi, type Address, type PublicClient } from 'viem';
 import { SdkError } from '../errors';
 import type { TokenMetadata } from '../types';
 import { App_ABI } from '../abi/app';
-import { ERC20_ABI } from '../abi/erc20';
 import { normalizeTokenMetadata } from './tokenNormalize';
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
@@ -114,8 +113,8 @@ export async function fetchPoolTokensFromContract(input: { publicClient: PublicC
   if (!includeErc20Metadata || !tokens.length) return tokens;
 
   const erc20Req = tokenAddrByIndex.flatMap((address) => [
-    { chainId: input.chainId, address, abi: ERC20_ABI, functionName: 'symbol' as const, args: [] },
-    { chainId: input.chainId, address, abi: ERC20_ABI, functionName: 'decimals' as const, args: [] },
+    { chainId: input.chainId, address, abi: erc20Abi, functionName: 'symbol' as const, args: [] },
+    { chainId: input.chainId, address, abi: erc20Abi, functionName: 'decimals' as const, args: [] },
   ]);
 
   let erc20Res: any[];

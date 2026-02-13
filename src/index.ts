@@ -32,10 +32,7 @@ export type {
   OpsApi,
   RelayerRequest,
 } from './types';
-export {
-  defaultAssetsOverrideMainnet,
-  defaultAssetsOverrideTestnet,
-} from './assets/defaultAssetsOverride';
+export { defaultAssetsOverrideMainnet, defaultAssetsOverrideTestnet } from './assets/defaultAssetsOverride';
 export { MemoKit } from './memo/memoKit';
 export { CryptoToolkit } from './crypto/cryptoToolkit';
 export { KeyManager } from './crypto/keyManager';
@@ -48,7 +45,6 @@ export { Utils } from './utils';
 export { BABYJUBJUB_SCALAR_FIELD } from './crypto/babyJubjub';
 export { calcTransferProofBinding, calcWithdrawProofBinding } from './utils/ocashBindings';
 export { App_ABI } from './abi/app';
-export { ERC20_ABI } from './abi/erc20';
 export { MemoryStore } from './store/memoryStore';
 export { ETH_MAINNET, BSC_MAINNET, BASE_MAINNET, SEPOLIA_TESTNET, BSC_TESTNET, MAINNET_CHAINS, TESTNET_CHAINS } from './deployments';
 export { KeyValueStore, RedisStore, SqliteStore, type KeyValueStoreOptions, type RedisStoreOptions, type SqliteStoreOptions, type KeyValueClient } from './store/keyValueStore';

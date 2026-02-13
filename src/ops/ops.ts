@@ -1,6 +1,5 @@
-import { createPublicClient, http, type Address, type PublicClient } from 'viem';
+import { createPublicClient, erc20Abi, http, type Address, type PublicClient } from 'viem';
 import { App_ABI } from '../abi/app';
-import { ERC20_ABI } from '../abi/erc20';
 import type {
   AssetsApi,
   CommitmentData,
@@ -84,15 +83,15 @@ const buildWithdrawWitness = (input: {
       viewer_pk: toViewerPkJson(token.viewerPk),
       freezer_pk: toFreezerPkJson(token.freezerPk),
     },
-    input_secret: input.inputSecret as any,
-    output_record_opening: input.outputRecordOpening as any,
-    array: input.array as any,
+    input_secret: input.inputSecret,
+    output_record_opening: input.outputRecordOpening,
+    array: input.array,
     amount: input.burnAmount,
     relayer_fee: input.relayerFee,
     gas_drop_value: input.gasDropValue,
     viewing_memo_randomness: Array.from(CryptoToolkit.viewingRandomness()),
     proof_binding: input.proofBinding,
-  } as any;
+  };
 };
 
 export class Ops implements OpsApi {
@@ -110,11 +109,11 @@ export class Ops implements OpsApi {
   ) {}
 
   private debug(scope: string, message: string, detail?: Record<string, unknown>) {
-    this.emit?.({ type: 'debug', payload: { scope, message, detail } } as any);
+    this.emit?.({ type: 'debug', payload: { scope, message, detail } });
   }
 
   private emitOperationUpdate(payload: Extract<SdkEvent, { type: 'operations:update' }>['payload']) {
-    this.emit?.({ type: 'operations:update', payload } as SdkEvent);
+    this.emit?.({ type: 'operations:update', payload });
   }
 
   private getPublicClient(chainId: number): PublicClient {
@@ -124,7 +123,7 @@ export class Ops implements OpsApi {
     if (!chain?.rpcUrl) {
       throw new SdkError('CONFIG', `chain ${chainId} missing rpcUrl`, { chainId });
     }
-    const client = createPublicClient({ transport: http(chain.rpcUrl) }) as PublicClient;
+    const client = createPublicClient({ transport: http(chain.rpcUrl) });
     this.publicClients.set(chainId, client);
     return client;
   }
@@ -177,28 +176,23 @@ export class Ops implements OpsApi {
     if (!Array.isArray(selected) || !selected.length) {
       throw new SdkError('CONFIG', 'planner returned no selectedInputs', { chainId: input.plan.chainId, assetId: input.plan.assetId });
     }
-    const token = input.plan.token as TokenMetadata;
+    const token = input.plan.token;
     const relayerFee = BigInt(input.plan.relayerFee ?? 0n);
     const extraData = input.plan.extraData;
     const outputs = input.plan.outputs;
-    const proofBinding = input.plan.proofBinding as string;
+    const proofBinding = input.plan.proofBinding;
 
     const [array, digest, totalElements] = await this.timed(scope, 'readContract.state', { chainId: input.plan.chainId, contract: contractAddress }, () =>
       this.stage('CONFIG', 'prepareTransfer failed to read contract state', { chainId: input.plan.chainId, contract: contractAddress }, () =>
         Promise.all([
           input.publicClient.readContract({ address: contractAddress, abi: App_ABI, functionName: 'getArray', args: [] }),
           input.publicClient.readContract({ address: contractAddress, abi: App_ABI, functionName: 'digest', args: [] }),
-          input.publicClient.readContract({
-            address: contractAddress,
-            abi: App_ABI,
-            functionName: 'totalElements',
-            args: [],
-          }),
+          input.publicClient.readContract({ address: contractAddress, abi: App_ABI, functionName: 'totalElements', args: [] }),
         ]),
       ),
     );
 
-    const digestArrayHash = Array.isArray(digest) ? (digest as any)[1] : (digest as any)?.[1];
+    const digestArrayHash = Array.isArray(digest) ? digest[1] : digest?.[1];
     const arrayHash = toBigintOrThrow(digestArrayHash, {
       code: 'CONFIG',
       name: 'digest[1] (array hash)',
@@ -371,16 +365,16 @@ export class Ops implements OpsApi {
         }),
       ),
     );
-    const planAction = (plan as any)?.action;
+    const planAction = plan?.action;
     if (planAction && planAction !== 'withdraw') {
       throw new SdkError('CONFIG', 'planner returned non-withdraw plan', { chainId: input.chainId, assetId: input.assetId, action: planAction });
     }
 
-    const typedPlan = plan as WithdrawPlan;
-    const token = typedPlan.token as TokenMetadata;
+    const typedPlan = plan;
+    const token = typedPlan.token;
     const relayerFee = BigInt(typedPlan.relayerFee ?? 0n);
     const burnAmount = BigInt(typedPlan.burnAmount ?? input.amount);
-    const utxo = typedPlan.selectedInput as any;
+    const utxo = typedPlan.selectedInput;
     if (!utxo) {
       throw new SdkError('CONFIG', 'planner returned no selectedInput', {
         chainId: input.chainId,
@@ -389,25 +383,20 @@ export class Ops implements OpsApi {
       });
     }
 
-    const outputRo = typedPlan.outputRecordOpening as any;
-    const extraData = typedPlan.extraData as any;
-    const proofBinding = typedPlan.proofBinding as string;
+    const outputRo = typedPlan.outputRecordOpening;
+    const extraData = typedPlan.extraData;
+    const proofBinding = typedPlan.proofBinding;
 
     const [array, digest, totalElements] = await this.timed(scope, 'readContract.state', { chainId: input.chainId, contract: contractAddress }, () =>
       this.stage('CONFIG', 'prepareWithdraw failed to read contract state', { chainId: input.chainId, contract: contractAddress }, () =>
         Promise.all([
-          (input.publicClient.readContract as any)({ address: contractAddress, abi: App_ABI as any, functionName: 'getArray', args: [] }),
-          (input.publicClient.readContract as any)({ address: contractAddress, abi: App_ABI as any, functionName: 'digest', args: [] }),
-          (input.publicClient.readContract as any)({
-            address: contractAddress,
-            abi: App_ABI as any,
-            functionName: 'totalElements',
-            args: [],
-          }),
+          input.publicClient.readContract({ address: contractAddress, abi: App_ABI, functionName: 'getArray', args: [] }),
+          input.publicClient.readContract({ address: contractAddress, abi: App_ABI, functionName: 'digest', args: [] }),
+          input.publicClient.readContract({ address: contractAddress, abi: App_ABI, functionName: 'totalElements', args: [] }),
         ]),
       ),
     );
-    const digestArrayHash = Array.isArray(digest) ? (digest as any)[1] : (digest as any)?.[1];
+    const digestArrayHash = Array.isArray(digest) ? digest[1] : digest?.[1];
     const arrayHash = toBigintOrThrow(digestArrayHash, {
       code: 'CONFIG',
       name: 'digest[1] (array hash)',
@@ -468,7 +457,7 @@ export class Ops implements OpsApi {
 
     const proof = await this.timed(scope, 'zkp.proveWithdraw', { chainId: input.chainId }, () =>
       this.stage('PROOF', 'prepareWithdraw proof failed', { chainId: input.chainId }, () =>
-        this.zkp.proveWithdraw(witness as any, {
+        this.zkp.proveWithdraw(witness, {
           merkle_root_index: merkleRootIndex,
           array_hash_index: arrayHashIndex,
           relayer: typedPlan.relayer,
@@ -497,7 +486,7 @@ export class Ops implements OpsApi {
   private buildOperationFromPlan(plan: TransferPlan | WithdrawPlan): OperationCreateInput {
     if (plan.action === 'transfer') {
       const inputCommitments = plan.selectedInputs.map((u) => u.commitment);
-      const outputCommitments = plan.outputs.filter((o) => o.asset_amount > 0n).map((o) => CryptoToolkit.commitment(o, 'hex') as Hex);
+      const outputCommitments = plan.outputs.filter((o) => o.asset_amount > 0n).map((o) => CryptoToolkit.commitment(o, 'hex'));
       return {
         type: 'transfer',
         chainId: plan.chainId,
@@ -518,7 +507,7 @@ export class Ops implements OpsApi {
     }
 
     const inputCommitments = [plan.selectedInput.commitment];
-    const outputCommitments = plan.outputRecordOpening.asset_amount > 0n ? [CryptoToolkit.commitment(plan.outputRecordOpening, 'hex') as Hex] : [];
+    const outputCommitments = plan.outputRecordOpening.asset_amount > 0n ? [CryptoToolkit.commitment(plan.outputRecordOpening, 'hex')] : [];
     return {
       type: 'withdraw',
       chainId: plan.chainId,
@@ -577,7 +566,7 @@ export class Ops implements OpsApi {
     let operationId = input.operationId;
     const operation = input.operation ?? (plan ? this.buildOperationFromPlan(plan) : undefined);
     if (!operationId && operation) {
-      const created = this.store?.createOperation(operation as any);
+      const created = this.store?.createOperation(operation);
       if (created) this.emitOperationUpdate({ action: 'create', operation: created });
       operationId = created?.id ?? operationId;
     }
@@ -719,18 +708,9 @@ export class Ops implements OpsApi {
     const protocolFee = Utils.calcDepositFee(input.amount, token.depositFeeBps);
     const payAmount = input.amount + protocolFee;
 
-    const depositRelayerFee = (await this.stage(
-      'CONFIG',
-      'prepareDeposit failed to read depositRelayerFee',
-      { chainId: input.chainId, contract: contractAddress },
-      () =>
-        (input.publicClient.readContract as any)({
-          address: contractAddress,
-          abi: App_ABI as any,
-          functionName: 'depositRelayerFee',
-          args: [],
-        }) as any,
-    )) as unknown as bigint;
+    const depositRelayerFee = await this.stage('CONFIG', 'prepareDeposit failed to read depositRelayerFee', { chainId: input.chainId, contract: contractAddress }, () =>
+      input.publicClient.readContract({ address: contractAddress, abi: App_ABI, functionName: 'depositRelayerFee', args: [] }),
+    );
 
     const userAddress = input.ownerPublicKey.user_pk.user_address;
     const userPK: [bigint, bigint] = [BigInt(userAddress[0]), BigInt(userAddress[1])];
@@ -751,7 +731,7 @@ export class Ops implements OpsApi {
     const depositRequest = {
       chainId: input.chainId,
       address: contractAddress,
-      abi: App_ABI as any,
+      abi: App_ABI,
       functionName: 'deposit' as const,
       args: depositArgs,
       value,
@@ -774,25 +754,19 @@ export class Ops implements OpsApi {
       };
     }
 
-    const allowance = (await this.stage(
+    const allowance = await this.stage(
       'CONFIG',
       'prepareDeposit failed to read ERC20 allowance',
       { chainId: input.chainId, token: token.wrappedErc20, account: input.account, spender: contractAddress },
-      () =>
-        (input.publicClient.readContract as any)({
-          address: token.wrappedErc20,
-          abi: ERC20_ABI as any,
-          functionName: 'allowance',
-          args: [input.account, contractAddress],
-        }) as any,
-    )) as unknown as bigint;
+      () => input.publicClient.readContract({ address: token.wrappedErc20, abi: erc20Abi, functionName: 'allowance', args: [input.account, contractAddress] }),
+    );
 
     const approveNeeded = allowance < payAmount;
     const approveRequest = approveNeeded
       ? {
           chainId: input.chainId,
           address: token.wrappedErc20,
-          abi: ERC20_ABI as any,
+          abi: erc20Abi,
           functionName: 'approve' as const,
           args: [contractAddress, payAmount] as [Address, bigint],
         }
@@ -838,18 +812,18 @@ export class Ops implements OpsApi {
           depositRelayerFee: prepared.depositRelayerFee.toString(),
           outputCommitments,
         },
-      } as any);
+      });
       if (created) this.emitOperationUpdate({ action: 'create', operation: created });
       operationId = created?.id ?? operationId;
     }
 
     let approveTxHash: Hex | undefined;
     if (input.autoApprove && prepared.approveNeeded && prepared.approveRequest) {
-      approveTxHash = await input.walletClient.writeContract(prepared.approveRequest as any);
+      approveTxHash = await input.walletClient.writeContract(prepared.approveRequest);
       await input.publicClient.waitForTransactionReceipt({ hash: approveTxHash });
     }
 
-    const txHash = await input.walletClient.writeContract(prepared.depositRequest as any);
+    const txHash = await input.walletClient.writeContract(prepared.depositRequest);
     this.updateOperation(operationId, { status: 'submitted', txHash });
 
     const receipt = await input.publicClient.waitForTransactionReceipt({
@@ -870,7 +844,7 @@ export class Ops implements OpsApi {
     while (Date.now() - startedAt < timeoutMs) {
       if (input.signal?.aborted) {
         this.updateOperation(input.operationId, { status: 'failed', error: 'waitRelayerTxHash aborted', requestUrl });
-        throw new SdkError('RELAYER', 'waitRelayerTxHash aborted', { relayerUrl: input.relayerUrl, relayerTxHash: input.relayerTxHash }, (input.signal as any).reason);
+        throw new SdkError('RELAYER', 'waitRelayerTxHash aborted', { relayerUrl: input.relayerUrl, relayerTxHash: input.relayerTxHash }, input.signal.reason);
       }
       let txhash: Hex | null;
       try {
