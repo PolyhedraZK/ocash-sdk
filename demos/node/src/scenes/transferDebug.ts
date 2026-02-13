@@ -103,5 +103,4 @@ export async function demoTransferDebug(ctx: DemoContext) {
   console.log(c.green('chain tx:'), txhash);
 
   const receipt = await submit.transactionReceipt;
-  console.log(c.green('tx receipt:'), receipt);
 }

@@ -14,7 +14,7 @@ TypeScript ZKP SDK for privacy-preserving token operations — deposit, transfer
 - **UTXO Model** — Poseidon2 commitments, Merkle trees, nullifiers
 - **Multi-Environment** — Browser, Node.js, Electron/Tauri
 - **Modular** — Factory pattern with event-driven modules, compose what you need
-- **6 Storage Adapters** — Memory, IndexedDB, File, KV, Redis, SQLite
+- **4 Storage Adapters** — Memory, IndexedDB, File, KV
 
 ## Install
 
@@ -145,7 +145,7 @@ sdk.wallet.close()           →  Release keys, flush storage
 ```bash
 pnpm install
 pnpm run build
-pnpm run test          # 110 tests
+pnpm run test          # Run tests
 pnpm run dev           # Browser demo
 pnpm run demo:node     # Node.js demo
 pnpm run docs:dev      # Documentation dev server

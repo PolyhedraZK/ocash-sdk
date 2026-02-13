@@ -1,4 +1,4 @@
-import { defaultAssetsOverride, SEPOLIA_TESTNET, type AssetsOverride, type ChainConfigInput } from '@ocash/sdk';
+import { defaultAssetsOverrideTestnet, type AssetsOverride, type ChainConfigInput } from '@ocash/sdk';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -37,12 +37,12 @@ export async function loadDemoConfig(options?: { configPath?: string | boolean }
   const config: DemoConfig = {
     ...defaultConfig,
     ...fromFile,
-    assetsOverride: fromFile?.assetsOverride ?? defaultAssetsOverride,
+    assetsOverride: fromFile?.assetsOverride ?? defaultAssetsOverrideTestnet,
     signerPrivateKey: isHexPrivKey(fromFile?.signerPrivateKey) ? fromFile.signerPrivateKey : undefined,
   };
 
   if (!config.assetsOverride) {
-    config.assetsOverride = defaultAssetsOverride;
+    config.assetsOverride = defaultAssetsOverrideTestnet;
   }
   return config;
 }

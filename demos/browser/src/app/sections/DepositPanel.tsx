@@ -122,7 +122,7 @@ export function DepositPanel() {
       return;
     }
     const activeWalletClient = walletClient ?? (await getWalletClient(wagmiConfig, { chainId: selectedChainId ?? undefined }).catch(() => undefined));
-    if (!activeWalletClient) {
+    if (!activeWalletClient?.writeContract) {
       message.error('Wallet client not available');
       return;
     }

@@ -13,7 +13,6 @@ The repository is a single-package layout. The root `package.json` is the only d
 - SDK source: `src/`
 - Build output: `dist/` (publish includes only `dist/` and `assets/`)
 - Demos: `demos/` (for showcase/debug only; not published with the SDK)
-- Asset build: `pnpm run build:assets` outputs to `assets/`
 - Browser demo: `pnpm run dev`
 - Node demo: `pnpm run demo:node -- <command>`
 
@@ -25,6 +24,7 @@ src/                          # SDK source (~60 files, ~8400 lines)
   index.browser.ts            # Browser entry: + IndexedDbStore
   index.node.ts               # Node entry: + FileStore
   types.ts                    # All type definitions (~850 lines)
+  errors.ts                   # Error codes and SdkError
   core/                       # SdkCore: event bus, init orchestration
   crypto/                     # Poseidon2, BabyJubjub, key derivation, commitments
   wallet/                     # WalletService: session, UTXO, balance, memo decrypt
@@ -38,6 +38,10 @@ src/                          # SDK source (~60 files, ~8400 lines)
   memo/                       # MemoKit: ECDH + NaCl secretbox encrypt/decrypt
   abi/                        # Contract ABIs (Ocash.json compiled ABI, ERC20)
   runtime/                    # WasmBridge: WASM loading, runtime detect, asset cache
+  ledger/                     # Chain/token/relayer configuration
+  assets/                     # Default assets metadata
+  abi/                        # Contract ABIs
+  dummy/                      # Test data helpers
   utils/                      # Shared utilities (random, signal, url, bigint)
 tests/                        # Vitest tests (~38 files)
 demos/browser/                # React + Vite + wagmi browser demo
@@ -55,8 +59,6 @@ pnpm run dev                  # Browser demo (Vite, port 5173)
 pnpm run dev:sdk              # SDK watch mode (tsup --watch)
 pnpm run demo:node -- <cmd>   # Run Node demo (requires build)
 pnpm run demo:node:tsx -- <cmd> # Run Node demo via tsx
-pnpm run build:assets         # Build WASM/circuit assets
-pnpm run build:assets:local   # Build assets including wasm_exec.js
 ```
 
 ## Tech Stack
@@ -99,33 +101,6 @@ The ABI JSON is extracted from the Foundry compiled output (`Ocash.sol/Ocash.jso
 - Exports converge through entry points — no deep imports like `@ocash/sdk/src/crypto/...`
 - `core.ready()` must be called before any proof/witness operations (loads WASM lazily)
 - StorageAdapter is an interface — default MemoryStore is non-persistent
-
-## SDK Modules (Public API)
-
-```
-sdk.core      — ready(), reset(), on(), off()
-sdk.keys      — deriveKeyPair(seed, nonce), userPkToAddress(), addressToUserPk()
-sdk.crypto    — commitment(), nullifier(), createRecordOpening(), memo.createMemo()
-sdk.assets    — getChains(), getTokens(), syncRelayerConfig()
-sdk.storage   — getAdapter()
-sdk.wallet    — open(), close(), getUtxos(), getBalance(), markSpent()
-sdk.sync      — start(), stop(), syncOnce(), getStatus()
-sdk.merkle    — getProofByCids(), buildInputSecretsFromUtxos()
-sdk.planner   — estimate(), estimateMax(), plan()
-sdk.zkp       — proveTransfer(), proveWithdraw()
-sdk.tx        — buildTransferCalldata(), buildWithdrawCalldata()
-sdk.ops       — prepareTransfer(), prepareWithdraw(), prepareDeposit(), submitRelayerRequest()
-```
-
-## Cryptography
-
-- Curve: BabyJubjub (twisted Edwards over BN254 scalar field) — pure JS
-- Hash: Poseidon2 (commitments, nullifiers, Merkle nodes) — pure JS
-- Encryption: ECDH + NaCl XSalsa20-Poly1305 (memo encryption) — tweetnacl
-- Key derivation: HKDF-SHA256 — @noble/hashes
-- Proofs: Groth16 zk-SNARK — Go WASM (fetched at runtime, not bundled)
-- commitment = Poseidon2(asset_id, amount, pk.x, pk.y, blinding_factor)
-- nullifier = Poseidon2(commitment, secret_key, merkle_index)
 
 ## Testing
 

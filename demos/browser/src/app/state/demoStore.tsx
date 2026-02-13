@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import OcashSdk, { IndexedDbStore } from '@ocash/sdk/browser';
 import type { Hex, StorageAdapter, StoredOperation, TokenMetadata } from '@ocash/sdk';
 import { defineChain } from 'viem';
-import { createConfig, http, UseWalletClientReturnType } from 'wagmi';
+import { createConfig, http, type UseWalletClientReturnType } from 'wagmi';
 import { useAccount, useChainId, useConfig, useConnect, useDisconnect, usePublicClient, useWalletClient } from 'wagmi';
 import { injected, metaMask } from 'wagmi/connectors';
 import { message } from 'antd';
