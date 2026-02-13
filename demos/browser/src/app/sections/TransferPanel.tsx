@@ -102,7 +102,7 @@ export function TransferPanel() {
         chainId: currentChain.chainId,
         assetId: currentToken.id,
         amount,
-        to: transferTo,
+        to: transferTo as Hex,
         ownerKeyPair: owner,
         publicClient,
         autoMerge: true,
