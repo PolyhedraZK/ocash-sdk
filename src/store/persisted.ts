@@ -5,6 +5,9 @@ import type { StoredOperation } from './operationTypes';
 export type PersistedStoreState = {
   wallet: PersistedWalletState;
   operations: StoredOperation[];
+};
+
+export type PersistedSharedState = {
   /**
    * Optional persisted merkle leaves per chain.
    *

@@ -533,7 +533,7 @@ export type MerkleNodeRecord = {
 export interface StorageAdapter {
   /**
    * Initialize adapter state, optionally scoping storage by wallet id.
-   * Implementations should clear any cached state when `walletId` changes.
+   * Implementations should clear wallet-scoped state when `walletId` changes.
    */
   init?(options?: { walletId?: string }): Promise<void> | void;
   /** Close connections / flush pending writes. */

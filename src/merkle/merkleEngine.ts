@@ -37,19 +37,7 @@ export class MerkleEngine implements MerkleApi {
     private readonly getChain: (chainId: number) => { merkleProofUrl?: string },
     private readonly bridge: ProofBridge,
     options?: { mode?: 'remote' | 'local' | 'hybrid'; treeDepth?: number },
-    private readonly storage?: Pick<
-      StorageAdapter,
-      | 'getMerkleLeaves'
-      | 'appendMerkleLeaves'
-      | 'clearMerkleLeaves'
-      | 'getMerkleLeaf'
-      | 'getMerkleNode'
-      | 'upsertMerkleNodes'
-      | 'clearMerkleNodes'
-      | 'getMerkleTree'
-      | 'setMerkleTree'
-      | 'clearMerkleTree'
-    >,
+    private readonly storage?: StorageAdapter,
   ) {
     this.mode = options?.mode ?? 'hybrid';
     this.treeDepth = Math.max(1, Math.floor(options?.treeDepth ?? TREE_DEPTH_DEFAULT));

@@ -12,9 +12,8 @@ import type {
   UtxoRecord,
 } from '../types';
 import type { ListOperationsQuery, OperationDetailFor, OperationType, StoredOperation } from './operationTypes';
-import type { PersistedWalletState } from './persistedWalletState';
 import { hydrateWalletState, serializeWalletState } from './persistedWalletState';
-import type { PersistedStoreState } from './persisted';
+import type { PersistedSharedState, PersistedStoreState } from './persisted';
 import { newOperationId } from './operationTypes';
 import { applyOperationsQuery } from './operationsQuery';
 import { applyEntryMemoQuery } from './entryMemoQuery';
@@ -76,6 +75,14 @@ export class KeyValueStore implements StorageAdapter {
   }
 
   /**
+   * Compute the shared storage key for chain-level caches.
+   */
+  private sharedKey() {
+    const prefix = this.options.keyPrefix ?? 'ocash:sdk:store';
+    return `${prefix}:shared`;
+  }
+
+  /**
    * Load persisted state from the backend store.
    */
   private async load() {
@@ -89,40 +96,43 @@ export class KeyValueStore implements StorageAdapter {
     this.entryMemos = {};
     this.entryNullifiers = {};
 
-    const raw = await this.options.client.get(this.stateKey());
-    if (!raw) return;
+    const rawWallet = await this.options.client.get(this.stateKey());
+    const rawShared = await this.options.client.get(this.sharedKey());
     try {
-      const parsed = JSON.parse(raw) as Partial<PersistedStoreState>;
-      const hydrated = hydrateWalletState(parsed.wallet);
-      for (const [k, v] of hydrated.cursors.entries()) this.cursors.set(k, v);
-      for (const [k, v] of hydrated.utxos.entries()) this.utxos.set(k, v);
+      if (rawWallet) {
+        const parsed = JSON.parse(rawWallet) as Partial<PersistedStoreState>;
+        const hydrated = hydrateWalletState(parsed.wallet);
+        for (const [k, v] of hydrated.cursors.entries()) this.cursors.set(k, v);
+        for (const [k, v] of hydrated.utxos.entries()) this.utxos.set(k, v);
 
-      const operations = Array.isArray(parsed.operations) ? parsed.operations : [];
-      this.operations = operations;
-
-      const extra = parsed;
-
-      if (extra.merkleLeaves && typeof extra.merkleLeaves === 'object' && !Array.isArray(extra.merkleLeaves)) {
-        this.merkleLeaves = extra.merkleLeaves;
-      }
-
-      if (extra.merkleTrees && typeof extra.merkleTrees === 'object' && !Array.isArray(extra.merkleTrees)) {
-        this.merkleTrees = extra.merkleTrees;
-      }
-
-      if (extra.merkleNodes && typeof extra.merkleNodes === 'object' && !Array.isArray(extra.merkleNodes)) {
-        this.merkleNodes = extra.merkleNodes;
-      }
-
-      if (extra.entryMemos && typeof extra.entryMemos === 'object' && !Array.isArray(extra.entryMemos)) {
-        this.entryMemos = extra.entryMemos;
-      }
-
-      if (extra.entryNullifiers && typeof extra.entryNullifiers === 'object' && !Array.isArray(extra.entryNullifiers)) {
-        this.entryNullifiers = extra.entryNullifiers;
+        const operations = Array.isArray(parsed.operations) ? parsed.operations : [];
+        this.operations = operations;
       }
     } catch {
       // ignore bad state
+    }
+
+    try {
+      if (rawShared) {
+        const parsed = JSON.parse(rawShared) as Partial<PersistedSharedState>;
+        if (parsed.merkleLeaves && typeof parsed.merkleLeaves === 'object' && !Array.isArray(parsed.merkleLeaves)) {
+          this.merkleLeaves = parsed.merkleLeaves;
+        }
+        if (parsed.merkleTrees && typeof parsed.merkleTrees === 'object' && !Array.isArray(parsed.merkleTrees)) {
+          this.merkleTrees = parsed.merkleTrees;
+        }
+        if (parsed.merkleNodes && typeof parsed.merkleNodes === 'object' && !Array.isArray(parsed.merkleNodes)) {
+          this.merkleNodes = parsed.merkleNodes;
+        }
+        if (parsed.entryMemos && typeof parsed.entryMemos === 'object' && !Array.isArray(parsed.entryMemos)) {
+          this.entryMemos = parsed.entryMemos;
+        }
+        if (parsed.entryNullifiers && typeof parsed.entryNullifiers === 'object' && !Array.isArray(parsed.entryNullifiers)) {
+          this.entryNullifiers = parsed.entryNullifiers;
+        }
+      }
+    } catch {
+      // ignore bad shared state
     }
 
     const pruned = this.pruneOperations();
@@ -137,16 +147,19 @@ export class KeyValueStore implements StorageAdapter {
       .catch(() => undefined)
       .then(async () => {
         const wallet = serializeWalletState({ walletId: this.walletId, cursors: this.cursors, utxos: this.utxos });
-        const state: PersistedStoreState = {
+        const walletState: PersistedStoreState = {
           wallet,
           operations: this.operations,
+        };
+        const sharedState: PersistedSharedState = {
           merkleLeaves: this.merkleLeaves,
           merkleTrees: this.merkleTrees,
           merkleNodes: this.merkleNodes,
           entryMemos: this.entryMemos,
           entryNullifiers: this.entryNullifiers,
         };
-        await this.options.client.set(this.stateKey(), JSON.stringify(state));
+        await this.options.client.set(this.stateKey(), JSON.stringify(walletState));
+        await this.options.client.set(this.sharedKey(), JSON.stringify(sharedState));
       });
     return this.saveChain;
   }

@@ -13,11 +13,10 @@ import type {
 } from '../types';
 import { appendFile, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import type { PersistedWalletState } from './persistedWalletState';
 import { hydrateWalletState, serializeWalletState } from './persistedWalletState';
 import type { ListOperationsQuery, OperationDetailFor, OperationType, StoredOperation } from './operationTypes';
 import { newOperationId } from './operationTypes';
-import type { PersistedStoreState } from './persisted';
+import type { PersistedSharedState, PersistedStoreState } from './persisted';
 import { applyOperationsQuery } from './operationsQuery';
 import { applyEntryMemoQuery } from './entryMemoQuery';
 import { applyEntryNullifierQuery } from './entryNullifierQuery';
@@ -30,7 +29,7 @@ export type FileStoreOptions = {
 
 /**
  * JSON-file backed StorageAdapter for Node environments.
- * Persists wallet state and merkle data to disk.
+ * Persists wallet state and shared merkle/entry cache to disk.
  */
 export class FileStore implements StorageAdapter {
   private walletId: string | undefined;
@@ -77,11 +76,41 @@ export class FileStore implements StorageAdapter {
   }
 
   /**
-   * Compute the merkle leaves jsonl file path for a chain.
+   * Compute the shared JSON state file path for chain-level caches.
+   */
+  private sharedFilePath() {
+    return path.join(this.options.baseDir, 'shared.store.json');
+  }
+
+  /**
+   * Compute the shared merkle leaves jsonl file path for a chain.
    */
   private merkleFilePath(chainId: number) {
-    const suffix = this.walletId ? this.walletId.replace(/[^a-zA-Z0-9._-]/g, '_') : 'default';
-    return path.join(this.options.baseDir, `${suffix}.merkle.${chainId}.jsonl`);
+    return path.join(this.options.baseDir, `shared.merkle.${chainId}.jsonl`);
+  }
+
+  private async readMerkleFile(filePath: string): Promise<Array<{ cid: number; commitment: Hex }> | undefined> {
+    try {
+      const raw = await readFile(filePath, 'utf8');
+      const out: Array<{ cid: number; commitment: Hex }> = [];
+      const lines = raw.split('\n').filter((l) => l.trim().length > 0);
+      for (const line of lines) {
+        try {
+          const row = JSON.parse(line);
+          const cid = Number(row?.cid);
+          const commitment = row?.commitment as Hex;
+          if (!Number.isFinite(cid) || cid < 0) continue;
+          if (typeof commitment !== 'string' || !commitment.startsWith('0x')) continue;
+          out.push({ cid: Math.floor(cid), commitment });
+        } catch {
+          // ignore bad lines
+        }
+      }
+      out.sort((a, b) => a.cid - b.cid);
+      return out.length ? out : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   /**
@@ -113,7 +142,7 @@ export class FileStore implements StorageAdapter {
    */
   private async load() {
     await mkdir(this.options.baseDir, { recursive: true });
-    // Reset local state first; if the file is missing/bad for this wallet, we should not leak data from a previous walletId.
+    // Reset wallet-local state first; if the file is missing/bad for this wallet, we should not leak data from a previous walletId.
     this.cursors.clear();
     this.utxos.clear();
     this.operations = [];
@@ -131,7 +160,13 @@ export class FileStore implements StorageAdapter {
 
       const operations = Array.isArray(parsed.operations) ? parsed.operations : [];
       this.operations = operations;
+    } catch {
+      // ignore missing/bad file
+    }
 
+    try {
+      const raw = await readFile(this.sharedFilePath(), 'utf8');
+      const parsed = JSON.parse(raw) as Partial<PersistedSharedState>;
       const merkleTreesRaw = parsed.merkleTrees;
       if (merkleTreesRaw && typeof merkleTreesRaw === 'object') {
         this.merkleTrees = merkleTreesRaw;
@@ -152,7 +187,7 @@ export class FileStore implements StorageAdapter {
         this.entryNullifiers = entryNullifiersRaw;
       }
     } catch {
-      // ignore missing/bad file
+      // ignore missing/bad shared file
     }
 
     const pruned = this.pruneOperations();
@@ -168,19 +203,25 @@ export class FileStore implements StorageAdapter {
       .then(async () => {
         await mkdir(this.options.baseDir, { recursive: true });
         const wallet = serializeWalletState({ walletId: this.walletId, cursors: this.cursors, utxos: this.utxos });
-        const state: PersistedStoreState = {
+        const walletState: PersistedStoreState = {
           wallet,
           operations: this.operations,
+        };
+        const sharedState: PersistedSharedState = {
           merkleTrees: this.merkleTrees,
           merkleNodes: this.merkleNodes,
           entryMemos: this.entryMemos,
           entryNullifiers: this.entryNullifiers,
         };
-        const target = this.filePath();
-        const tmp = `${target}.${process.pid}.${Date.now()}.tmp`;
-        const json = JSON.stringify(state, null, 2);
-        await writeFile(tmp, json, 'utf8');
-        await rename(tmp, target);
+        const walletTarget = this.filePath();
+        const walletTmp = `${walletTarget}.${process.pid}.${Date.now()}.tmp`;
+        await writeFile(walletTmp, JSON.stringify(walletState, null, 2), 'utf8');
+        await rename(walletTmp, walletTarget);
+
+        const sharedTarget = this.sharedFilePath();
+        const sharedTmp = `${sharedTarget}.${process.pid}.${Date.now()}.tmp`;
+        await writeFile(sharedTmp, JSON.stringify(sharedState, null, 2), 'utf8');
+        await rename(sharedTmp, sharedTarget);
       });
     return this.saveChain;
   }
@@ -401,27 +442,9 @@ export class FileStore implements StorageAdapter {
    * Load merkle leaves from jsonl file.
    */
   async getMerkleLeaves(chainId: number): Promise<Array<{ cid: number; commitment: Hex }> | undefined> {
-    try {
-      const raw = await readFile(this.merkleFilePath(chainId), 'utf8');
-      const out: Array<{ cid: number; commitment: Hex }> = [];
-      const lines = raw.split('\n').filter((l) => l.trim().length > 0);
-      for (const line of lines) {
-        try {
-          const row = JSON.parse(line);
-          const cid = Number(row?.cid);
-          const commitment = row?.commitment as Hex;
-          if (!Number.isFinite(cid) || cid < 0) continue;
-          if (typeof commitment !== 'string' || !commitment.startsWith('0x')) continue;
-          out.push({ cid: Math.floor(cid), commitment });
-        } catch {
-          // ignore bad lines
-        }
-      }
-      out.sort((a, b) => a.cid - b.cid);
-      return out.length ? out : undefined;
-    } catch {
-      return undefined;
-    }
+    const shared = await this.readMerkleFile(this.merkleFilePath(chainId));
+    if (shared?.length) return shared;
+    return undefined;
   }
 
   /**

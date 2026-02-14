@@ -52,11 +52,6 @@ export class MemoryStore implements StorageAdapter {
       this.cursors.clear();
       this.utxos.clear();
       this.operations = [];
-      this.merkleLeavesByChain.clear();
-      this.merkleTreesByChain.clear();
-      this.merkleNodesByChain.clear();
-      this.entryMemosByChain.clear();
-      this.entryNullifiersByChain.clear();
     }
     this.walletId = nextWalletId;
   }

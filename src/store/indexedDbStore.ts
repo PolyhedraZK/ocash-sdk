@@ -11,11 +11,8 @@ import type {
   SyncCursor,
   UtxoRecord,
 } from '../types';
-import type { PersistedWalletState } from './persistedWalletState';
-import { hydrateWalletState, serializeWalletState } from './persistedWalletState';
 import type { ListOperationsQuery, OperationDetailFor, OperationType, StoredOperation } from './operationTypes';
 import { newOperationId } from './operationTypes';
-import type { PersistedStoreState } from './persisted';
 import { applyOperationsQuery } from './operationsQuery';
 import { applyEntryMemoQuery } from './entryMemoQuery';
 import { applyEntryNullifierQuery } from './entryNullifierQuery';
@@ -28,7 +25,19 @@ export type IndexedDbStoreOptions = {
   maxOperations?: number;
 };
 
-type StateRow = { id: string; json: PersistedStoreState };
+type CursorRow = { walletId: string; chainId: number } & SyncCursor;
+
+type UtxoRow = { walletId: string } & UtxoRecord;
+
+type OperationRow = { walletId: string } & StoredOperation;
+
+type MerkleLeafRow = { chainId: number; cid: number; commitment: Hex };
+
+type StoreDef = {
+  name: string;
+  keyPath: string | string[];
+  indexes?: Array<{ name: string; keyPath: string | string[] }>;
+};
 
 /**
  * IndexedDB-backed StorageAdapter for browser environments.
@@ -44,7 +53,6 @@ export class IndexedDbStore implements StorageAdapter {
   private entryMemos: Record<string, EntryMemoRecord[]> = {};
   private entryNullifiers: Record<string, EntryNullifierRecord[]> = {};
   private db: IDBDatabase | null = null;
-  private saveChain: Promise<void> = Promise.resolve();
   private readonly maxOperations: number;
 
   /**
@@ -64,30 +72,44 @@ export class IndexedDbStore implements StorageAdapter {
   }
 
   /**
-   * Persist state, close the DB connection, and clear handle.
+   * Close the DB connection and clear handle.
    */
   async close() {
-    await this.save();
     this.db?.close();
     this.db = null;
   }
 
   /**
-   * Resolve object store name (default: ocash_store).
+   * Resolve base object store name (default: ocash_store).
    */
   private storeName() {
     return this.options.storeName ?? 'ocash_store';
   }
 
-  /**
-   * Open IndexedDB and ensure the store exists (create on upgrade).
-   */
+  private walletKey() {
+    return this.walletId ?? 'default';
+  }
+
+  private storeDefs(): StoreDef[] {
+    const base = this.storeName();
+    return [
+      { name: `${base}:cursors`, keyPath: ['walletId', 'chainId'], indexes: [{ name: 'walletId', keyPath: 'walletId' }] },
+      { name: `${base}:utxos`, keyPath: ['walletId', 'chainId', 'commitment'], indexes: [{ name: 'walletId', keyPath: 'walletId' }] },
+      { name: `${base}:operations`, keyPath: ['walletId', 'id'], indexes: [{ name: 'walletId', keyPath: 'walletId' }] },
+      { name: `${base}:entryMemos`, keyPath: ['chainId', 'cid'], indexes: [{ name: 'chainId', keyPath: 'chainId' }] },
+      { name: `${base}:entryNullifiers`, keyPath: ['chainId', 'nid'], indexes: [{ name: 'chainId', keyPath: 'chainId' }] },
+      { name: `${base}:merkleLeaves`, keyPath: ['chainId', 'cid'], indexes: [{ name: 'chainId', keyPath: 'chainId' }] },
+      { name: `${base}:merkleTrees`, keyPath: 'chainId' },
+      { name: `${base}:merkleNodes`, keyPath: ['chainId', 'id'], indexes: [{ name: 'chainId', keyPath: 'chainId' }] },
+    ];
+  }
+
   private async openDb(): Promise<IDBDatabase> {
     if (this.db) return this.db;
     const factory: IDBFactory | undefined = this.options.indexedDb ?? globalThis.indexedDB;
     if (!factory) throw new Error('indexedDB is not available');
     const name = this.options.dbName ?? 'ocash_sdk';
-    const storeName = this.storeName();
+    const defs = this.storeDefs();
 
     const open = (version?: number) =>
       new Promise<IDBDatabase>((resolve, reject) => {
@@ -95,15 +117,28 @@ export class IndexedDbStore implements StorageAdapter {
         req.onerror = () => reject(req.error ?? new Error('indexedDB open failed'));
         req.onupgradeneeded = () => {
           const db = req.result;
-          if (!db.objectStoreNames.contains(storeName)) db.createObjectStore(storeName, { keyPath: 'id' });
+          for (const def of defs) {
+            let store: IDBObjectStore | null = null;
+            if (!db.objectStoreNames.contains(def.name)) {
+              store = db.createObjectStore(def.name, { keyPath: def.keyPath });
+            } else if (req.transaction) {
+              store = req.transaction.objectStore(def.name);
+            }
+            if (store && def.indexes) {
+              for (const idx of def.indexes) {
+                if (!store.indexNames.contains(idx.name)) {
+                  store.createIndex(idx.name, idx.keyPath, { unique: false });
+                }
+              }
+            }
+          }
         };
         req.onsuccess = () => resolve(req.result);
       });
 
-    // First open current DB. If the target store doesn't exist (e.g. storeName changed),
-    // reopen with a bumped version to create it.
     let db = await open();
-    if (!db.objectStoreNames.contains(storeName)) {
+    const missing = defs.some((def) => !db.objectStoreNames.contains(def.name));
+    if (missing) {
       const currentVersion = db.version;
       const nextVersion = typeof currentVersion === 'number' && currentVersion > 0 ? currentVersion + 1 : 2;
       db.close();
@@ -114,28 +149,93 @@ export class IndexedDbStore implements StorageAdapter {
     return db;
   }
 
-  /**
-   * Compute the row id for current wallet scope.
-   */
-  private stateId() {
-    return this.walletId ?? 'default';
+  private storeNames() {
+    const base = this.storeName();
+    return {
+      cursors: `${base}:cursors`,
+      utxos: `${base}:utxos`,
+      operations: `${base}:operations`,
+      entryMemos: `${base}:entryMemos`,
+      entryNullifiers: `${base}:entryNullifiers`,
+      merkleLeaves: `${base}:merkleLeaves`,
+      merkleTrees: `${base}:merkleTrees`,
+      merkleNodes: `${base}:merkleNodes`,
+    };
+  }
+
+  private async getAll<T>(storeName: string): Promise<T[]> {
+    const db = await this.openDb();
+    return new Promise<T[]>((resolve, reject) => {
+      const tx = db.transaction(storeName, 'readonly');
+      const store = tx.objectStore(storeName);
+      const req = store.getAll();
+      req.onerror = () => reject(req.error ?? new Error('indexedDB getAll failed'));
+      req.onsuccess = () => resolve(req.result as T[]);
+    });
+  }
+
+  private async getAllByIndex<T>(storeName: string, indexName: string, key: IDBValidKey): Promise<T[]> {
+    const db = await this.openDb();
+    return new Promise<T[]>((resolve, reject) => {
+      const tx = db.transaction(storeName, 'readonly');
+      const store = tx.objectStore(storeName);
+      const index = store.index(indexName);
+      const req = index.getAll(key);
+      req.onerror = () => reject(req.error ?? new Error('indexedDB index getAll failed'));
+      req.onsuccess = () => resolve(req.result as T[]);
+    });
+  }
+
+  private async putMany<T>(storeName: string, rows: T[]): Promise<void> {
+    if (!rows.length) return;
+    const db = await this.openDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(storeName, 'readwrite');
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error ?? new Error('indexedDB put failed'));
+      const store = tx.objectStore(storeName);
+      for (const row of rows) store.put(row as T);
+    });
+  }
+
+  private async deleteByKeys(storeName: string, keys: IDBValidKey[]): Promise<void> {
+    if (!keys.length) return;
+    const db = await this.openDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(storeName, 'readwrite');
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error ?? new Error('indexedDB delete failed'));
+      const store = tx.objectStore(storeName);
+      for (const key of keys) store.delete(key);
+    });
+  }
+
+  private async deleteAllByIndex(storeName: string, indexName: string, key: IDBValidKey): Promise<void> {
+    const db = await this.openDb();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(storeName, 'readwrite');
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error ?? new Error('indexedDB deleteByIndex failed'));
+      const store = tx.objectStore(storeName);
+      const index = store.index(indexName);
+      const req = index.openCursor(IDBKeyRange.only(key));
+      req.onerror = () => reject(req.error ?? new Error('indexedDB cursor failed'));
+      req.onsuccess = () => {
+        const cursor = req.result;
+        if (cursor) {
+          cursor.delete();
+          cursor.continue();
+        }
+      };
+    });
   }
 
   /**
    * Load persisted state into memory and normalize it.
    */
   private async load() {
-    const db = await this.openDb();
-    const storeName = this.storeName();
-    const id = this.stateId();
-
-    const row = await new Promise<StateRow | undefined>((resolve, reject) => {
-      const tx = db.transaction(storeName, 'readonly');
-      const store = tx.objectStore(storeName);
-      const req = store.get(id);
-      req.onerror = () => reject(req.error ?? new Error('indexedDB get failed'));
-      req.onsuccess = () => resolve(req.result as StateRow | undefined);
-    });
+    const stores = this.storeNames();
+    const walletKey = this.walletKey();
 
     // Reset local state first; if the remote has no/invalid state for this wallet, we should not leak old data.
     this.cursors.clear();
@@ -147,76 +247,73 @@ export class IndexedDbStore implements StorageAdapter {
     this.entryMemos = {};
     this.entryNullifiers = {};
 
-    try {
-      const hydrated = hydrateWalletState(row?.json?.wallet);
-      for (const [k, v] of hydrated.cursors.entries()) this.cursors.set(k, v);
-      for (const [k, v] of hydrated.utxos.entries()) this.utxos.set(k, v);
-
-      const ops = row?.json?.operations;
-      this.operations = Array.isArray(ops) ? ops : [];
-
-      const merkleLeavesRaw = row?.json?.merkleLeaves;
-      if (merkleLeavesRaw && typeof merkleLeavesRaw === 'object') {
-        this.merkleLeaves = merkleLeavesRaw;
-      }
-
-      const merkleTreesRaw = row?.json?.merkleTrees;
-      if (merkleTreesRaw && typeof merkleTreesRaw === 'object') {
-        this.merkleTrees = merkleTreesRaw;
-      }
-
-      const merkleNodesRaw = row?.json?.merkleNodes;
-      if (merkleNodesRaw && typeof merkleNodesRaw === 'object') {
-        this.merkleNodes = merkleNodesRaw;
-      }
-
-      const entryMemosRaw = row?.json?.entryMemos;
-      if (entryMemosRaw && typeof entryMemosRaw === 'object') {
-        this.entryMemos = entryMemosRaw;
-      }
-
-      const entryNullifiersRaw = row?.json?.entryNullifiers;
-      if (entryNullifiersRaw && typeof entryNullifiersRaw === 'object') {
-        this.entryNullifiers = entryNullifiersRaw;
-      }
-    } catch {
-      // ignore bad rows
+    const cursorRows = await this.getAllByIndex<CursorRow>(stores.cursors, 'walletId', walletKey);
+    for (const row of cursorRows) {
+      this.cursors.set(row.chainId, { memo: row.memo, nullifier: row.nullifier, merkle: row.merkle });
     }
 
-    const pruned = this.pruneOperations();
-    if (pruned) void this.save().catch(() => undefined);
-  }
+    const utxoRows = await this.getAllByIndex<UtxoRow>(stores.utxos, 'walletId', walletKey);
+    for (const row of utxoRows) {
+      const { walletId: _walletId, ...utxo } = row;
+      const key = `${utxo.chainId}:${utxo.commitment}`;
+      this.utxos.set(key, { ...utxo });
+    }
 
-  /**
-   * Persist current state to IndexedDB (write transaction).
-   */
-  private async save() {
-    this.saveChain = this.saveChain
-      .catch(() => undefined)
-      .then(async () => {
-        const db = await this.openDb();
-        const storeName = this.storeName();
-        const id = this.stateId();
-        const wallet = serializeWalletState({ walletId: this.walletId, cursors: this.cursors, utxos: this.utxos });
-        const json: PersistedStoreState = {
-          wallet,
-          operations: this.operations,
-          merkleLeaves: this.merkleLeaves,
-          merkleTrees: this.merkleTrees,
-          merkleNodes: this.merkleNodes,
-          entryMemos: this.entryMemos,
-          entryNullifiers: this.entryNullifiers,
-        };
+    const operationRows = await this.getAllByIndex<OperationRow>(stores.operations, 'walletId', walletKey);
+    this.operations = operationRows
+      .map((row) => {
+        const { walletId: _walletId, ...operation } = row;
+        return operation;
+      })
+      .sort((a, b) => b.createdAt - a.createdAt);
 
-        await new Promise<void>((resolve, reject) => {
-          const tx = db.transaction(storeName, 'readwrite');
-          tx.oncomplete = () => resolve();
-          tx.onerror = () => reject(tx.error ?? new Error('indexedDB put failed'));
-          const store = tx.objectStore(storeName);
-          store.put({ id, json } satisfies StateRow);
-        });
-      });
-    return this.saveChain;
+    const memoRows = await this.getAll<EntryMemoRecord>(stores.entryMemos);
+    for (const row of memoRows) {
+      const key = String(row.chainId);
+      const existing = this.entryMemos[key] ?? [];
+      existing.push({ ...row });
+      this.entryMemos[key] = existing;
+    }
+    for (const [key, list] of Object.entries(this.entryMemos)) {
+      this.entryMemos[key] = list.sort((a, b) => a.cid - b.cid);
+    }
+
+    const nullifierRows = await this.getAll<EntryNullifierRecord>(stores.entryNullifiers);
+    for (const row of nullifierRows) {
+      const key = String(row.chainId);
+      const existing = this.entryNullifiers[key] ?? [];
+      existing.push({ ...row });
+      this.entryNullifiers[key] = existing;
+    }
+    for (const [key, list] of Object.entries(this.entryNullifiers)) {
+      this.entryNullifiers[key] = list.sort((a, b) => a.nid - b.nid);
+    }
+
+    const leafRows = await this.getAll<MerkleLeafRow>(stores.merkleLeaves);
+    for (const row of leafRows) {
+      const key = String(row.chainId);
+      const existing = this.merkleLeaves[key] ?? [];
+      existing.push({ cid: row.cid, commitment: row.commitment });
+      this.merkleLeaves[key] = existing;
+    }
+    for (const [key, list] of Object.entries(this.merkleLeaves)) {
+      this.merkleLeaves[key] = list.sort((a, b) => a.cid - b.cid);
+    }
+
+    const treeRows = await this.getAll<MerkleTreeState>(stores.merkleTrees);
+    for (const row of treeRows) {
+      this.merkleTrees[String(row.chainId)] = { ...row };
+    }
+
+    const nodeRows = await this.getAll<MerkleNodeRecord>(stores.merkleNodes);
+    for (const row of nodeRows) {
+      const key = String(row.chainId);
+      const existing = this.merkleNodes[key] ?? {};
+      existing[row.id] = { ...row };
+      this.merkleNodes[key] = existing;
+    }
+
+    this.pruneOperations();
   }
 
   /**
@@ -241,7 +338,9 @@ export class IndexedDbStore implements StorageAdapter {
       existing[node.id] = { ...node, chainId };
     }
     this.merkleNodes[key] = existing;
-    await this.save();
+
+    const rows = nodes.map((node) => ({ ...node, chainId }));
+    await this.putMany(this.storeNames().merkleNodes, rows);
   }
 
   /**
@@ -249,7 +348,7 @@ export class IndexedDbStore implements StorageAdapter {
    */
   async clearMerkleNodes(chainId: number): Promise<void> {
     delete this.merkleNodes[String(chainId)];
-    await this.save();
+    await this.deleteAllByIndex(this.storeNames().merkleNodes, 'chainId', chainId);
   }
 
   /**
@@ -271,7 +370,7 @@ export class IndexedDbStore implements StorageAdapter {
    */
   async setMerkleTree(chainId: number, tree: MerkleTreeState): Promise<void> {
     this.merkleTrees[String(chainId)] = { ...tree, chainId };
-    await this.save();
+    await this.putMany(this.storeNames().merkleTrees, [{ ...tree, chainId }]);
   }
 
   /**
@@ -279,7 +378,7 @@ export class IndexedDbStore implements StorageAdapter {
    */
   async clearMerkleTree(chainId: number): Promise<void> {
     delete this.merkleTrees[String(chainId)];
-    await this.save();
+    await this.deleteByKeys(this.storeNames().merkleTrees, [chainId]);
   }
 
   /**
@@ -288,11 +387,13 @@ export class IndexedDbStore implements StorageAdapter {
   async upsertEntryMemos(memos: EntryMemoRecord[]): Promise<number> {
     let updated = 0;
     const grouped = new Map<number, EntryMemoRecord[]>();
+    const toPersist: EntryMemoRecord[] = [];
     for (const memo of memos) {
       if (!Number.isInteger(memo.cid) || memo.cid < 0) continue;
       const list = grouped.get(memo.chainId) ?? [];
       list.push(memo);
       grouped.set(memo.chainId, list);
+      toPersist.push({ ...memo });
     }
     for (const [chainId, list] of grouped.entries()) {
       const key = String(chainId);
@@ -309,7 +410,7 @@ export class IndexedDbStore implements StorageAdapter {
       }
       this.entryMemos[key] = Array.from(byCid.values()).sort((a, b) => a.cid - b.cid);
     }
-    if (updated) await this.save();
+    if (toPersist.length) await this.putMany(this.storeNames().entryMemos, toPersist);
     return updated;
   }
 
@@ -328,7 +429,7 @@ export class IndexedDbStore implements StorageAdapter {
    */
   async clearEntryMemos(chainId: number): Promise<void> {
     delete this.entryMemos[String(chainId)];
-    await this.save();
+    await this.deleteAllByIndex(this.storeNames().entryMemos, 'chainId', chainId);
   }
 
   /**
@@ -337,10 +438,12 @@ export class IndexedDbStore implements StorageAdapter {
   async upsertEntryNullifiers(nullifiers: EntryNullifierRecord[]): Promise<number> {
     let updated = 0;
     const grouped = new Map<number, EntryNullifierRecord[]>();
+    const toPersist: EntryNullifierRecord[] = [];
     for (const row of nullifiers) {
       const list = grouped.get(row.chainId) ?? [];
       list.push(row);
       grouped.set(row.chainId, list);
+      toPersist.push({ ...row });
     }
     for (const [chainId, list] of grouped.entries()) {
       const key = String(chainId);
@@ -358,7 +461,7 @@ export class IndexedDbStore implements StorageAdapter {
       }
       this.entryNullifiers[key] = Array.from(byNid.values()).sort((a, b) => a.nid - b.nid);
     }
-    if (updated) await this.save();
+    if (toPersist.length) await this.putMany(this.storeNames().entryNullifiers, toPersist);
     return updated;
   }
 
@@ -377,7 +480,7 @@ export class IndexedDbStore implements StorageAdapter {
    */
   async clearEntryNullifiers(chainId: number): Promise<void> {
     delete this.entryNullifiers[String(chainId)];
-    await this.save();
+    await this.deleteAllByIndex(this.storeNames().entryNullifiers, 'chainId', chainId);
   }
 
   /**
@@ -431,7 +534,7 @@ export class IndexedDbStore implements StorageAdapter {
       next++;
     }
     this.merkleLeaves[key] = existing;
-    await this.save();
+    await this.putMany(this.storeNames().merkleLeaves, fresh.map((row) => ({ ...row, chainId })));
   }
 
   /**
@@ -439,7 +542,7 @@ export class IndexedDbStore implements StorageAdapter {
    */
   async clearMerkleLeaves(chainId: number): Promise<void> {
     delete this.merkleLeaves[String(chainId)];
-    await this.save();
+    await this.deleteAllByIndex(this.storeNames().merkleLeaves, 'chainId', chainId);
   }
 
   /**
@@ -455,19 +558,22 @@ export class IndexedDbStore implements StorageAdapter {
    */
   async setSyncCursor(chainId: number, cursor: SyncCursor): Promise<void> {
     this.cursors.set(chainId, { ...cursor });
-    await this.save();
+    await this.putMany(this.storeNames().cursors, [{ walletId: this.walletKey(), chainId, ...cursor }]);
   }
 
   /**
    * Upsert UTXOs and persist.
    */
   async upsertUtxos(utxos: UtxoRecord[]): Promise<void> {
+    const rows: UtxoRow[] = [];
     for (const utxo of utxos) {
       const key = `${utxo.chainId}:${utxo.commitment}`;
       const prev = this.utxos.get(key);
-      this.utxos.set(key, { ...utxo, isSpent: prev?.isSpent ?? utxo.isSpent });
+      const merged = { ...utxo, isSpent: prev?.isSpent ?? utxo.isSpent };
+      this.utxos.set(key, merged);
+      rows.push({ walletId: this.walletKey(), ...merged });
     }
-    await this.save();
+    await this.putMany(this.storeNames().utxos, rows);
   }
 
   /**
@@ -485,15 +591,18 @@ export class IndexedDbStore implements StorageAdapter {
   async markSpent(input: { chainId: number; nullifiers: Hex[] }): Promise<number> {
     const wanted = new Set(input.nullifiers.map((nf) => nf.toLowerCase()));
     let updated = 0;
+    const rows: UtxoRow[] = [];
     for (const [key, utxo] of this.utxos.entries()) {
       if (utxo.chainId !== input.chainId) continue;
       if (!wanted.has(utxo.nullifier.toLowerCase())) continue;
       if (!utxo.isSpent) {
-        this.utxos.set(key, { ...utxo, isSpent: true });
+        const merged = { ...utxo, isSpent: true };
+        this.utxos.set(key, merged);
+        rows.push({ walletId: this.walletKey(), ...merged });
         updated++;
       }
     }
-    if (updated) await this.save();
+    if (rows.length) await this.putMany(this.storeNames().utxos, rows);
     return updated;
   }
 
@@ -511,7 +620,7 @@ export class IndexedDbStore implements StorageAdapter {
     };
     this.operations.unshift(created);
     this.pruneOperations();
-    void this.save().catch(() => undefined);
+    void this.putMany(this.storeNames().operations, [{ walletId: this.walletKey(), ...created }]);
     return created;
   }
 
@@ -522,7 +631,8 @@ export class IndexedDbStore implements StorageAdapter {
     const idx = this.operations.findIndex((op) => op.id === id);
     if (idx === -1) return;
     this.operations[idx] = { ...this.operations[idx]!, ...patch };
-    void this.save().catch(() => undefined);
+    const updated = this.operations[idx]!;
+    void this.putMany(this.storeNames().operations, [{ walletId: this.walletKey(), ...updated }]);
   }
 
   /**
@@ -532,7 +642,7 @@ export class IndexedDbStore implements StorageAdapter {
     const idx = this.operations.findIndex((op) => op.id === id);
     if (idx === -1) return false;
     this.operations.splice(idx, 1);
-    void this.save().catch(() => undefined);
+    void this.deleteByKeys(this.storeNames().operations, [[this.walletKey(), id]]);
     return true;
   }
 
@@ -541,7 +651,7 @@ export class IndexedDbStore implements StorageAdapter {
    */
   clearOperations(): void {
     this.operations = [];
-    void this.save().catch(() => undefined);
+    void this.deleteAllByIndex(this.storeNames().operations, 'walletId', this.walletKey());
   }
 
   /**
@@ -550,7 +660,12 @@ export class IndexedDbStore implements StorageAdapter {
   pruneOperations(options?: { max?: number }): number {
     const limit = Math.max(0, Math.floor(options?.max ?? this.maxOperations));
     const before = this.operations.length;
+    const removed = this.operations.slice(limit);
     this.operations = this.operations.slice(0, limit);
+    if (removed.length) {
+      const keys = removed.map((op) => [this.walletKey(), op.id] as IDBValidKey);
+      void this.deleteByKeys(this.storeNames().operations, keys);
+    }
     return before - this.operations.length;
   }
 
