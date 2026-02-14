@@ -102,6 +102,7 @@ function createFakeIndexedDb() {
               }
               const entry = entries[idx]!;
               req.result = {
+                value: entry.row,
                 delete: () => meta.data.delete(entry.primaryKey),
                 continue: () => {
                   idx += 1;

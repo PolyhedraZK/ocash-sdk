@@ -13,14 +13,14 @@ import type {
 } from '../types';
 import { appendFile, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { hydrateWalletState, serializeWalletState } from './persistedWalletState';
-import type { ListOperationsQuery, OperationDetailFor, OperationType, StoredOperation } from './operationTypes';
-import { newOperationId } from './operationTypes';
-import type { PersistedSharedState, PersistedStoreState } from './persisted';
-import { applyOperationsQuery } from './operationsQuery';
-import { applyEntryMemoQuery } from './entryMemoQuery';
-import { applyEntryNullifierQuery } from './entryNullifierQuery';
-import { applyUtxoQuery } from './utxoQuery';
+import { hydrateWalletState, serializeWalletState } from './internal/persistedWalletState';
+import type { ListOperationsQuery, OperationDetailFor, OperationType, StoredOperation } from './internal/operationTypes';
+import { newOperationId } from './internal/operationTypes';
+import type { PersistedSharedState, PersistedStoreState } from './internal/persisted';
+import { applyOperationsQuery } from './internal/operationsQuery';
+import { applyEntryMemoQuery } from './internal/entryMemoQuery';
+import { applyEntryNullifierQuery } from './internal/entryNullifierQuery';
+import { applyUtxoQuery } from './internal/utxoQuery';
 
 export type FileStoreOptions = {
   baseDir: string;
@@ -52,6 +52,17 @@ export class FileStore implements StorageAdapter {
     this.maxOperations = max == null ? Number.POSITIVE_INFINITY : Math.max(0, Math.floor(max));
   }
 
+  private samePlainRecord(a: Record<string, unknown> | undefined, b: Record<string, unknown>): boolean {
+    if (!a) return false;
+    const aKeys = Object.keys(a);
+    const bKeys = Object.keys(b);
+    if (aKeys.length !== bKeys.length) return false;
+    for (const key of bKeys) {
+      if (a[key] !== b[key]) return false;
+    }
+    return true;
+  }
+
   /**
    * Initialize store for a wallet id and load from disk.
    */
@@ -64,7 +75,7 @@ export class FileStore implements StorageAdapter {
    * Flush pending state to disk.
    */
   async close() {
-    await this.save();
+    await this.saveChain;
   }
 
   /**
@@ -191,13 +202,13 @@ export class FileStore implements StorageAdapter {
     }
 
     const pruned = this.pruneOperations();
-    if (pruned) void this.save().catch(() => undefined);
+    if (pruned) void this.saveWallet().catch(() => undefined);
   }
 
   /**
-   * Persist current state to disk using a temp file swap.
+   * Persist wallet-scoped state to disk using a temp file swap.
    */
-  private async save() {
+  private async saveWallet() {
     this.saveChain = this.saveChain
       .catch(() => undefined)
       .then(async () => {
@@ -207,16 +218,28 @@ export class FileStore implements StorageAdapter {
           wallet,
           operations: this.operations,
         };
+        const walletTarget = this.filePath();
+        const walletTmp = `${walletTarget}.${process.pid}.${Date.now()}.tmp`;
+        await writeFile(walletTmp, JSON.stringify(walletState, null, 2), 'utf8');
+        await rename(walletTmp, walletTarget);
+      });
+    return this.saveChain;
+  }
+
+  /**
+   * Persist shared chain-scoped state to disk using a temp file swap.
+   */
+  private async saveShared() {
+    this.saveChain = this.saveChain
+      .catch(() => undefined)
+      .then(async () => {
+        await mkdir(this.options.baseDir, { recursive: true });
         const sharedState: PersistedSharedState = {
           merkleTrees: this.merkleTrees,
           merkleNodes: this.merkleNodes,
           entryMemos: this.entryMemos,
           entryNullifiers: this.entryNullifiers,
         };
-        const walletTarget = this.filePath();
-        const walletTmp = `${walletTarget}.${process.pid}.${Date.now()}.tmp`;
-        await writeFile(walletTmp, JSON.stringify(walletState, null, 2), 'utf8');
-        await rename(walletTmp, walletTarget);
 
         const sharedTarget = this.sharedFilePath();
         const sharedTmp = `${sharedTarget}.${process.pid}.${Date.now()}.tmp`;
@@ -245,7 +268,7 @@ export class FileStore implements StorageAdapter {
    */
   async setMerkleTree(chainId: number, tree: MerkleTreeState): Promise<void> {
     this.merkleTrees[String(chainId)] = { ...tree, chainId };
-    await this.save();
+    await this.saveShared();
   }
 
   /**
@@ -253,7 +276,7 @@ export class FileStore implements StorageAdapter {
    */
   async clearMerkleTree(chainId: number): Promise<void> {
     delete this.merkleTrees[String(chainId)];
-    await this.save();
+    await this.saveShared();
   }
 
   /**
@@ -274,7 +297,7 @@ export class FileStore implements StorageAdapter {
       existing[node.id] = { ...node, chainId };
     }
     this.merkleNodes[key] = existing;
-    await this.save();
+    await this.saveShared();
   }
 
   /**
@@ -282,14 +305,14 @@ export class FileStore implements StorageAdapter {
    */
   async clearMerkleNodes(chainId: number): Promise<void> {
     delete this.merkleNodes[String(chainId)];
-    await this.save();
+    await this.saveShared();
   }
 
   /**
    * Upsert entry memos (raw EntryService cache) and persist.
    */
-  async upsertEntryMemos(memos: EntryMemoRecord[]): Promise<number> {
-    let updated = 0;
+  async upsertEntryMemos(memos: EntryMemoRecord[]): Promise<void> {
+    let changed = false;
     const grouped = new Map<number, EntryMemoRecord[]>();
     for (const memo of memos) {
       if (!Number.isInteger(memo.cid) || memo.cid < 0) continue;
@@ -307,13 +330,16 @@ export class FileStore implements StorageAdapter {
         byCid.set(Math.floor(cid), row);
       }
       for (const row of list) {
-        if (!byCid.has(row.cid)) updated++;
-        byCid.set(row.cid, { ...row });
+        const next = { ...row };
+        const prev = byCid.get(row.cid);
+        if (!this.samePlainRecord(prev as Record<string, unknown> | undefined, next as Record<string, unknown>)) {
+          changed = true;
+          byCid.set(row.cid, next);
+        }
       }
       this.entryMemos[key] = Array.from(byCid.values()).sort((a, b) => a.cid - b.cid);
     }
-    if (updated) await this.save();
-    return updated;
+    if (changed) await this.saveShared();
   }
 
   /**
@@ -331,14 +357,14 @@ export class FileStore implements StorageAdapter {
    */
   async clearEntryMemos(chainId: number): Promise<void> {
     delete this.entryMemos[String(chainId)];
-    await this.save();
+    await this.saveShared();
   }
 
   /**
    * Upsert entry nullifiers (raw EntryService cache) and persist.
    */
-  async upsertEntryNullifiers(nullifiers: EntryNullifierRecord[]): Promise<number> {
-    let updated = 0;
+  async upsertEntryNullifiers(nullifiers: EntryNullifierRecord[]): Promise<void> {
+    let changed = false;
     const grouped = new Map<number, EntryNullifierRecord[]>();
     for (const row of nullifiers) {
       const list = grouped.get(row.chainId) ?? [];
@@ -356,13 +382,16 @@ export class FileStore implements StorageAdapter {
       }
       for (const row of list) {
         if (!Number.isInteger(row.nid) || row.nid < 0) continue;
-        if (!byNid.has(row.nid)) updated++;
-        byNid.set(row.nid, { ...row });
+        const next = { ...row };
+        const prev = byNid.get(row.nid);
+        if (!this.samePlainRecord(prev as Record<string, unknown> | undefined, next as Record<string, unknown>)) {
+          changed = true;
+          byNid.set(row.nid, next);
+        }
       }
       this.entryNullifiers[key] = Array.from(byNid.values()).sort((a, b) => a.nid - b.nid);
     }
-    if (updated) await this.save();
-    return updated;
+    if (changed) await this.saveShared();
   }
 
   /**
@@ -380,7 +409,7 @@ export class FileStore implements StorageAdapter {
    */
   async clearEntryNullifiers(chainId: number): Promise<void> {
     delete this.entryNullifiers[String(chainId)];
-    await this.save();
+    await this.saveShared();
   }
 
   /**
@@ -396,7 +425,7 @@ export class FileStore implements StorageAdapter {
    */
   async setSyncCursor(chainId: number, cursor: SyncCursor): Promise<void> {
     this.cursors.set(chainId, { ...cursor });
-    await this.save();
+    await this.saveWallet();
   }
 
   /**
@@ -408,7 +437,7 @@ export class FileStore implements StorageAdapter {
       const prev = this.utxos.get(key);
       this.utxos.set(key, { ...utxo, isSpent: prev?.isSpent ?? utxo.isSpent });
     }
-    await this.save();
+    await this.saveWallet();
   }
 
   /**
@@ -434,7 +463,7 @@ export class FileStore implements StorageAdapter {
         updated++;
       }
     }
-    if (updated) await this.save();
+    if (updated) await this.saveWallet();
     return updated;
   }
 
@@ -507,7 +536,7 @@ export class FileStore implements StorageAdapter {
     };
     this.operations.unshift(created);
     this.pruneOperations();
-    void this.save().catch(() => undefined);
+    void this.saveWallet().catch(() => undefined);
     return created;
   }
 
@@ -518,7 +547,7 @@ export class FileStore implements StorageAdapter {
     const idx = this.operations.findIndex((op) => op.id === id);
     if (idx === -1) return;
     this.operations[idx] = { ...this.operations[idx]!, ...patch };
-    void this.save().catch(() => undefined);
+    void this.saveWallet().catch(() => undefined);
   }
 
   /**
@@ -528,7 +557,7 @@ export class FileStore implements StorageAdapter {
     const idx = this.operations.findIndex((op) => op.id === id);
     if (idx === -1) return false;
     this.operations.splice(idx, 1);
-    void this.save().catch(() => undefined);
+    void this.saveWallet().catch(() => undefined);
     return true;
   }
 
@@ -537,7 +566,7 @@ export class FileStore implements StorageAdapter {
    */
   clearOperations(): void {
     this.operations = [];
-    void this.save().catch(() => undefined);
+    void this.saveWallet().catch(() => undefined);
   }
 
   /**

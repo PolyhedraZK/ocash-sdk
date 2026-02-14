@@ -1,4 +1,4 @@
-import type { ListUtxosQuery, ListUtxosResult, UtxoRecord } from '../types';
+import type { ListUtxosQuery, ListUtxosResult, UtxoRecord } from '../../types';
 
 /**
  * Normalize numeric inputs to finite integers.

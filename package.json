@@ -93,6 +93,14 @@
     "tweetnacl": "1.0.3",
     "viem": "^2.45.1"
   },
+  "peerDependencies": {
+    "better-sqlite3": "^10.0.0"
+  },
+  "peerDependenciesMeta": {
+    "better-sqlite3": {
+      "optional": true
+    }
+  },
   "sideEffects": false,
   "engines": {
     "node": ">=20.19.0",

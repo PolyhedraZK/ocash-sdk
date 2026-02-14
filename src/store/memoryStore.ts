@@ -12,12 +12,12 @@ import type {
   UtxoRecord,
   Hex,
 } from '../types';
-import type { ListOperationsQuery, OperationDetailFor, OperationType, StoredOperation } from './operationTypes';
-import { newOperationId } from './operationTypes';
-import { applyOperationsQuery } from './operationsQuery';
-import { applyEntryMemoQuery } from './entryMemoQuery';
-import { applyEntryNullifierQuery } from './entryNullifierQuery';
-import { applyUtxoQuery } from './utxoQuery';
+import type { ListOperationsQuery, OperationDetailFor, OperationType, StoredOperation } from './internal/operationTypes';
+import { newOperationId } from './internal/operationTypes';
+import { applyOperationsQuery } from './internal/operationsQuery';
+import { applyEntryMemoQuery } from './internal/entryMemoQuery';
+import { applyEntryNullifierQuery } from './internal/entryNullifierQuery';
+import { applyUtxoQuery } from './internal/utxoQuery';
 
 /**
  * In-memory StorageAdapter implementation.
@@ -52,6 +52,11 @@ export class MemoryStore implements StorageAdapter {
       this.cursors.clear();
       this.utxos.clear();
       this.operations = [];
+      this.merkleLeavesByChain.clear();
+      this.merkleTreesByChain.clear();
+      this.merkleNodesByChain.clear();
+      this.entryMemosByChain.clear();
+      this.entryNullifiersByChain.clear();
     }
     this.walletId = nextWalletId;
   }
@@ -233,8 +238,7 @@ export class MemoryStore implements StorageAdapter {
   /**
    * Upsert entry memos (raw EntryService cache).
    */
-  async upsertEntryMemos(memos: EntryMemoRecord[]): Promise<number> {
-    let updated = 0;
+  async upsertEntryMemos(memos: EntryMemoRecord[]): Promise<void> {
     for (const memo of memos) {
       if (!Number.isInteger(memo.cid) || memo.cid < 0) continue;
       let byCid = this.entryMemosByChain.get(memo.chainId);
@@ -242,11 +246,8 @@ export class MemoryStore implements StorageAdapter {
         byCid = new Map();
         this.entryMemosByChain.set(memo.chainId, byCid);
       }
-      const prev = byCid.get(memo.cid);
-      if (!prev) updated++;
       byCid.set(memo.cid, { ...memo });
     }
-    return updated;
   }
 
   /**
@@ -270,8 +271,7 @@ export class MemoryStore implements StorageAdapter {
   /**
    * Upsert entry nullifiers (raw EntryService cache).
    */
-  async upsertEntryNullifiers(nullifiers: EntryNullifierRecord[]): Promise<number> {
-    let updated = 0;
+  async upsertEntryNullifiers(nullifiers: EntryNullifierRecord[]): Promise<void> {
     for (const row of nullifiers) {
       if (!Number.isInteger(row.nid) || row.nid < 0) continue;
       let byNid = this.entryNullifiersByChain.get(row.chainId);
@@ -279,10 +279,8 @@ export class MemoryStore implements StorageAdapter {
         byNid = new Map();
         this.entryNullifiersByChain.set(row.chainId, byNid);
       }
-      if (!byNid.has(row.nid)) updated++;
       byNid.set(row.nid, { ...row });
     }
-    return updated;
   }
 
   /**

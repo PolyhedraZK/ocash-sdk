@@ -50,7 +50,9 @@ export { calcTransferProofBinding, calcWithdrawProofBinding } from './utils/ocas
 export { App_ABI } from './abi/app';
 export { MemoryStore } from './store/memoryStore';
 export { ETH_MAINNET, BSC_MAINNET, BASE_MAINNET, SEPOLIA_TESTNET, BSC_TESTNET, MAINNET_CHAINS, TESTNET_CHAINS } from './deployments';
-export { KeyValueStore, RedisStore, SqliteStore, type KeyValueStoreOptions, type RedisStoreOptions, type SqliteStoreOptions, type KeyValueClient } from './store/keyValueStore';
+export { KeyValueStore, type KeyValueStoreOptions, type KeyValueClient } from './store/keyValueStore';
+export { RedisStore, type RedisStoreOptions } from './store/redisStore';
+export { SqliteStore, type SqliteStoreOptions } from './store/sqliteStore';
 export {
   type StoredOperation,
   type OperationStatus,
@@ -63,7 +65,7 @@ export {
   type DepositOperationDetail,
   type TransferOperationDetail,
   type WithdrawOperationDetail,
-} from './store/operationTypes';
+} from './store/internal/operationTypes';
 
 import type { AssetsApi, CommitmentData, Hex, OCashSdk, OCashSdkConfig, SdkEvent, StorageAdapter } from './types';
 import { defaultAssetsOverrideMainnet } from './assets/defaultAssetsOverride';

@@ -1,4 +1,4 @@
-import type { EntryMemoRecord, ListEntryMemosQuery, ListEntryMemosResult } from '../types';
+import type { EntryMemoRecord, ListEntryMemosQuery, ListEntryMemosResult } from '../../types';
 
 /**
  * Normalize numeric inputs to finite integers.

@@ -17,7 +17,14 @@ describe('KeyValueStore', () => {
     await store.init({ walletId: 'wallet_1' });
     await store.init();
 
-    expect(keys).toEqual(['ocash:sdk:store:wallet_1', 'ocash:sdk:store:wallet_1']);
+    expect(keys).toEqual([
+      'ocash:sdk:store:wallet_1:wallet:meta:cursorChains',
+      'ocash:sdk:store:wallet_1:wallet:meta:utxoRefs',
+      'ocash:sdk:store:wallet_1:wallet:meta:operationIds',
+      'ocash:sdk:store:wallet_1:wallet:meta:cursorChains',
+      'ocash:sdk:store:wallet_1:wallet:meta:utxoRefs',
+      'ocash:sdk:store:wallet_1:wallet:meta:operationIds',
+    ]);
   });
 
   it('persists wallet state and operations via KeyValueClient', async () => {
@@ -113,9 +120,130 @@ describe('KeyValueStore', () => {
 
     await closePromise;
 
-    const raw = db.get('ocash:sdk:store:wallet_serial');
+    const raw = db.get(`ocash:sdk:store:wallet_serial:wallet:operation:${op.id}`);
     expect(raw).toBeTruthy();
     const parsed = JSON.parse(raw!);
-    expect(parsed.operations[0]).toMatchObject({ id: op.id, status: 'confirmed', txHash: '0xaaa' });
+    expect(parsed).toMatchObject({ id: op.id, status: 'confirmed', txHash: '0xaaa' });
+  });
+
+  it('writes wallet records incrementally instead of full-wallet blobs', async () => {
+    const db = new Map<string, string>();
+    const writes: string[] = [];
+    const client = {
+      get: async (key: string) => db.get(key) ?? null,
+      set: async (key: string, value: string) => {
+        writes.push(key);
+        db.set(key, value);
+      },
+    };
+
+    const store = new KeyValueStore({ client });
+    await store.init({ walletId: 'wallet_inc' });
+
+    writes.length = 0;
+    await store.setSyncCursor(1, { memo: 1, nullifier: 2, merkle: 3 });
+    expect(writes).toContain('ocash:sdk:store:wallet_inc:wallet:cursor:1');
+    expect(writes).toContain('ocash:sdk:store:wallet_inc:wallet:meta:cursorChains');
+    expect(writes.some((k) => k.includes(':wallet:meta:utxoRefs'))).toBe(false);
+    expect(writes.some((k) => k.includes(':wallet:meta:operationIds'))).toBe(false);
+
+    writes.length = 0;
+    await store.upsertUtxos([
+      {
+        chainId: 1,
+        assetId: 'T',
+        amount: 10n,
+        commitment: '0x01',
+        nullifier: '0x02',
+        mkIndex: 1,
+        isFrozen: false,
+        isSpent: false,
+      },
+    ] as any);
+    expect(writes).toContain('ocash:sdk:store:wallet_inc:wallet:utxo:1:0x01');
+    expect(writes).toContain('ocash:sdk:store:wallet_inc:wallet:meta:utxoRefs');
+    expect(writes.some((k) => k.endsWith(':meta:operationIds'))).toBe(false);
+
+    writes.length = 0;
+    await store.upsertUtxos([
+      {
+        chainId: 1,
+        assetId: 'T',
+        amount: 11n,
+        commitment: '0x01',
+        nullifier: '0x02',
+        mkIndex: 1,
+        isFrozen: false,
+        isSpent: false,
+      },
+    ] as any);
+    expect(writes).toContain('ocash:sdk:store:wallet_inc:wallet:utxo:1:0x01');
+    expect(writes.some((k) => k.endsWith(':meta:utxoRefs'))).toBe(false);
+  });
+
+  it('writes shared records incrementally per chain/id', async () => {
+    const db = new Map<string, string>();
+    const writes: string[] = [];
+    const client = {
+      get: async (key: string) => db.get(key) ?? null,
+      set: async (key: string, value: string) => {
+        writes.push(key);
+        db.set(key, value);
+      },
+    };
+
+    const store = new KeyValueStore({ client });
+    await store.init({ walletId: 'wallet_shared_inc' });
+
+    writes.length = 0;
+    await store.upsertEntryMemos?.([{ chainId: 7, cid: 0, commitment: '0x01', memo: '0x02' } as any]);
+    expect(writes).toContain('ocash:sdk:store:shared:entryMemos:7:0');
+    expect(writes).toContain('ocash:sdk:store:shared:entryMemos:7:meta');
+
+    writes.length = 0;
+    await store.upsertEntryMemos?.([{ chainId: 7, cid: 0, commitment: '0x01', memo: '0x03' } as any]);
+    expect(writes).toContain('ocash:sdk:store:shared:entryMemos:7:0');
+    expect(writes.some((k) => k.endsWith(':shared:entryMemos:7:meta'))).toBe(false);
+  });
+
+  it('loads wallet data on demand (meta first, records later)', async () => {
+    const db = new Map<string, string>();
+    db.set('ocash:sdk:store:wallet_lazy:wallet:meta:utxoRefs', JSON.stringify(['1:0xabc']));
+    db.set(
+      'ocash:sdk:store:wallet_lazy:wallet:utxo:1:0xabc',
+      JSON.stringify({
+        chainId: 1,
+        assetId: 'T',
+        amount: '5',
+        commitment: '0xabc',
+        nullifier: '0xdef',
+        mkIndex: 1,
+        isFrozen: false,
+        isSpent: false,
+      }),
+    );
+
+    const gets: string[] = [];
+    const client = {
+      get: async (key: string) => {
+        gets.push(key);
+        return db.get(key) ?? null;
+      },
+      set: async (key: string, value: string) => {
+        db.set(key, value);
+      },
+    };
+
+    const store = new KeyValueStore({ client });
+    await store.init({ walletId: 'wallet_lazy' });
+    expect(gets).toEqual([
+      'ocash:sdk:store:wallet_lazy:wallet:meta:cursorChains',
+      'ocash:sdk:store:wallet_lazy:wallet:meta:utxoRefs',
+      'ocash:sdk:store:wallet_lazy:wallet:meta:operationIds',
+    ]);
+
+    gets.length = 0;
+    await store.listUtxos({ chainId: 1 });
+    expect(gets).toContain('ocash:sdk:store:wallet_lazy:wallet:utxo:1:0xabc');
   });
 });

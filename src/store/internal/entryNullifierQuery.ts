@@ -1,4 +1,4 @@
-import type { EntryNullifierRecord, ListEntryNullifiersQuery, ListEntryNullifiersResult } from '../types';
+import type { EntryNullifierRecord, ListEntryNullifiersQuery, ListEntryNullifiersResult } from '../../types';
 
 /**
  * Normalize numeric inputs to finite integers.

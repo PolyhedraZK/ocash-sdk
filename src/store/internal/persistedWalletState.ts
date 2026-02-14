@@ -1,4 +1,4 @@
-import type { SyncCursor, UtxoRecord } from '../types';
+import type { SyncCursor, UtxoRecord } from '../../types';
 
 export type PersistedUtxoRecord = Omit<UtxoRecord, 'amount'> & { amount: string };
 

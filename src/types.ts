@@ -1,6 +1,6 @@
 import type { Address, PublicClient } from 'viem';
-import type { ListOperationsQuery, OperationCreateInput, OperationDetailFor, OperationType, StoredOperation } from './store/operationTypes';
-export type { ListOperationsQuery, OperationCreateInput, OperationDetailFor, OperationType, StoredOperation } from './store/operationTypes';
+import type { ListOperationsQuery, OperationCreateInput, OperationDetailFor, OperationType, StoredOperation } from './store/internal/operationTypes';
+export type { ListOperationsQuery, OperationCreateInput, OperationDetailFor, OperationType, StoredOperation } from './store/internal/operationTypes';
 
 /** Hex-encoded bytes with 0x prefix. */
 export type Hex = `0x${string}`;
@@ -603,7 +603,7 @@ export interface StorageAdapter {
    * Optional entry memo persistence (raw EntryService payloads).
    * Useful for debugging, rebuilds, and app-like local caches.
    */
-  upsertEntryMemos?(memos: EntryMemoRecord[]): Promise<number> | number;
+  upsertEntryMemos?(memos: EntryMemoRecord[]): Promise<void> | void;
   listEntryMemos?(query: ListEntryMemosQuery): Promise<ListEntryMemosResult>;
   clearEntryMemos?(chainId: number): Promise<void> | void;
 
@@ -611,7 +611,7 @@ export interface StorageAdapter {
    * Optional entry nullifier persistence (raw EntryService payloads).
    * Useful for debugging and app-like local caches.
    */
-  upsertEntryNullifiers?(nullifiers: EntryNullifierRecord[]): Promise<number> | number;
+  upsertEntryNullifiers?(nullifiers: EntryNullifierRecord[]): Promise<void> | void;
   listEntryNullifiers?(query: ListEntryNullifiersQuery): Promise<ListEntryNullifiersResult>;
   clearEntryNullifiers?(chainId: number): Promise<void> | void;
 

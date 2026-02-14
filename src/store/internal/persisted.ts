@@ -1,4 +1,4 @@
-import type { EntryMemoRecord, EntryNullifierRecord, Hex, MerkleNodeRecord, MerkleTreeState } from '../types';
+import type { EntryMemoRecord, EntryNullifierRecord, Hex, MerkleNodeRecord, MerkleTreeState } from '../../types';
 import type { PersistedWalletState } from './persistedWalletState';
 import type { StoredOperation } from './operationTypes';
 
