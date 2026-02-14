@@ -43,4 +43,3 @@ export function getZeroHash(level: number): `0x${string}` {
 
   return zeroHashes[level] || zeroHashes[0]!;
 }
-

@@ -1,12 +1,18 @@
-import type { EntryNullifierRecord, ListEntryNullifiersQuery, ListEntryNullifiersResult } from '../types';
+import type { EntryMemoRecord, ListEntryMemosQuery, ListEntryMemosResult } from '../../types';
 
+/**
+ * Normalize numeric inputs to finite integers.
+ */
 function normalizeNumber(value: number | undefined) {
   if (value == null) return undefined;
   const num = Math.floor(value);
   return Number.isFinite(num) ? num : undefined;
 }
 
-function compareCreatedAt(a: EntryNullifierRecord, b: EntryNullifierRecord, factor: number) {
+/**
+ * Compare createdAt fields with optional presence handling.
+ */
+function compareCreatedAt(a: EntryMemoRecord, b: EntryMemoRecord, factor: number) {
   const aHas = a.createdAt != null;
   const bHas = b.createdAt != null;
   if (aHas !== bHas) return aHas ? -1 : 1;
@@ -15,19 +21,22 @@ function compareCreatedAt(a: EntryNullifierRecord, b: EntryNullifierRecord, fact
   return diff === 0 ? 0 : diff * factor;
 }
 
-export function applyEntryNullifierQuery(rows: EntryNullifierRecord[], query: ListEntryNullifiersQuery): ListEntryNullifiersResult {
-  const orderBy = query.orderBy ?? 'nid';
+/**
+ * Apply filters/sort/pagination for entry memo rows.
+ */
+export function applyEntryMemoQuery(rows: EntryMemoRecord[], query: ListEntryMemosQuery): ListEntryMemosResult {
+  const orderBy = query.orderBy ?? 'cid';
   const order = query.order ?? 'asc';
   const factor = order === 'desc' ? -1 : 1;
 
-  const nidFrom = normalizeNumber(query.nidFrom);
-  const nidTo = normalizeNumber(query.nidTo);
+  const cidFrom = normalizeNumber(query.cidFrom);
+  const cidTo = normalizeNumber(query.cidTo);
   const createdAtFrom = normalizeNumber(query.createdAtFrom);
   const createdAtTo = normalizeNumber(query.createdAtTo);
 
   let filtered = rows;
-  if (nidFrom != null) filtered = filtered.filter((row) => row.nid >= nidFrom);
-  if (nidTo != null) filtered = filtered.filter((row) => row.nid <= nidTo);
+  if (cidFrom != null) filtered = filtered.filter((row) => row.cid >= cidFrom);
+  if (cidTo != null) filtered = filtered.filter((row) => row.cid <= cidTo);
   if (createdAtFrom != null) filtered = filtered.filter((row) => row.createdAt != null && row.createdAt >= createdAtFrom);
   if (createdAtTo != null) filtered = filtered.filter((row) => row.createdAt != null && row.createdAt <= createdAtTo);
 
@@ -35,11 +44,11 @@ export function applyEntryNullifierQuery(rows: EntryNullifierRecord[], query: Li
     if (orderBy === 'createdAt') {
       const createdDiff = compareCreatedAt(a, b, factor);
       if (createdDiff !== 0) return createdDiff;
-      const nidDiff = a.nid - b.nid;
-      return nidDiff === 0 ? 0 : nidDiff * factor;
+      const cidDiff = a.cid - b.cid;
+      return cidDiff === 0 ? 0 : cidDiff * factor;
     }
-    const nidDiff = a.nid - b.nid;
-    if (nidDiff !== 0) return nidDiff * factor;
+    const cidDiff = a.cid - b.cid;
+    if (cidDiff !== 0) return cidDiff * factor;
     const createdDiff = compareCreatedAt(a, b, factor);
     return createdDiff;
   });

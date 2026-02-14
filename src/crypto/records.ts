@@ -10,6 +10,9 @@ import type { CommitmentData } from '../types';
 
 export interface CommitmentDataJSON extends AppRecordOpening<string> {}
 
+/**
+ * Normalize a generic record opening into CommitmentData (bigint fields).
+ */
 export const toCommitmentData = (ro: AppRecordOpening<number | bigint | string>): CommitmentData => ({
   asset_id: BigInt(ro.asset_id),
   asset_amount: BigInt(ro.asset_amount),
@@ -20,6 +23,9 @@ export const toCommitmentData = (ro: AppRecordOpening<number | bigint | string>)
   is_frozen: Boolean(ro.is_frozen),
 });
 
+/**
+ * Convert CommitmentData back into a JSON-friendly record opening.
+ */
 export const toRecordOpeningJson = (ro: CommitmentData): AppRecordOpening<string> => ({
   asset_id: ro.asset_id.toString(),
   asset_amount: ro.asset_amount.toString(),

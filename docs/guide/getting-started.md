@@ -17,11 +17,11 @@ yarn add @ocash/sdk
 
 The SDK provides three entry points for different environments:
 
-| Import | Environment | Storage Adapter |
-|--------|-------------|-----------------|
-| `@ocash/sdk` | Universal | `MemoryStore` (default) |
-| `@ocash/sdk/browser` | Browser | `IndexedDbStore` |
-| `@ocash/sdk/node` | Node.js | `FileStore` |
+| Import               | Environment | Storage Adapter         |
+| -------------------- | ----------- | ----------------------- |
+| `@ocash/sdk`         | Universal   | `MemoryStore` (default) |
+| `@ocash/sdk/browser` | Browser     | `IndexedDbStore`        |
+| `@ocash/sdk/node`    | Node.js     | `FileStore`             |
 
 ```ts
 // Universal (works everywhere)
@@ -64,9 +64,7 @@ await sdk.wallet.open({ seed: 'your-secret-seed-phrase' });
 await sdk.sync.syncOnce();
 
 // 5. Check balance
-const balance = await sdk.wallet.getBalance({
-  chainId: 11155111,
-});
+const balance = await sdk.wallet.getBalance({ chainId, assetId });
 console.log('Balance:', balance);
 
 // 6. Clean up

@@ -21,6 +21,9 @@ export const Poseidon2Domain = {
 type DomainValue = (typeof Poseidon2Domain)[keyof typeof Poseidon2Domain];
 type HashInput = bigint | number | string;
 
+/**
+ * Poseidon2 hash helper with domain separation compatible with Solidity implementation.
+ */
 export class Poseidon2 {
   // BN254 scalar field prime
   private static readonly P = BN254_FIELD_MODULUS;
@@ -164,11 +167,7 @@ export class Poseidon2 {
    * If a seed is provided it is used as the left input for the first element, allowing
    * constructions such as array hashes that start from zero.
    */
-  public static hashSequenceWithDomain(
-    inputs: HashInput[],
-    domain: HashInput | DomainValue,
-    seed?: HashInput,
-  ): bigint {
+  public static hashSequenceWithDomain(inputs: HashInput[], domain: HashInput | DomainValue, seed?: HashInput): bigint {
     if (inputs.length === 0) {
       if (seed === undefined) {
         throw new Error('Poseidon2.hashSequenceWithDomain requires at least one input or a seed.');
@@ -200,7 +199,7 @@ export class Poseidon2 {
   /**
    * Hash two inputs and return a 0x-prefixed hex string.
    */
-  public static hashToHex(a: HashInput, b: HashInput, domain: HashInput | DomainValue = Poseidon2Domain.None): string {
+  public static hashToHex(a: HashInput, b: HashInput, domain: HashInput | DomainValue = Poseidon2Domain.None): `0x${string}` {
     const result = this.hashInputs(a, b, domain);
     return `0x${result.toString(16).padStart(64, '0')}`;
   }

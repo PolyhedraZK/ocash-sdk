@@ -52,7 +52,7 @@ export function TransferPanel() {
       .estimate({ chainId: currentChain.chainId, assetId: currentToken.id, action: 'transfer', amount })
       .then((estimate) => {
         if (!active || estimate.action !== 'transfer') return;
-        setTransferEstimate(estimate as PlannerEstimateTransferResult);
+        setTransferEstimate(estimate);
       })
       .catch((error) => {
         if (!active) return;

@@ -10,6 +10,9 @@ const TEMP_ARRAY_SIZE_DEFAULT = 32;
 const SUBTREE_SIZE = 32;
 const SUBTREE_DEPTH = 5;
 
+/**
+ * Convert bigint-like values to decimal string without throwing.
+ */
 const toDecString = (value: string | bigint) => {
   try {
     return typeof value === 'bigint' ? value.toString() : BigInt(value).toString();
@@ -18,6 +21,10 @@ const toDecString = (value: string | bigint) => {
   }
 };
 
+/**
+ * Merkle engine supports remote, local, and hybrid proof generation.
+ * Local mode relies on contiguous memo ingestion to build tree state.
+ */
 export class MerkleEngine implements MerkleApi {
   private readonly mode: 'remote' | 'local' | 'hybrid';
   private readonly treeDepth: number;
@@ -30,29 +37,23 @@ export class MerkleEngine implements MerkleApi {
     private readonly getChain: (chainId: number) => { merkleProofUrl?: string },
     private readonly bridge: ProofBridge,
     options?: { mode?: 'remote' | 'local' | 'hybrid'; treeDepth?: number },
-    private readonly storage?: Pick<
-      StorageAdapter,
-      | 'getMerkleLeaves'
-      | 'appendMerkleLeaves'
-      | 'clearMerkleLeaves'
-      | 'getMerkleLeaf'
-      | 'getMerkleNode'
-      | 'upsertMerkleNodes'
-      | 'clearMerkleNodes'
-      | 'getMerkleTree'
-      | 'setMerkleTree'
-      | 'clearMerkleTree'
-    >,
+    private readonly storage?: StorageAdapter,
   ) {
     this.mode = options?.mode ?? 'hybrid';
     this.treeDepth = Math.max(1, Math.floor(options?.treeDepth ?? TREE_DEPTH_DEFAULT));
   }
 
+  /**
+   * Compute the current merkle root index from total elements.
+   */
   currentMerkleRootIndex(totalElements: number, tempArraySize: number = TEMP_ARRAY_SIZE_DEFAULT) {
     if (totalElements <= tempArraySize) return 0;
     return Math.floor((totalElements - 1) / tempArraySize);
   }
 
+  /**
+   * Get or initialize the pending leaf buffer for a chain.
+   */
   private ensurePendingLeaves(chainId: number) {
     let pending = this.pendingLeavesByChain.get(chainId);
     if (!pending) {
@@ -62,6 +63,9 @@ export class MerkleEngine implements MerkleApi {
     return pending;
   }
 
+  /**
+   * Get or initialize chain-level merkle state.
+   */
   private ensureChainState(chainId: number) {
     let state = this.chainStateByChain.get(chainId);
     if (!state) {
@@ -71,10 +75,17 @@ export class MerkleEngine implements MerkleApi {
     return state;
   }
 
+  /**
+   * Poseidon2 merkle hash for a left/right pair.
+   */
   private static hashPair(left: Hex, right: Hex): Hex {
-    return Poseidon2.hashToHex(BigInt(left), BigInt(right), Poseidon2Domain.Merkle) as Hex;
+    return Poseidon2.hashToHex(BigInt(left), BigInt(right), Poseidon2Domain.Merkle);
   }
 
+  /**
+   * Build a fixed-depth subtree from 32 contiguous leaves.
+   * Returns the subtree root and all intermediate nodes for storage.
+   */
   private static buildSubtree(leafCommitments: Hex[], baseIndex: number): { subtreeRoot: Hex; nodesToStore: MerkleNodeRecord[] } {
     if (leafCommitments.length !== SUBTREE_SIZE) {
       throw new SdkError('MERKLE', 'Subtree must have exactly 32 leaf nodes', { got: leafCommitments.length });
@@ -105,11 +116,17 @@ export class MerkleEngine implements MerkleApi {
     return { subtreeRoot: currentLevel[0]!, nodesToStore };
   }
 
+  /**
+   * Fetch a node hash from storage if available.
+   */
   private async getNodeHash(chainId: number, id: string): Promise<Hex | undefined> {
     const node = await this.storage?.getMerkleNode?.(chainId, id);
     return node?.hash;
   }
 
+  /**
+   * Merge a completed subtree root into the main tree, updating frontier nodes.
+   */
   private async mergeSubtreeToMainTree(input: { chainId: number; subtreeRoot: Hex; newTotalElements: number }): Promise<{ finalRoot: Hex; nodesToStore: MerkleNodeRecord[] }> {
     let currentValue = input.subtreeRoot;
     let frontierUpdated = false;
@@ -148,6 +165,9 @@ export class MerkleEngine implements MerkleApi {
     return { finalRoot: currentValue, nodesToStore };
   }
 
+  /**
+   * Convert on-chain totalElements to the count of fully merged elements.
+   */
   private static totalElementsInTree(totalElements: bigint, tempArraySize: number = TEMP_ARRAY_SIZE_DEFAULT): number {
     if (tempArraySize <= 0) throw new SdkError('MERKLE', 'tempArraySize must be greater than zero', { tempArraySize });
     if (totalElements <= 0n) return 0;
@@ -155,6 +175,9 @@ export class MerkleEngine implements MerkleApi {
     return Number(((totalElements - 1n) / size) * size);
   }
 
+  /**
+   * Hydrate local merkle state from storage on first use.
+   */
   private async hydrateFromStorage(chainId: number) {
     if (this.mode === 'remote') return;
     if (this.hydratedChains.has(chainId)) return;
@@ -207,6 +230,9 @@ export class MerkleEngine implements MerkleApi {
     return task;
   }
 
+  /**
+   * Normalize unknown values to a 32-byte hex string.
+   */
   private static normalizeHex32(value: unknown, name: string): Hex {
     try {
       const bi = BigInt(value as any);
@@ -282,10 +308,16 @@ export class MerkleEngine implements MerkleApi {
     }
   }
 
+  /**
+   * Convenience wrapper to request a single proof.
+   */
   async getProofByCid(input: { chainId: number; cid: number; totalElements: bigint }): Promise<RemoteMerkleProofResponse> {
     return this.getProofByCids({ chainId: input.chainId, cids: [input.cid], totalElements: input.totalElements });
   }
 
+  /**
+   * Get merkle proofs for a set of cids using local/hybrid/remote logic.
+   */
   async getProofByCids(input: { chainId: number; cids: number[]; totalElements: bigint }): Promise<RemoteMerkleProofResponse> {
     const cids = [...input.cids];
     if (cids.length === 0) throw new SdkError('MERKLE', 'No cids provided', { chainId: input.chainId });
@@ -295,7 +327,7 @@ export class MerkleEngine implements MerkleApi {
       }
     }
 
-    const totalElements = typeof input.totalElements === 'bigint' ? input.totalElements : BigInt(input.totalElements as any);
+    const totalElements = typeof input.totalElements === 'bigint' ? input.totalElements : BigInt(input.totalElements);
     const contractTreeElements = MerkleEngine.totalElementsInTree(totalElements);
     const needsTreeProof = cids.filter((cid) => cid < contractTreeElements);
 
@@ -322,7 +354,7 @@ export class MerkleEngine implements MerkleApi {
             const proof = [];
             for (const cid of cids) {
               if (cid >= contractTreeElements) {
-                proof.push({ leaf_index: cid, path: new Array(this.treeDepth + 1).fill('0') as any });
+                proof.push({ leaf_index: cid, path: new Array(this.treeDepth + 1).fill('0') });
                 continue;
               }
               const leaf = await this.storage!.getMerkleLeaf!(input.chainId, cid);
@@ -365,7 +397,7 @@ export class MerkleEngine implements MerkleApi {
       // If nothing has been merged into the tree yet, the root is the depth-level zero hash.
       const root = contractTreeElements === 0 ? getZeroHash(this.treeDepth) : await this.fetchRemoteRootOnly(input.chainId);
       return {
-        proof: cids.map((cid) => ({ leaf_index: cid, path: new Array(this.treeDepth + 1).fill('0') as any })),
+        proof: cids.map((cid) => ({ leaf_index: cid, path: new Array(this.treeDepth + 1).fill('0') })),
         merkle_root: root,
         latest_cid: totalElements > 0n ? Number(totalElements - 1n) : -1,
       };
@@ -377,7 +409,7 @@ export class MerkleEngine implements MerkleApi {
       merkle_root: remote.merkle_root,
       latest_cid: remote.latest_cid,
       proof: cids.map((cid) => {
-        if (cid >= contractTreeElements) return { leaf_index: cid, path: new Array(this.treeDepth + 1).fill('0') as any };
+        if (cid >= contractTreeElements) return { leaf_index: cid, path: new Array(this.treeDepth + 1).fill('0') };
         const hit = remote.proof[remoteIdx++];
         if (!hit) throw new SdkError('MERKLE', 'Remote merkle proof entry missing', { chainId: input.chainId, cid });
         return hit;
@@ -385,11 +417,17 @@ export class MerkleEngine implements MerkleApi {
     };
   }
 
+  /**
+   * Fetch a remote merkle root (used when no proofs are needed).
+   */
   private async fetchRemoteRootOnly(chainId: number): Promise<Hex> {
     const remote = await this.fetchRemoteProofFromService({ chainId, cids: [0] });
     return MerkleEngine.normalizeHex32(remote.merkle_root, 'remote.merkle_root');
   }
 
+  /**
+   * Fetch proofs from the remote merkle service.
+   */
   private async fetchRemoteProofFromService(input: { chainId: number; cids: number[] }): Promise<RemoteMerkleProofResponse> {
     const chain = this.getChain(input.chainId);
     if (!chain.merkleProofUrl) {
@@ -399,6 +437,9 @@ export class MerkleEngine implements MerkleApi {
     return client.getProofByCids(input.cids);
   }
 
+  /**
+   * Build membership witnesses for provided UTXOs from a remote proof response.
+   */
   buildAccMemberWitnesses(input: { remote: RemoteMerkleProofResponse; utxos: Array<{ commitment: Hex; mkIndex: number }>; arrayHash: bigint; totalElements: bigint }): AccMemberWitness[] {
     return input.utxos.map((utxo, idx) => {
       const remoteProof = input.remote.proof[idx];
@@ -413,6 +454,9 @@ export class MerkleEngine implements MerkleApi {
     });
   }
 
+  /**
+   * Convert UTXOs into circuit input secrets, decrypting memos and padding if needed.
+   */
   async buildInputSecretsFromUtxos(input: {
     remote: RemoteMerkleProofResponse;
     utxos: Array<{ commitment: Hex; memo?: Hex; mkIndex: number }>;

@@ -4,22 +4,26 @@ import { CryptoToolkit } from '../crypto/cryptoToolkit';
 import { toCommitmentData } from '../crypto/records';
 import { CacheController } from './cache';
 import { SdkError } from '../errors';
-
-const arrayBufferToHex = (buffer: ArrayBuffer): string => {
-  const view = new Uint8Array(buffer);
-  return Array.from(view, (byte) => byte.toString(16).padStart(2, '0')).join('');
-};
+import { bytesToHex } from '@noble/hashes/utils';
 
 export interface WasmBridgeConfig {
+  /** Optional asset map used to override default runtime assets. */
   assetsOverride?: AssetsOverride;
+  /** Cache directory for downloaded assets when running outside the browser. */
   cacheDir?: string;
+  /** Force a runtime mode instead of auto-detection. */
   runtime?: 'auto' | 'browser' | 'node' | 'hybrid';
 }
 
+/** Read a value from the global namespace without crashing on missing keys. */
 const getGlobal = <T = any>(key: string): T | undefined => (globalThis as any)[key];
 
+/** Normalized asset source after resolving overrides and runtime rules. */
 type AssetSource = { kind: 'url'; url: string } | { kind: 'file'; filePath: string };
 
+/**
+ * Convert a file:// URL to a local filesystem path, normalizing Windows drive paths.
+ */
 const fileUrlToPathCompat = (url: string): string => {
   const u = new URL(url);
   if (u.protocol !== 'file:') {
@@ -31,6 +35,9 @@ const fileUrlToPathCompat = (url: string): string => {
   return pathname;
 };
 
+/**
+ * Universal proof bridge for browser/node/hybrid runtimes.
+ */
 export class UniversalWasmBridge implements ProofBridge {
   private goInstance: any | null = null;
   private initialized = false;
@@ -40,11 +47,19 @@ export class UniversalWasmBridge implements ProofBridge {
   private readonly runtime: 'browser' | 'node' | 'hybrid';
   private readonly textDecoder = new TextDecoder();
 
+  /**
+   * Create a WASM bridge that can run in browser, node, or hybrid environments.
+   * The runtime mode controls how assets are resolved and whether caching is enabled.
+   */
   constructor(private readonly config: WasmBridgeConfig = {}) {
     this.runtime = this.detectRuntime(config.runtime);
     this.cache = new CacheController({ baseDir: config.cacheDir, enable: this.runtime !== 'browser' });
   }
 
+  /**
+   * Determine the effective runtime mode.
+   * Preference order: explicit config, then browser globals, then Node globals, then browser.
+   */
   private detectRuntime(preferred?: OCashSdkConfig['runtime']): 'browser' | 'node' | 'hybrid' {
     if (preferred === 'browser') return 'browser';
     if (preferred === 'node') return 'node';
@@ -52,14 +67,22 @@ export class UniversalWasmBridge implements ProofBridge {
     if (typeof window !== 'undefined' && typeof window.document !== 'undefined') return 'browser';
     // Workers (no `window.document`) still behave like browsers.
     if (typeof globalThis.location !== 'undefined') return 'browser';
-    if (typeof process !== 'undefined' && Boolean((process as any)?.versions?.node)) return 'node';
+    if (typeof process !== 'undefined' && Boolean(process?.versions?.node)) return 'node';
     return 'browser';
   }
 
+  /**
+   * Create a stable cache key from a URL by stripping the scheme and normalizing
+   * non-filesystem characters. This avoids overly long or invalid filenames.
+   */
   private cacheKey(url: string) {
     return url.replace(/^[a-z]+:\/\//i, '').replace(/[^a-zA-Z0-9._-]/g, '_');
   }
 
+  /**
+   * Load a binary asset by filename using the configured overrides.
+   * Throws if the asset is missing because the runtime bridge never uses defaults.
+   */
   private async fetchBinary(filename: string): Promise<ArrayBuffer> {
     const override = this.config.assetsOverride?.[filename];
     if (!override) {
@@ -68,6 +91,9 @@ export class UniversalWasmBridge implements ProofBridge {
     return this.fetchOverride(filename, override);
   }
 
+  /**
+   * Resolve and load an override entry which can be a single source or sharded sources.
+   */
   private async fetchOverride(key: string, override: AssetOverrideEntry): Promise<ArrayBuffer> {
     if (typeof override === 'string') {
       return this.fetchSourceCached(key, await this.resolveAssetSource(override));
@@ -78,6 +104,10 @@ export class UniversalWasmBridge implements ProofBridge {
     throw new SdkError('ASSETS', 'Unknown asset override format', { key, overrideType: typeof override });
   }
 
+  /**
+   * Normalize an asset override into either a URL source or local file path.
+   * Browser runtime always resolves to URLs; Node resolves to filesystem paths.
+   */
   private async resolveAssetSource(pathOrUrl: string): Promise<AssetSource> {
     if (/^https?:\/\//i.test(pathOrUrl)) return { kind: 'url', url: pathOrUrl };
 
@@ -103,6 +133,10 @@ export class UniversalWasmBridge implements ProofBridge {
     };
   }
 
+  /**
+   * Fetch and cache a URL resource using the cache controller.
+   * Caching is disabled in browser runtime, but the cache controller handles that.
+   */
   private async fetchUrlCached(key: string, url: string): Promise<ArrayBuffer> {
     const cacheKey = `${key}/${this.cacheKey(url)}`;
     const cached = await this.cache.load(cacheKey);
@@ -116,6 +150,9 @@ export class UniversalWasmBridge implements ProofBridge {
     return buffer;
   }
 
+  /**
+   * Read a local file as an ArrayBuffer, converting the Node Buffer to a detached view.
+   */
   private async readLocalFile(filePath: string): Promise<ArrayBuffer> {
     try {
       const fs = await import('node:fs/promises');
@@ -126,11 +163,17 @@ export class UniversalWasmBridge implements ProofBridge {
     }
   }
 
+  /**
+   * Load a source and cache it when applicable. Local files bypass caching.
+   */
   private async fetchSourceCached(key: string, source: AssetSource): Promise<ArrayBuffer> {
     if (source.kind === 'file') return this.readLocalFile(source.filePath);
     return this.fetchUrlCached(key, source.url);
   }
 
+  /**
+   * Fetch a sharded asset, concatenating buffers in order into a single ArrayBuffer.
+   */
   private async fetchShards(key: string, paths: string[]): Promise<ArrayBuffer> {
     if (!paths.length) {
       throw new SdkError('ASSETS', 'Asset shards must include at least one path', { key });
@@ -147,11 +190,16 @@ export class UniversalWasmBridge implements ProofBridge {
     return merged.buffer;
   }
 
+  /** Load a binary asset and return its hex representation. */
   private async fetchHex(filename: string): Promise<string> {
     const buffer = await this.fetchBinary(filename);
-    return arrayBufferToHex(buffer);
+    return bytesToHex(new Uint8Array(buffer));
   }
 
+  /**
+   * Load a text asset (wasm_exec.js) with caching for URL sources.
+   * Local files are read directly without caching.
+   */
   private async fetchText(filename: string): Promise<string> {
     const override = this.config.assetsOverride?.[filename];
     if (!override) {
@@ -187,6 +235,9 @@ export class UniversalWasmBridge implements ProofBridge {
     return text;
   }
 
+  /**
+   * Ensure the Go WASM runtime is loaded on globalThis by evaluating wasm_exec.js.
+   */
   private async ensureGoRuntime() {
     if (typeof getGlobal('Go') === 'function') return;
     const scriptText = await this.fetchText('wasm_exec.js');
@@ -196,6 +247,10 @@ export class UniversalWasmBridge implements ProofBridge {
     (globalThis as any).Go = GoClass;
   }
 
+  /**
+   * Initialize the Go runtime and the core WASM module.
+   * This is idempotent and safe to call multiple times.
+   */
   async init(): Promise<void> {
     if (this.initialized) return;
     await this.ensureGoRuntime();
@@ -210,6 +265,10 @@ export class UniversalWasmBridge implements ProofBridge {
     this.initialized = true;
   }
 
+  /**
+   * Load the transfer circuit (r1cs + pk) and initialize the prover.
+   * If the prover already exists, it is treated as a successful init.
+   */
   async initTransfer(): Promise<void> {
     if (this.transferReady) return;
     await this.init();
@@ -223,6 +282,10 @@ export class UniversalWasmBridge implements ProofBridge {
     this.transferReady = true;
   }
 
+  /**
+   * Load the withdraw circuit (r1cs + pk) and initialize the prover.
+   * If the prover already exists, it is treated as a successful init.
+   */
   async initWithdraw(): Promise<void> {
     if (this.withdrawReady) return;
     await this.init();
@@ -236,6 +299,10 @@ export class UniversalWasmBridge implements ProofBridge {
     this.withdrawReady = true;
   }
 
+  /**
+   * Prove a transfer using the initialized transfer circuit.
+   * Mode 2 returns the proof as a JSON string from the Go WASM bridge.
+   */
   async proveTransfer(witness: string): Promise<string> {
     await this.initTransfer();
     const handler = getGlobal<(witness: string, mode: 1 | 2) => string>('proveTransfer');
@@ -245,6 +312,10 @@ export class UniversalWasmBridge implements ProofBridge {
     return handler(witness, 2);
   }
 
+  /**
+   * Prove a withdraw using the initialized withdraw circuit.
+   * Mode 2 returns the proof as a JSON string from the Go WASM bridge.
+   */
   async proveWithdraw(witness: string): Promise<string> {
     await this.initWithdraw();
     const handler = getGlobal<(witness: string, mode: 1 | 2) => string>('proveWithdraw');
@@ -254,22 +325,34 @@ export class UniversalWasmBridge implements ProofBridge {
     return handler(witness, 2);
   }
 
+  /** Create a memo from a record opening using the MemoKit helper. */
   createMemo(ro: CommitmentData) {
     return MemoKit.createMemo(ro);
   }
 
+  /** Decrypt a memo using the owner's secret key. */
   decryptMemo(secretKey: bigint, memo: `0x${string}`) {
     return MemoKit.decryptMemo(secretKey, memo);
   }
 
+  /**
+   * Compute a commitment from a record opening, returning hex or bigint.
+   */
   commitment(ro: CommitmentData, format: 'hex' | 'bigint' = 'hex') {
     return format === 'bigint' ? CryptoToolkit.commitment(ro, 'bigint') : CryptoToolkit.commitment(ro, 'hex');
   }
 
+  /**
+   * Compute a nullifier used to mark a UTXO as spent.
+   */
   nullifier(secretKey: bigint, commitment: `0x${string}`, freezerPk?: [bigint, bigint]) {
     return CryptoToolkit.nullifier(secretKey, commitment, freezerPk);
   }
 
+  /**
+   * Create a dummy record opening by calling into the Go WASM bridge.
+   * Used by tests and example flows where real inputs are not required.
+   */
   async createDummyRecordOpening(): Promise<CommitmentData> {
     await this.init();
     const handler = getGlobal<() => string>('createDummyRecordOpening');
@@ -283,6 +366,10 @@ export class UniversalWasmBridge implements ProofBridge {
     return toCommitmentData(response.record_opening);
   }
 
+  /**
+   * Create a dummy input secret (keypair + record opening + merkle witness).
+   * Converts nested numeric fields to BigInt for internal consistency.
+   */
   async createDummyInputSecret(): Promise<InputSecret> {
     await this.init();
     const handler = getGlobal<() => string>('createDummyInputSecret');

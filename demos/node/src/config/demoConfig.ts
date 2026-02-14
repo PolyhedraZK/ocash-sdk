@@ -1,4 +1,4 @@
-import { defaultAssetsOverride, SEPOLIA_TESTNET, type AssetsOverride, type ChainConfigInput } from '@ocash/sdk';
+import { defaultAssetsOverrideTestnet, SEPOLIA_TESTNET, type AssetsOverride, type ChainConfigInput } from '@ocash/sdk';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,16 +20,12 @@ const defaultConfig: DemoConfig = {
   storageDir: path.join(demoRoot, '.ocash-demo'),
   cacheDir: path.join(demoRoot, '.ocash-demo/cache'),
   chains: [SEPOLIA_TESTNET],
-  assetsOverride: undefined,
 };
 
 const isHexPrivKey = (value: unknown): value is `0x${string}` => typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value);
 
 export async function loadDemoConfig(options?: { configPath?: string | boolean }) {
-  const configPath =
-    typeof options?.configPath === 'string'
-      ? options.configPath
-      : path.join(demoRoot, 'ocash.config.json');
+  const configPath = typeof options?.configPath === 'string' ? options.configPath : path.join(demoRoot, 'ocash.config.json');
   let fromFile: Partial<DemoConfig> | undefined;
   try {
     const raw = await readFile(configPath, 'utf8');
@@ -41,12 +37,12 @@ export async function loadDemoConfig(options?: { configPath?: string | boolean }
   const config: DemoConfig = {
     ...defaultConfig,
     ...fromFile,
-    assetsOverride: fromFile?.assetsOverride ?? defaultAssetsOverride,
-    signerPrivateKey: isHexPrivKey((fromFile as any)?.signerPrivateKey) ? ((fromFile as any).signerPrivateKey as any) : undefined,
+    assetsOverride: fromFile?.assetsOverride ?? defaultAssetsOverrideTestnet,
+    signerPrivateKey: isHexPrivKey(fromFile?.signerPrivateKey) ? fromFile.signerPrivateKey : undefined,
   };
 
   if (!config.assetsOverride) {
-    config.assetsOverride = defaultAssetsOverride;
+    config.assetsOverride = defaultAssetsOverrideTestnet;
   }
   return config;
 }

@@ -2,7 +2,8 @@ import { MemoKit } from './memoKit';
 import type { CommitmentData, MemoDecryptRequest, MemoDecryptResult, MemoWorkerConfig } from '../types';
 import { SdkError } from '../errors';
 
-const DEFAULT_CONCURRENCY = typeof navigator !== 'undefined' && typeof navigator.hardwareConcurrency === 'number' ? Math.max(1, Math.floor(navigator.hardwareConcurrency / 2)) : 2;
+const DEFAULT_CONCURRENCY =
+  typeof navigator !== 'undefined' && typeof navigator.hardwareConcurrency === 'number' ? Math.max(1, Math.floor(navigator.hardwareConcurrency / 2)) : 2;
 
 interface WorkerMessageResult {
   index: number;
@@ -17,6 +18,10 @@ interface WorkerResponsePayload {
   error?: string;
 }
 
+/**
+ * MemoWorker offloads memo decryption to a WebWorker when available.
+ * Falls back to main-thread decryption when worker is unavailable.
+ */
 export class MemoWorker {
   private worker: Worker | null = null;
   private readonly pending = new Map<
@@ -30,10 +35,16 @@ export class MemoWorker {
     this.config = config ?? {};
   }
 
+  /**
+   * Compute effective concurrency from config or hardware defaults.
+   */
   private get concurrency() {
     return this.config.concurrency ?? DEFAULT_CONCURRENCY;
   }
 
+  /**
+   * Lazily create a worker and wire up message handlers.
+   */
   private ensureWorker() {
     if (this.worker || typeof Worker === 'undefined') return;
     const workerUrl = this.config.workerUrl;
@@ -61,6 +72,9 @@ export class MemoWorker {
     };
   }
 
+  /**
+   * Normalize worker results back into the original request shape.
+   */
   private normalizeWorkerResult(entry: WorkerMessageResult, chunk: MemoDecryptRequest[]): MemoDecryptResult {
     const source = chunk[entry.index];
     return {
@@ -71,6 +85,9 @@ export class MemoWorker {
     };
   }
 
+  /**
+   * Dispatch a decrypt request to the worker and await its response.
+   */
   private dispatch(secretKey: bigint, chunk: MemoDecryptRequest[]): Promise<MemoDecryptResult[]> {
     this.ensureWorker();
     const worker = this.worker;
@@ -116,6 +133,9 @@ export class MemoWorker {
     });
   }
 
+  /**
+   * Decrypt a batch using a worker if configured; otherwise fallback to local.
+   */
   private async decryptWithKey(secretKey: bigint, requests: MemoDecryptRequest[]): Promise<MemoDecryptResult[]> {
     if (!this.config.workerUrl || typeof Worker === 'undefined') {
       return requests.map((req) => this.decryptSingle(secretKey, req));
@@ -130,6 +150,9 @@ export class MemoWorker {
     return responses.flat();
   }
 
+  /**
+   * Decrypt a mixed batch, grouping by secret key for worker efficiency.
+   */
   async decryptBatch(requests: MemoDecryptRequest[]): Promise<MemoDecryptResult[]> {
     if (!requests.length) return [];
     const groups = new Map<string, { secret: bigint; items: MemoDecryptRequest[] }>();
@@ -145,6 +168,9 @@ export class MemoWorker {
     return results.flat();
   }
 
+  /**
+   * Local, single-memo decryption path used as fallback.
+   */
   private decryptSingle(secretKey: bigint, request: MemoDecryptRequest): MemoDecryptResult {
     try {
       const record = MemoKit.decryptMemo(secretKey, request.memo);
@@ -159,6 +185,9 @@ export class MemoWorker {
     }
   }
 
+  /**
+   * Terminate the worker and clear pending requests.
+   */
   terminate() {
     this.worker?.terminate();
     this.worker = null;

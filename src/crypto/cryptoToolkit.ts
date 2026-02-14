@@ -4,6 +4,9 @@ import type { CommitmentData, Hex } from '../types';
 import { Poseidon2, Poseidon2Domain } from './poseidon2';
 import { randomBytes32Bigint } from '../utils/random';
 
+/**
+ * Cryptographic helpers for commitments, nullifiers, and record openings.
+ */
 export class CryptoToolkit {
   static commitment(record: CommitmentData, format: 'hex'): Hex;
   static commitment(record: CommitmentData, format: 'bigint'): bigint;
@@ -12,18 +15,16 @@ export class CryptoToolkit {
     if (record.is_frozen) {
       amount |= 1n << 128n;
     }
-    const elements = [
-      BigInt(record.user_pk.user_address[0]),
-      BigInt(record.user_pk.user_address[1]),
-      BigInt(record.blinding_factor),
-      BigInt(record.asset_id),
-      amount,
-    ];
+    const elements = [BigInt(record.user_pk.user_address[0]), BigInt(record.user_pk.user_address[1]), BigInt(record.blinding_factor), BigInt(record.asset_id), amount];
     const h = Poseidon2.hashSequenceWithDomain(elements, Poseidon2Domain.Record);
-    const hex = toHex(h, { size: 32 }) as Hex;
+    const hex = toHex(h, { size: 32 });
     return format === 'bigint' ? BigInt(hex) : hex;
   }
 
+  /**
+   * Compute nullifier for a commitment using secret key and optional freezer PK.
+   * If freezer PK is default (0,1), the secret key is used directly.
+   */
   static nullifier(secretKey: bigint, commitment: `0x${string}`, freezerPk?: [bigint, bigint]): `0x${string}` {
     let nullifierKey: bigint;
     const defaultFreezer = !freezerPk || (freezerPk[0] === 0n && freezerPk[1] === 1n);
@@ -38,9 +39,13 @@ export class CryptoToolkit {
     }
 
     const n = Poseidon2.hashDomain(nullifierKey, BigInt(commitment), Poseidon2Domain.Nullifier);
-    return toHex(n, { size: 32 }) as `0x${string}`;
+    return toHex(n, { size: 32 });
   }
 
+  /**
+   * Create a record opening with normalized fields and a random blinding factor.
+   * Ensures non-zero commitment when auto-generating the blinding factor.
+   */
   static createRecordOpening(input: {
     asset_id: bigint | number | string;
     asset_amount: bigint | number | string;
@@ -51,8 +56,7 @@ export class CryptoToolkit {
     const hasCustomBlinding = input.blinding_factor !== undefined;
     const attempts = hasCustomBlinding ? 1 : 5;
     for (let attempt = 0; attempt < attempts; attempt++) {
-      const blinding =
-        hasCustomBlinding && attempt === 0 ? BigInt(input.blinding_factor!) : randomBytes32Bigint(true);
+      const blinding = hasCustomBlinding && attempt === 0 ? BigInt(input.blinding_factor!) : randomBytes32Bigint(true);
       const record: CommitmentData = {
         asset_id: BigInt(input.asset_id),
         asset_amount: BigInt(input.asset_amount),
@@ -64,13 +68,7 @@ export class CryptoToolkit {
       };
       if (hasCustomBlinding) return record;
       const commitment = Poseidon2.hashSequenceWithDomain(
-        [
-          record.user_pk.user_address[0],
-          record.user_pk.user_address[1],
-          record.blinding_factor,
-          record.asset_id,
-          record.asset_amount,
-        ],
+        [record.user_pk.user_address[0], record.user_pk.user_address[1], record.blinding_factor, record.asset_id, record.asset_amount],
         Poseidon2Domain.Record,
       );
       if (commitment !== 0n) {
@@ -80,6 +78,9 @@ export class CryptoToolkit {
     throw new Error('Failed to derive non-zero commitment');
   }
 
+  /**
+   * Generate randomness for memo encryption (BabyJubjub scalar).
+   */
   static viewingRandomness(): Uint8Array {
     const scalar = randomBytes32Bigint(true) % BABYJUBJUB_ORDER;
     const buf = new Uint8Array(32);
@@ -90,6 +91,9 @@ export class CryptoToolkit {
     return buf;
   }
 
+  /**
+   * Compute pool id from token address and policy keys.
+   */
   static poolId(tokenAddress: Hex | bigint | number | string, viewerPk: [bigint, bigint], freezerPk: [bigint, bigint]): bigint {
     const inputs = [BigInt(viewerPk[0]), BigInt(viewerPk[1]), BigInt(freezerPk[0]), BigInt(freezerPk[1])];
     const seed = typeof tokenAddress === 'bigint' ? tokenAddress : BigInt(tokenAddress);

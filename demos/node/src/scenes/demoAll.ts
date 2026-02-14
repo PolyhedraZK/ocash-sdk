@@ -10,9 +10,7 @@ import { c } from '../cli/color.js';
 type Hex = `0x${string}`;
 
 type RpcRequest = { id: string; method: string; params?: any };
-type RpcResponse =
-  | { id: string; ok: true; result: any }
-  | { id: string; ok: false; error: { message: string; stack?: string; name?: string; code?: string; detail?: any; cause?: any } };
+type RpcResponse = { id: string; ok: true; result: any } | { id: string; ok: false; error: { message: string; stack?: string; name?: string; code?: string; detail?: any; cause?: any } };
 
 type WorkerLogEntry = {
   ts: number;
@@ -31,9 +29,6 @@ const safeStringify = (value: unknown) => {
     return String(value);
   }
 };
-
-const once = <T>(emitter: NodeJS.EventEmitter, event: string) =>
-  new Promise<T>((resolve) => emitter.once(event, resolve as any));
 
 const makeId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
@@ -65,7 +60,7 @@ export async function demoAll(options: { flags: Record<string, string | boolean 
   const streamSync = options.flags.streamSync === true || options.flags.streamSync === '1' || options.flags.streamSync === 'true';
 
   const pub = KeyManager.getPublicKeyBySeed(config.seed, config.accountNonce != null ? String(config.accountNonce) : undefined);
-  const selfViewingAddress = KeyManager.userPkToAddress(pub.user_pk) as Hex;
+  const selfViewingAddress = KeyManager.userPkToAddress(pub.user_pk);
   const baseDir = path.join(config.storageDir ?? '.ocash-demo', 'demoAll');
 
   // Fork a background worker process to run SDK sync/watch without spamming the interactive terminal.
@@ -74,13 +69,7 @@ export async function demoAll(options: { flags: Record<string, string | boolean 
   const workerPath = fileURLToPath(workerUrl);
 
   const configPath = typeof options.flags.config === 'string' ? options.flags.config : undefined;
-  const childArgs = [
-    `baseDir=${baseDir}`,
-    `chainId=${chainId ?? ''}`,
-    `pollMs=${pollMs ?? ''}`,
-    `streamLogs=1`,
-    `streamSync=${streamSync ? '1' : '0'}`,
-  ];
+  const childArgs = [`baseDir=${baseDir}`, `chainId=${chainId ?? ''}`, `pollMs=${pollMs ?? ''}`, `streamLogs=1`, `streamSync=${streamSync ? '1' : '0'}`];
   if (configPath) {
     childArgs.unshift(`configPath=${configPath}`);
   }
@@ -211,10 +200,7 @@ export async function demoAll(options: { flags: Record<string, string | boolean 
       const line = (await rl.question(c.dim('ocash> '))).trim();
       const first = line.split(/\s+/)[0]?.toLowerCase();
       const asInt = first && /^-?\d+$/.test(first) ? Number(first) : Number.NaN;
-      const cmd =
-        Number.isFinite(asInt) && asInt >= 0 && asInt < menu.length
-          ? menu[asInt]!.key
-          : first;
+      const cmd = Number.isFinite(asInt) && asInt >= 0 && asInt < menu.length ? menu[asInt]!.key : first;
       if (!cmd) continue;
 
       try {
@@ -324,12 +310,7 @@ export async function demoAll(options: { flags: Record<string, string | boolean 
         const msg = err instanceof Error ? err.message : String(err);
         const code = typeof anyErr?.code === 'string' ? anyErr.code : undefined;
         const detail = anyErr?.detail != null ? ` detail=${safeStringify(anyErr.detail)}` : '';
-        const cause =
-          anyErr?.cause && typeof anyErr.cause === 'object'
-            ? ` cause=${safeStringify(anyErr.cause)}`
-            : anyErr?.cause != null
-              ? ` cause=${String(anyErr.cause)}`
-              : '';
+        const cause = anyErr?.cause && typeof anyErr.cause === 'object' ? ` cause=${safeStringify(anyErr.cause)}` : anyErr?.cause != null ? ` cause=${String(anyErr.cause)}` : '';
         console.error(c.red('error:'), msg + (code ? ` (code=${code})` : '') + detail + cause);
       }
     }

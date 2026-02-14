@@ -28,6 +28,9 @@ interface EntryListResponse<T> {
 
 import { joinUrl } from '../utils/url';
 
+/**
+ * Append query parameters to a base URL.
+ */
 const withQuery = (url: string, params: Record<string, string | number | undefined>) => {
   const search = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
@@ -38,26 +41,33 @@ const withQuery = (url: string, params: Record<string, string | number | undefin
   return qs ? `${url}?${qs}` : url;
 };
 
-const isHex = (value: unknown): value is Hex => isHexStrict(value);
-
+/**
+ * Normalize optional hex values (returns null on invalid hex).
+ */
 const normalizeOptionalHex = (value: unknown): Hex | null | undefined => {
   if (value == null) return undefined;
-  if (isHex(value)) return value;
+  if (isHexStrict(value)) return value;
   return null;
 };
 
+/**
+ * Normalize total counts from API responses.
+ */
 const normalizeTotal = (value: unknown): number => {
   const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN;
   if (!Number.isFinite(n) || n < 0) return 0;
   return Math.floor(n);
 };
 
+/**
+ * Validate and normalize a memo row from EntryService.
+ */
 const normalizeMemoEntry = (raw: any): EntryMemo => {
   if (!raw || typeof raw !== 'object') {
     throw new SdkError('SYNC', 'Invalid entry memo item', { item: raw });
   }
-  if (!isHex(raw.commitment)) throw new SdkError('SYNC', 'Invalid entry memo commitment', { commitment: raw.commitment });
-  if (!isHex(raw.memo)) throw new SdkError('SYNC', 'Invalid entry memo payload', { memo: raw.memo });
+  if (!isHexStrict(raw.commitment)) throw new SdkError('SYNC', 'Invalid entry memo commitment', { commitment: raw.commitment });
+  if (!isHexStrict(raw.memo)) throw new SdkError('SYNC', 'Invalid entry memo payload', { memo: raw.memo });
   const cid = raw.cid;
   if (cid != null && !(typeof cid === 'number' && Number.isInteger(cid) && cid >= 0)) {
     throw new SdkError('SYNC', 'Invalid entry memo cid', { cid });
@@ -87,11 +97,14 @@ const normalizeMemoEntry = (raw: any): EntryMemo => {
   };
 };
 
+/**
+ * Validate and normalize a nullifier row from EntryService.
+ */
 const normalizeNullifierEntry = (raw: any): EntryNullifier => {
   if (!raw || typeof raw !== 'object') {
     throw new SdkError('SYNC', 'Invalid entry nullifier item', { item: raw });
   }
-  if (!isHex(raw.nullifier)) throw new SdkError('SYNC', 'Invalid entry nullifier', { nullifier: raw.nullifier });
+  if (!isHexStrict(raw.nullifier)) throw new SdkError('SYNC', 'Invalid entry nullifier', { nullifier: raw.nullifier });
   const createdAt = raw.created_at;
   if (createdAt != null && !(typeof createdAt === 'number' && Number.isInteger(createdAt) && createdAt >= 0)) {
     throw new SdkError('SYNC', 'Invalid entry nullifier created_at', { created_at: createdAt });
@@ -99,18 +112,24 @@ const normalizeNullifierEntry = (raw: any): EntryNullifier => {
   return { nullifier: raw.nullifier, created_at: createdAt ?? null };
 };
 
+/**
+ * Unwrap list payloads and apply structural validation.
+ */
 const unwrapList = <T>(payload: EntryListResponse<T>, detail: Record<string, unknown>) => {
   if (typeof payload?.code === 'number' && payload.code !== 0) {
     throw new SdkError('SYNC', payload.message || 'EntryService request failed', payload);
   }
-  const itemsRaw = (payload as any)?.data?.data;
-  const totalRaw = (payload as any)?.data?.total;
+  const itemsRaw = payload?.data?.data;
+  const totalRaw = payload?.data?.total;
   if (itemsRaw != null && !Array.isArray(itemsRaw)) {
-    throw new SdkError('SYNC', 'Invalid entry response: data.data must be an array', { ...detail, data: (payload as any)?.data });
+    throw new SdkError('SYNC', 'Invalid entry response: data.data must be an array', { ...detail, data: payload?.data });
   }
   return { items: (itemsRaw ?? []) as T[], total: normalizeTotal(totalRaw) };
 };
 
+/**
+ * Unwrap list payloads and capture the "ready" flag if present.
+ */
 const unwrapListWithReady = <T>(payload: EntryListResponse<T>, detail: Record<string, unknown>) => {
   const base = unwrapList(payload, detail);
   const ready = (payload as any)?.data?.ready;
@@ -119,12 +138,18 @@ const unwrapListWithReady = <T>(payload: EntryListResponse<T>, detail: Record<st
 
 type DebugEmitter = (event: Extract<SdkEvent, { type: 'debug' }>) => void;
 
+/**
+ * HTTP client for EntryService memo/nullifier endpoints.
+ */
 export class EntryClient {
   constructor(
     private readonly baseUrl: string,
     private readonly debugEmit?: DebugEmitter,
   ) {}
 
+  /**
+   * Fetch memo pages for a viewing address.
+   */
   async listMemos(input: { chainId: number; address: string; offset: number; limit: number; signal?: AbortSignal }) {
     const url = withQuery(joinUrl(this.baseUrl, '/api/v1/viewing/memos/list'), {
       offset: input.offset,
@@ -156,6 +181,9 @@ export class EntryClient {
     return { items: items.map(normalizeMemoEntry), total };
   }
 
+  /**
+   * Fetch nullifier pages for a viewing address.
+   */
   async listNullifiers(input: { chainId: number; address: string; offset: number; limit: number; signal?: AbortSignal }) {
     const url = withQuery(joinUrl(this.baseUrl, '/api/v1/viewing/nullifier/list'), {
       offset: input.offset,
@@ -187,6 +215,10 @@ export class EntryClient {
     return { items: items.map(normalizeNullifierEntry), total };
   }
 
+  /**
+   * Fetch nullifiers with the block-indexed pagination API.
+   * This endpoint may return a "ready" flag indicating if more pages are expected.
+   */
   async listNullifiersByBlock(input: { chainId: number; address: string; offset: number; limit: number; signal?: AbortSignal }) {
     const url = withQuery(joinUrl(this.baseUrl, '/api/v1/viewing/nullifier/list_by_block'), {
       offset: input.offset,

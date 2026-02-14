@@ -4,7 +4,13 @@ import { BabyJubjub } from './babyJubjub';
 
 const ABI_PARAMETERS = parseAbiParameters('uint256, uint256, uint256, uint256, bool');
 
+/**
+ * Encode/decode record openings to ABI-compatible hex payloads.
+ */
 export class RecordCodec {
+  /**
+   * Encode a record opening into ABI-packed bytes.
+   */
   static encode(ro: CommitmentData): Hash {
     const userAddressX = BigInt(ro.user_pk.user_address[0]);
     const userAddressY = BigInt(ro.user_pk.user_address[1]);
@@ -14,17 +20,14 @@ export class RecordCodec {
     }
 
     const compressedPoint = BabyJubjub.compressPoint([userAddressX, userAddressY]);
-    const compressedHex = toHex(compressedPoint) as `0x${string}`;
+    const compressedHex = toHex(compressedPoint);
 
-    return encodeAbiParameters(ABI_PARAMETERS, [
-      BigInt(ro.asset_id),
-      BigInt(ro.asset_amount),
-      BigInt(compressedHex),
-      BigInt(ro.blinding_factor),
-      ro.is_frozen,
-    ]) as Hash;
+    return encodeAbiParameters(ABI_PARAMETERS, [BigInt(ro.asset_id), BigInt(ro.asset_amount), BigInt(compressedHex), BigInt(ro.blinding_factor), ro.is_frozen]);
   }
 
+  /**
+   * Decode an ABI-packed record opening back into CommitmentData.
+   */
   static decode(hexData: string): CommitmentData {
     if (!hexData) throw new Error('Missing record payload');
     const normalized = hexData.startsWith('0x') ? (hexData as Hash) : (`0x${hexData}` as Hash);

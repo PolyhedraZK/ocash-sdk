@@ -1,6 +1,5 @@
-import { createPublicClient, http, type Address, type PublicClient } from 'viem';
+import { createPublicClient, erc20Abi, http, type Address, type PublicClient } from 'viem';
 import { App_ABI } from '../abi/app';
-import { ERC20_ABI } from '../abi/erc20';
 import type {
   AssetsApi,
   CommitmentData,
@@ -36,12 +35,14 @@ import { toBigintOrThrow } from '../utils/bigint';
 
 const ARRAY_HASH_SIZE = 2048n;
 const NATIVE_ADDRESS = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE' as const;
-const isHex = (value: unknown): value is Hex => isHexStrict(value);
 
 const toFrPointJson = (input: [string, string]) => ({ X: BigInt(input[0]), Y: BigInt(input[1]) });
 const toViewerPkJson = (input: [string, string]) => ({ EncryptionKey: { Key: toFrPointJson(input) } });
 const toFreezerPkJson = (input: [string, string]) => ({ Point: toFrPointJson(input) });
 
+/**
+ * Build transfer witness JSON structure expected by the circuits.
+ */
 const buildTransferWitness = (input: { token: TokenMetadata; inputSecrets: any[]; outputs: any[]; array: any; relayerFee: bigint; proofBinding: string }): TransferWitnessInput => {
   const token = input.token;
   return {
@@ -51,8 +52,8 @@ const buildTransferWitness = (input: { token: TokenMetadata; inputSecrets: any[]
       viewer_pk: toViewerPkJson(token.viewerPk),
       freezer_pk: toFreezerPkJson(token.freezerPk),
     },
-    input_secrets: input.inputSecrets as any,
-    array: input.array as any,
+    input_secrets: input.inputSecrets,
+    array: input.array,
     fee: input.relayerFee,
     max_amount: token.transferMaxAmount
       ? toBigintOrThrow(token.transferMaxAmount, {
@@ -61,12 +62,15 @@ const buildTransferWitness = (input: { token: TokenMetadata; inputSecrets: any[]
           detail: { tokenId: token.id },
         })
       : 0n,
-    output_record_openings: input.outputs as any,
+    output_record_openings: input.outputs,
     viewing_memo_randomness: Array.from(CryptoToolkit.viewingRandomness()),
     proof_binding: input.proofBinding,
-  } as any;
+  };
 };
 
+/**
+ * Build withdraw witness JSON structure expected by the circuits.
+ */
 const buildWithdrawWitness = (input: {
   token: TokenMetadata;
   inputSecret: any;
@@ -85,17 +89,21 @@ const buildWithdrawWitness = (input: {
       viewer_pk: toViewerPkJson(token.viewerPk),
       freezer_pk: toFreezerPkJson(token.freezerPk),
     },
-    input_secret: input.inputSecret as any,
-    output_record_opening: input.outputRecordOpening as any,
-    array: input.array as any,
+    input_secret: input.inputSecret,
+    output_record_opening: input.outputRecordOpening,
+    array: input.array,
     amount: input.burnAmount,
     relayer_fee: input.relayerFee,
     gas_drop_value: input.gasDropValue,
     viewing_memo_randomness: Array.from(CryptoToolkit.viewingRandomness()),
     proof_binding: input.proofBinding,
-  } as any;
+  };
 };
 
+/**
+ * Ops is the end-to-end orchestrator:
+ * plan → merkle proof → witness → proof → relayer request → optional submission.
+ */
 export class Ops implements OpsApi {
   private readonly publicClients = new Map<number, PublicClient>();
 
@@ -110,14 +118,23 @@ export class Ops implements OpsApi {
     private readonly emit?: (evt: SdkEvent) => void,
   ) {}
 
+  /**
+   * Emit a debug event with a scoped message.
+   */
   private debug(scope: string, message: string, detail?: Record<string, unknown>) {
-    this.emit?.({ type: 'debug', payload: { scope, message, detail } } as any);
+    this.emit?.({ type: 'debug', payload: { scope, message, detail } });
   }
 
+  /**
+   * Emit an operations:update event.
+   */
   private emitOperationUpdate(payload: Extract<SdkEvent, { type: 'operations:update' }>['payload']) {
-    this.emit?.({ type: 'operations:update', payload } as SdkEvent);
+    this.emit?.({ type: 'operations:update', payload });
   }
 
+  /**
+   * Get or create a PublicClient for a chain using its rpcUrl.
+   */
   private getPublicClient(chainId: number): PublicClient {
     const cached = this.publicClients.get(chainId);
     if (cached) return cached;
@@ -125,11 +142,14 @@ export class Ops implements OpsApi {
     if (!chain?.rpcUrl) {
       throw new SdkError('CONFIG', `chain ${chainId} missing rpcUrl`, { chainId });
     }
-    const client = createPublicClient({ transport: http(chain.rpcUrl) }) as PublicClient;
+    const client = createPublicClient({ transport: http(chain.rpcUrl) });
     this.publicClients.set(chainId, client);
     return client;
   }
 
+  /**
+   * Helper to record debug timings around async work.
+   */
   private async timed<T>(scope: string, label: string, detail: Record<string, unknown>, fn: () => Promise<T>): Promise<T> {
     const startedAt = Date.now();
     this.debug(scope, `${label}:start`, detail);
@@ -147,6 +167,9 @@ export class Ops implements OpsApi {
     }
   }
 
+  /**
+   * Update operation record (best-effort) and emit update event.
+   */
   private updateOperation(operationId: string | undefined, patch: Parameters<StorageAdapter['updateOperation']>[1]) {
     if (!operationId) return;
     try {
@@ -157,6 +180,9 @@ export class Ops implements OpsApi {
     }
   }
 
+  /**
+   * Wrap a stage with standardized SdkError mapping.
+   */
   private async stage<T>(code: SdkErrorCode, message: string, detail: Record<string, unknown>, fn: () => Promise<T>): Promise<T> {
     try {
       return await fn();
@@ -166,6 +192,9 @@ export class Ops implements OpsApi {
     }
   }
 
+  /**
+   * Prepare a transfer from an already built plan (single operation).
+   */
   private async prepareTransferFromPlan(input: { plan: TransferPlan; ownerKeyPair: UserKeyPair; publicClient: PublicClient }) {
     const scope = 'ops:prepareTransfer';
     const chain = this.assets.getChain(input.plan.chainId);
@@ -178,28 +207,23 @@ export class Ops implements OpsApi {
     if (!Array.isArray(selected) || !selected.length) {
       throw new SdkError('CONFIG', 'planner returned no selectedInputs', { chainId: input.plan.chainId, assetId: input.plan.assetId });
     }
-    const token = input.plan.token as TokenMetadata;
+    const token = input.plan.token;
     const relayerFee = BigInt(input.plan.relayerFee ?? 0n);
     const extraData = input.plan.extraData;
     const outputs = input.plan.outputs;
-    const proofBinding = input.plan.proofBinding as string;
+    const proofBinding = input.plan.proofBinding;
 
     const [array, digest, totalElements] = await this.timed(scope, 'readContract.state', { chainId: input.plan.chainId, contract: contractAddress }, () =>
       this.stage('CONFIG', 'prepareTransfer failed to read contract state', { chainId: input.plan.chainId, contract: contractAddress }, () =>
         Promise.all([
           input.publicClient.readContract({ address: contractAddress, abi: App_ABI, functionName: 'getArray', args: [] }),
           input.publicClient.readContract({ address: contractAddress, abi: App_ABI, functionName: 'digest', args: [] }),
-          input.publicClient.readContract({
-            address: contractAddress,
-            abi: App_ABI,
-            functionName: 'totalElements',
-            args: [],
-          }),
+          input.publicClient.readContract({ address: contractAddress, abi: App_ABI, functionName: 'totalElements', args: [] }),
         ]),
       ),
     );
 
-    const digestArrayHash = Array.isArray(digest) ? (digest as any)[1] : (digest as any)?.[1];
+    const digestArrayHash = Array.isArray(digest) ? digest[1] : digest?.[1];
     const arrayHash = toBigintOrThrow(digestArrayHash, {
       code: 'CONFIG',
       name: 'digest[1] (array hash)',
@@ -278,6 +302,9 @@ export class Ops implements OpsApi {
     };
   }
 
+  /**
+   * Prepare a transfer. If planner returns a merge plan, returns merge info.
+   */
   async prepareTransfer(input: { chainId: number; assetId: string; amount: bigint; to: Hex; ownerKeyPair: UserKeyPair; publicClient: PublicClient; relayerUrl?: string; autoMerge?: boolean }) {
     const scope = 'ops:prepareTransfer';
     this.debug(scope, 'start', { chainId: input.chainId, assetId: input.assetId, to: input.to });
@@ -307,7 +334,7 @@ export class Ops implements OpsApi {
     }
 
     if (planAction === 'transfer-merge') {
-      const typedPlan = plan as TransferMergePlan;
+      const typedPlan = plan;
       const prepared = await this.prepareTransferFromPlan({
         plan: typedPlan.mergePlan,
         ownerKeyPair: input.ownerKeyPair,
@@ -328,7 +355,7 @@ export class Ops implements OpsApi {
       };
     }
 
-    const typedPlan = plan as TransferPlan;
+    const typedPlan = plan;
     const prepared = await this.prepareTransferFromPlan({
       plan: typedPlan,
       ownerKeyPair: input.ownerKeyPair,
@@ -337,6 +364,9 @@ export class Ops implements OpsApi {
     return { kind: 'transfer' as const, ...prepared };
   }
 
+  /**
+   * Prepare a withdrawal: plan, merkle proof, witness, proof, relayer request.
+   */
   async prepareWithdraw(input: {
     chainId: number;
     assetId: string;
@@ -372,16 +402,16 @@ export class Ops implements OpsApi {
         }),
       ),
     );
-    const planAction = (plan as any)?.action;
+    const planAction = plan?.action;
     if (planAction && planAction !== 'withdraw') {
       throw new SdkError('CONFIG', 'planner returned non-withdraw plan', { chainId: input.chainId, assetId: input.assetId, action: planAction });
     }
 
-    const typedPlan = plan as WithdrawPlan;
-    const token = typedPlan.token as TokenMetadata;
+    const typedPlan = plan;
+    const token = typedPlan.token;
     const relayerFee = BigInt(typedPlan.relayerFee ?? 0n);
     const burnAmount = BigInt(typedPlan.burnAmount ?? input.amount);
-    const utxo = typedPlan.selectedInput as any;
+    const utxo = typedPlan.selectedInput;
     if (!utxo) {
       throw new SdkError('CONFIG', 'planner returned no selectedInput', {
         chainId: input.chainId,
@@ -390,25 +420,20 @@ export class Ops implements OpsApi {
       });
     }
 
-    const outputRo = typedPlan.outputRecordOpening as any;
-    const extraData = typedPlan.extraData as any;
-    const proofBinding = typedPlan.proofBinding as string;
+    const outputRo = typedPlan.outputRecordOpening;
+    const extraData = typedPlan.extraData;
+    const proofBinding = typedPlan.proofBinding;
 
     const [array, digest, totalElements] = await this.timed(scope, 'readContract.state', { chainId: input.chainId, contract: contractAddress }, () =>
       this.stage('CONFIG', 'prepareWithdraw failed to read contract state', { chainId: input.chainId, contract: contractAddress }, () =>
         Promise.all([
-          (input.publicClient.readContract as any)({ address: contractAddress, abi: App_ABI as any, functionName: 'getArray', args: [] }),
-          (input.publicClient.readContract as any)({ address: contractAddress, abi: App_ABI as any, functionName: 'digest', args: [] }),
-          (input.publicClient.readContract as any)({
-            address: contractAddress,
-            abi: App_ABI as any,
-            functionName: 'totalElements',
-            args: [],
-          }),
+          input.publicClient.readContract({ address: contractAddress, abi: App_ABI, functionName: 'getArray', args: [] }),
+          input.publicClient.readContract({ address: contractAddress, abi: App_ABI, functionName: 'digest', args: [] }),
+          input.publicClient.readContract({ address: contractAddress, abi: App_ABI, functionName: 'totalElements', args: [] }),
         ]),
       ),
     );
-    const digestArrayHash = Array.isArray(digest) ? (digest as any)[1] : (digest as any)?.[1];
+    const digestArrayHash = Array.isArray(digest) ? digest[1] : digest?.[1];
     const arrayHash = toBigintOrThrow(digestArrayHash, {
       code: 'CONFIG',
       name: 'digest[1] (array hash)',
@@ -469,7 +494,7 @@ export class Ops implements OpsApi {
 
     const proof = await this.timed(scope, 'zkp.proveWithdraw', { chainId: input.chainId }, () =>
       this.stage('PROOF', 'prepareWithdraw proof failed', { chainId: input.chainId }, () =>
-        this.zkp.proveWithdraw(witness as any, {
+        this.zkp.proveWithdraw(witness, {
           merkle_root_index: merkleRootIndex,
           array_hash_index: arrayHashIndex,
           relayer: typedPlan.relayer,
@@ -495,10 +520,13 @@ export class Ops implements OpsApi {
     };
   }
 
+  /**
+   * Build a storage operation record from a transfer/withdraw plan.
+   */
   private buildOperationFromPlan(plan: TransferPlan | WithdrawPlan): OperationCreateInput {
     if (plan.action === 'transfer') {
       const inputCommitments = plan.selectedInputs.map((u) => u.commitment);
-      const outputCommitments = plan.outputs.filter((o) => o.asset_amount > 0n).map((o) => CryptoToolkit.commitment(o, 'hex') as Hex);
+      const outputCommitments = plan.outputs.filter((o) => o.asset_amount > 0n).map((o) => CryptoToolkit.commitment(o, 'hex'));
       return {
         type: 'transfer',
         chainId: plan.chainId,
@@ -519,7 +547,7 @@ export class Ops implements OpsApi {
     }
 
     const inputCommitments = [plan.selectedInput.commitment];
-    const outputCommitments = plan.outputRecordOpening.asset_amount > 0n ? [CryptoToolkit.commitment(plan.outputRecordOpening, 'hex') as Hex] : [];
+    const outputCommitments = plan.outputRecordOpening.asset_amount > 0n ? [CryptoToolkit.commitment(plan.outputRecordOpening, 'hex')] : [];
     return {
       type: 'withdraw',
       chainId: plan.chainId,
@@ -541,6 +569,9 @@ export class Ops implements OpsApi {
     };
   }
 
+  /**
+   * Submit a prepared relayer request and optionally wait for tx confirmation.
+   */
   async submitRelayerRequest<T = unknown>(input: {
     prepared: { plan: TransferPlan | WithdrawPlan; request: RelayerRequest; kind?: 'transfer' | 'merge' };
     relayerUrl?: string;
@@ -578,7 +609,7 @@ export class Ops implements OpsApi {
     let operationId = input.operationId;
     const operation = input.operation ?? (plan ? this.buildOperationFromPlan(plan) : undefined);
     if (!operationId && operation) {
-      const created = this.store?.createOperation(operation as any);
+      const created = this.store?.createOperation(operation);
       if (created) this.emitOperationUpdate({ action: 'create', operation: created });
       operationId = created?.id ?? operationId;
     }
@@ -587,13 +618,13 @@ export class Ops implements OpsApi {
       this.updateOperation(operationId, {
         status: 'submitted',
         requestUrl,
-        relayerTxHash: isHex(result) ? (result as Hex) : undefined,
+        relayerTxHash: isHexStrict(result) ? result : undefined,
       });
       const updateOperation = (patch: Parameters<StorageAdapter['updateOperation']>[1]) => {
         this.updateOperation(operationId, patch);
       };
       const waitRelayerTxHash = (() => {
-        const relayerTxHash = isHex(result) ? (result as Hex) : undefined;
+        const relayerTxHash = isHexStrict(result) ? result : undefined;
         if (!relayerTxHash) {
           return Promise.reject(new SdkError('RELAYER', 'relayerTxHash unavailable', { relayerUrl, requestUrl }));
         }
@@ -675,6 +706,9 @@ export class Ops implements OpsApi {
     }
   }
 
+  /**
+   * Prepare a deposit operation: compute RO/memo, fees, and contract calls.
+   */
   async prepareDeposit(input: { chainId: number; assetId: string; amount: bigint; ownerPublicKey: UserPublicKey; account: Address; publicClient: PublicClient }): Promise<{
     chainId: number;
     assetId: string;
@@ -720,18 +754,9 @@ export class Ops implements OpsApi {
     const protocolFee = Utils.calcDepositFee(input.amount, token.depositFeeBps);
     const payAmount = input.amount + protocolFee;
 
-    const depositRelayerFee = (await this.stage(
-      'CONFIG',
-      'prepareDeposit failed to read depositRelayerFee',
-      { chainId: input.chainId, contract: contractAddress },
-      () =>
-        (input.publicClient.readContract as any)({
-          address: contractAddress,
-          abi: App_ABI as any,
-          functionName: 'depositRelayerFee',
-          args: [],
-        }) as any,
-    )) as unknown as bigint;
+    const depositRelayerFee = await this.stage('CONFIG', 'prepareDeposit failed to read depositRelayerFee', { chainId: input.chainId, contract: contractAddress }, () =>
+      input.publicClient.readContract({ address: contractAddress, abi: App_ABI, functionName: 'depositRelayerFee', args: [] }),
+    );
 
     const userAddress = input.ownerPublicKey.user_pk.user_address;
     const userPK: [bigint, bigint] = [BigInt(userAddress[0]), BigInt(userAddress[1])];
@@ -752,7 +777,7 @@ export class Ops implements OpsApi {
     const depositRequest = {
       chainId: input.chainId,
       address: contractAddress,
-      abi: App_ABI as any,
+      abi: App_ABI,
       functionName: 'deposit' as const,
       args: depositArgs,
       value,
@@ -775,25 +800,19 @@ export class Ops implements OpsApi {
       };
     }
 
-    const allowance = (await this.stage(
+    const allowance = await this.stage(
       'CONFIG',
       'prepareDeposit failed to read ERC20 allowance',
       { chainId: input.chainId, token: token.wrappedErc20, account: input.account, spender: contractAddress },
-      () =>
-        (input.publicClient.readContract as any)({
-          address: token.wrappedErc20,
-          abi: ERC20_ABI as any,
-          functionName: 'allowance',
-          args: [input.account, contractAddress],
-        }) as any,
-    )) as unknown as bigint;
+      () => input.publicClient.readContract({ address: token.wrappedErc20, abi: erc20Abi, functionName: 'allowance', args: [input.account, contractAddress] }),
+    );
 
     const approveNeeded = allowance < payAmount;
     const approveRequest = approveNeeded
       ? {
           chainId: input.chainId,
           address: token.wrappedErc20,
-          abi: ERC20_ABI as any,
+          abi: erc20Abi,
           functionName: 'approve' as const,
           args: [contractAddress, payAmount] as [Address, bigint],
         }
@@ -816,6 +835,9 @@ export class Ops implements OpsApi {
     };
   }
 
+  /**
+   * Submit a prepared deposit: optionally approve ERC20, then deposit.
+   */
   async submitDeposit(input: {
     prepared: Awaited<ReturnType<Ops['prepareDeposit']>>;
     walletClient: { writeContract: (request: { address: Address; abi: any; functionName: string; args: any; value?: bigint; chainId?: number }) => Promise<Hex> };
@@ -825,7 +847,7 @@ export class Ops implements OpsApi {
     operationId?: string;
   }): Promise<{ txHash: Hex; approveTxHash?: Hex; receipt?: Awaited<ReturnType<PublicClient['waitForTransactionReceipt']>>; operationId?: string }> {
     const prepared = input.prepared;
-    const outputCommitments = [CryptoToolkit.commitment(prepared.recordOpening, 'hex') as Hex];
+    const outputCommitments = [CryptoToolkit.commitment(prepared.recordOpening, 'hex')];
     let operationId = input.operationId;
     if (!operationId) {
       const created = this.store?.createOperation({
@@ -839,18 +861,18 @@ export class Ops implements OpsApi {
           depositRelayerFee: prepared.depositRelayerFee.toString(),
           outputCommitments,
         },
-      } as any);
+      });
       if (created) this.emitOperationUpdate({ action: 'create', operation: created });
       operationId = created?.id ?? operationId;
     }
 
     let approveTxHash: Hex | undefined;
     if (input.autoApprove && prepared.approveNeeded && prepared.approveRequest) {
-      approveTxHash = await input.walletClient.writeContract(prepared.approveRequest as any);
+      approveTxHash = await input.walletClient.writeContract(prepared.approveRequest);
       await input.publicClient.waitForTransactionReceipt({ hash: approveTxHash });
     }
 
-    const txHash = await input.walletClient.writeContract(prepared.depositRequest as any);
+    const txHash = await input.walletClient.writeContract(prepared.depositRequest);
     this.updateOperation(operationId, { status: 'submitted', txHash });
 
     const receipt = await input.publicClient.waitForTransactionReceipt({
@@ -862,6 +884,9 @@ export class Ops implements OpsApi {
     return { txHash, approveTxHash, receipt, operationId };
   }
 
+  /**
+   * Poll the relayer for the on-chain tx hash of a submitted relayer request.
+   */
   async waitRelayerTxHash(input: { relayerUrl: string; relayerTxHash: Hex; timeoutMs?: number; intervalMs?: number; signal?: AbortSignal; operationId?: string; requestUrl?: string }): Promise<Hex> {
     const timeoutMs = input.timeoutMs ?? 120_000;
     const intervalMs = input.intervalMs ?? 2_000;
@@ -871,7 +896,7 @@ export class Ops implements OpsApi {
     while (Date.now() - startedAt < timeoutMs) {
       if (input.signal?.aborted) {
         this.updateOperation(input.operationId, { status: 'failed', error: 'waitRelayerTxHash aborted', requestUrl });
-        throw new SdkError('RELAYER', 'waitRelayerTxHash aborted', { relayerUrl: input.relayerUrl, relayerTxHash: input.relayerTxHash }, (input.signal as any).reason);
+        throw new SdkError('RELAYER', 'waitRelayerTxHash aborted', { relayerUrl: input.relayerUrl, relayerTxHash: input.relayerTxHash }, input.signal.reason);
       }
       let txhash: Hex | null;
       try {
@@ -894,6 +919,9 @@ export class Ops implements OpsApi {
     throw new SdkError('RELAYER', 'waitRelayerTxHash timeout', { relayerUrl: input.relayerUrl, relayerTxHash: input.relayerTxHash });
   }
 
+  /**
+   * Wait for a transaction receipt and update operation status.
+   */
   async waitForTransactionReceipt(input: {
     publicClient: PublicClient;
     txHash: Hex;

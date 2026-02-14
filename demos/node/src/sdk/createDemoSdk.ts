@@ -52,7 +52,7 @@ export function createDemoSdk(options: {
   const onEvent =
     options.onEvent ??
     (options.silentEvents
-      ? (() => {}) // for interactive CLI process separation
+      ? () => {} // for interactive CLI process separation
       : createEventPrinter({ verbose: Boolean(options.verboseEvents) }));
   return OcashSdk.createSdk({
     chains: options.config.chains,

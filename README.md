@@ -14,7 +14,7 @@ TypeScript ZKP SDK for privacy-preserving token operations — deposit, transfer
 - **UTXO Model** — Poseidon2 commitments, Merkle trees, nullifiers
 - **Multi-Environment** — Browser, Node.js, Electron/Tauri
 - **Modular** — Factory pattern with event-driven modules, compose what you need
-- **6 Storage Adapters** — Memory, IndexedDB, File, KV, Redis, SQLite
+- **4 Storage Adapters** — Memory, IndexedDB, File, KV
 
 ## Install
 
@@ -29,14 +29,16 @@ import { createSdk } from '@ocash/sdk';
 
 // See demos/node/ocash.config.example.json for testnet URLs
 const sdk = createSdk({
-  chains: [{
-    chainId: 11155111,
-    entryUrl: '<ENTRY_SERVICE_URL>',
-    ocashContractAddress: '<CONTRACT_ADDRESS>',
-    relayerUrl: '<RELAYER_URL>',
-    merkleProofUrl: '<MERKLE_PROOF_URL>',
-    tokens: [],
-  }],
+  chains: [
+    {
+      chainId: 11155111,
+      entryUrl: '<ENTRY_SERVICE_URL>',
+      ocashContractAddress: '<CONTRACT_ADDRESS>',
+      relayerUrl: '<RELAYER_URL>',
+      merkleProofUrl: '<MERKLE_PROOF_URL>',
+      tokens: [],
+    },
+  ],
   onEvent: console.log,
 });
 
@@ -44,16 +46,16 @@ await sdk.core.ready();
 await sdk.wallet.open({ seed: 'your-secret-seed-phrase' });
 await sdk.sync.syncOnce();
 
-const balance = await sdk.wallet.getBalance({ chainId: 11155111 });
+const balance = await sdk.wallet.getBalance({ chainId, assetId });
 ```
 
 ## Entry Points
 
-| Import | Environment | Extra |
-|--------|-------------|-------|
-| `@ocash/sdk` | Universal | `MemoryStore` |
-| `@ocash/sdk/browser` | Browser | + `IndexedDbStore` |
-| `@ocash/sdk/node` | Node.js | + `FileStore` |
+| Import               | Environment | Extra              |
+| -------------------- | ----------- | ------------------ |
+| `@ocash/sdk`         | Universal   | `MemoryStore`      |
+| `@ocash/sdk/browser` | Browser     | + `IndexedDbStore` |
+| `@ocash/sdk/node`    | Node.js     | + `FileStore`      |
 
 ## SDK Modules
 
@@ -79,8 +81,12 @@ sdk.ops       — End-to-end orchestration
 ```ts
 const keyPair = sdk.keys.deriveKeyPair(seed);
 const prepared = await sdk.ops.prepareTransfer({
-  chainId, assetId, amount, to: recipientAddress,
-  ownerKeyPair: keyPair, publicClient,
+  chainId,
+  assetId,
+  amount,
+  to: recipientAddress,
+  ownerKeyPair: keyPair,
+  publicClient,
 });
 const result = await sdk.ops.submitRelayerRequest({ prepared, publicClient });
 const txHash = await result.waitRelayerTxHash;
@@ -90,8 +96,12 @@ const txHash = await result.waitRelayerTxHash;
 
 ```ts
 const prepared = await sdk.ops.prepareWithdraw({
-  chainId, assetId, amount, recipient: evmAddress,
-  ownerKeyPair: keyPair, publicClient,
+  chainId,
+  assetId,
+  amount,
+  recipient: evmAddress,
+  ownerKeyPair: keyPair,
+  publicClient,
 });
 const result = await sdk.ops.submitRelayerRequest({ prepared, publicClient });
 ```
@@ -101,8 +111,12 @@ const result = await sdk.ops.submitRelayerRequest({ prepared, publicClient });
 ```ts
 const ownerPub = sdk.keys.getPublicKeyBySeed(seed);
 const prepared = await sdk.ops.prepareDeposit({
-  chainId, assetId, amount,
-  ownerPublicKey: ownerPub, account: walletAddress, publicClient,
+  chainId,
+  assetId,
+  amount,
+  ownerPublicKey: ownerPub,
+  account: walletAddress,
+  publicClient,
 });
 if (prepared.approveNeeded) {
   await walletClient.writeContract(prepared.approveRequest);
@@ -131,7 +145,7 @@ sdk.wallet.close()           →  Release keys, flush storage
 ```bash
 pnpm install
 pnpm run build
-pnpm run test          # 110 tests
+pnpm run test          # Run tests
 pnpm run dev           # Browser demo
 pnpm run demo:node     # Node.js demo
 pnpm run docs:dev      # Documentation dev server
