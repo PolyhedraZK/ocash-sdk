@@ -123,7 +123,7 @@ export const SEPOLIA_TESTNET: ChainConfigInput = {
   rpcUrl: 'https://sepolia.drpc.org',
   entryUrl: 'https://testnet-api.o.cash',
   ocashContractAddress: '0x428c850be686E933DD641eE43574BA35f550c94c',
-  relayerUrl: 'https://testnet-relayer-sepolia.o.cash',
+  relayerUrl: 'https://relayer.sepolia.2.o.cash',
   merkleProofUrl: 'https://testnet-freezer-sepolia.o.cash',
   tokens: [],
 };
@@ -136,7 +136,7 @@ export const BSC_TESTNET: ChainConfigInput = {
   rpcUrl: 'https://data-seed-prebsc-1-s1.bnbchain.org:8545',
   entryUrl: 'https://testnet-api.o.cash',
   ocashContractAddress: '0x428c850be686E933DD641eE43574BA35f550c94c',
-  relayerUrl: 'https://testnet-relayer-bsctestnet.o.cash',
+  relayerUrl: 'https://relayer.bsctestnet.2.o.cash',
   merkleProofUrl: 'https://testnet-freezer-bsctestnet.o.cash',
   tokens: [],
 };
