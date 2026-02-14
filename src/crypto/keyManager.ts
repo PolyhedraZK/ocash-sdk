@@ -7,6 +7,9 @@ import { toHex } from 'viem';
 
 const HKDF_INFO = 'OCash.KeyGen';
 
+/**
+ * Derive a 32-byte seed from a human string using HKDF-SHA256.
+ */
 const deriveSeed = (seed: string, nonce?: string): `0x${string}` => {
   if (seed.length < 16) throw new Error('Seed must be at least 16 characters');
   const ikm = utf8ToBytes(seed);
@@ -15,6 +18,9 @@ const deriveSeed = (seed: string, nonce?: string): `0x${string}` => {
   return `0x${bytesToHex(okm)}`;
 };
 
+/**
+ * Derive a BabyJubjub keypair from a seed and optional nonce.
+ */
 const seedToKeyPair = (seed: string, nonce?: string): UserKeyPair => {
   const derivedSeed = deriveSeed(seed, nonce);
   const keyPair = createKeyPairFromSeed(derivedSeed);
@@ -24,20 +30,35 @@ const seedToKeyPair = (seed: string, nonce?: string): UserKeyPair => {
   return keyPair;
 };
 
+/**
+ * Key derivation and address conversion utilities.
+ */
 export class KeyManager {
+  /**
+   * Derive a full keypair from seed and optional nonce.
+   */
   static deriveKeyPair(seed: string, nonce?: string): UserKeyPair {
     return seedToKeyPair(seed, nonce);
   }
 
+  /**
+   * Derive public key only from seed (no secret exposure).
+   */
   static getPublicKeyBySeed(seed: string, nonce?: string): UserPublicKey {
     const keyPair = seedToKeyPair(seed, nonce);
     return { user_pk: keyPair.user_pk };
   }
 
+  /**
+   * Derive secret key object from seed (includes public key).
+   */
   static getSecretKeyBySeed(seed: string, nonce?: string): UserSecretKey {
     return seedToKeyPair(seed, nonce);
   }
 
+  /**
+   * Compress BabyJubjub public key into an OCash viewing address.
+   */
   static userPkToAddress(userPk: { user_address: [bigint | string, bigint | string] }): Hex {
     const x = BigInt(userPk.user_address[0]);
     const y = BigInt(userPk.user_address[1]);
@@ -48,6 +69,9 @@ export class KeyManager {
     return toHex(compressed);
   }
 
+  /**
+   * Decompress an OCash viewing address back to BabyJubjub public key.
+   */
   static addressToUserPk(address: Hex): { user_address: [bigint, bigint] } {
     const payload = address.startsWith('0x') ? address.slice(2) : address;
     const bytes = hexToBytes(payload);

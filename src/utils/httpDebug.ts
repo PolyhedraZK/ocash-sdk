@@ -1,5 +1,11 @@
+/**
+ * Truncate a string to a maximum length (adds ellipsis).
+ */
 export const truncate = (s: string, max = 2048) => (s.length > max ? `${s.slice(0, max)}…` : s);
 
+/**
+ * Normalize error into a debug-friendly object.
+ */
 export const errorToDebug = (error: unknown) => {
   if (error instanceof Error) {
     return { name: error.name, message: error.message, cause: (error as any).cause };
@@ -7,6 +13,9 @@ export const errorToDebug = (error: unknown) => {
   return { message: String(error) };
 };
 
+/**
+ * Extract useful details from a non-OK HTTP response (with safe body parsing).
+ */
 export const nonOkResponseDetail = async (response: Response, url: string) => {
   const statusText = response?.statusText;
   const contentType = response.headers.get('content-type') ?? undefined;

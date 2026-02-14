@@ -16,6 +16,9 @@ type PoolInfo = {
   withdrawMaxAmount: bigint;
 };
 
+/**
+ * Normalize PK pair from multicall response to a bigint or string tuple.
+ */
 const normalizePkPair = (value: unknown, name: string): readonly [bigint, bigint] | readonly [string, string] => {
   if (!Array.isArray(value) || value.length !== 2) {
     throw new Error(`invalid ${name}`);
@@ -29,6 +32,9 @@ const normalizePkPair = (value: unknown, name: string): readonly [bigint, bigint
   return value as any;
 };
 
+/**
+ * Normalize getPoolInfo response into a structured PoolInfo object.
+ */
 const toPoolInfo = (value: unknown): PoolInfo => {
   if (!value || typeof value !== 'object') throw new Error('invalid pool info');
   const v: any = value;
@@ -47,6 +53,10 @@ const toPoolInfo = (value: unknown): PoolInfo => {
   return v as PoolInfo;
 };
 
+/**
+ * Read pool metadata from the OCash contract and return normalized TokenMetadata[].
+ * Optionally includes ERC20 symbol/decimals via a second multicall.
+ */
 export async function fetchPoolTokensFromContract(input: { publicClient: PublicClient; chainId: number; contractAddress: Address; maxPools?: number; includeErc20Metadata?: boolean }) {
   const maxPools = input.maxPools == null ? 16 : Math.max(1, Math.floor(input.maxPools));
   const includeErc20Metadata = Boolean(input.includeErc20Metadata);

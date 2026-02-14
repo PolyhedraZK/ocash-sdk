@@ -1,3 +1,6 @@
+/**
+ * JSON.stringify replacer that converts bigint to decimal strings.
+ */
 export const bigintReplacer = (_key: string, value: unknown) => {
   if (typeof value === 'bigint') {
     return value.toString();
@@ -5,6 +8,9 @@ export const bigintReplacer = (_key: string, value: unknown) => {
   return value;
 };
 
+/**
+ * JSON.stringify helper that handles bigint values.
+ */
 export const serializeBigInt = <T>(value: T): string => JSON.stringify(value, bigintReplacer);
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> => {
@@ -13,6 +19,9 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> => {
   return proto === Object.prototype || proto === null;
 };
 
+/**
+ * Recursively sort object keys to make JSON stable for hashing.
+ */
 const stable = (value: unknown): unknown => {
   if (value == null) return value;
   if (Array.isArray(value)) return value.map((v) => stable(v));
@@ -27,4 +36,7 @@ const stable = (value: unknown): unknown => {
   return out;
 };
 
+/**
+ * Stable JSON stringify with bigint support and sorted keys.
+ */
 export const stableStringify = (value: unknown): string => JSON.stringify(stable(value), bigintReplacer);

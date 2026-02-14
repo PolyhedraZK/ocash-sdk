@@ -1,3 +1,7 @@
+/**
+ * OCash contract ABI (functions/events/errors) used by the SDK.
+ * This is a trimmed Foundry ABI without internalType/constructor/receive.
+ */
 export const App_ABI = [
   {
     type: 'function',

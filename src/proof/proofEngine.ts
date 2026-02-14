@@ -3,28 +3,49 @@ import { bigintReplacer } from '../utils/json';
 import type { SdkEvent } from '../types';
 import { SdkCore } from '../core/sdk-core';
 
+/**
+ * High-level proof engine that converts witness inputs into Groth16 proofs
+ * by delegating to the WASM bridge and emitting lifecycle events.
+ */
 export class ProofEngine {
   constructor(
     private readonly bridge: ProofBridge,
     private readonly core: SdkCore,
   ) {}
 
+  /**
+   * Wrap transfer witness input into a standardized WitnessBuildResult.
+   * This is a pure composition step (no WASM calls).
+   */
   async createWitnessTransfer(input: TransferWitnessInput, context: WitnessContext = {}): Promise<WitnessBuildResult> {
     return this.composeBuildResult('transfer', input, context);
   }
 
+  /**
+   * Wrap withdraw witness input into a standardized WitnessBuildResult.
+   * This is a pure composition step (no WASM calls).
+   */
   async createWitnessWithdraw(input: WithdrawWitnessInput, context: WitnessContext = {}): Promise<WitnessBuildResult> {
     return this.composeBuildResult('withdraw', input, context);
   }
 
+  /**
+   * Prove a transfer witness. Accepts either a witness object or pre-serialized JSON string.
+   */
   async proveTransfer(witness: TransferWitnessInput | string, context: WitnessContext = {}): Promise<ProofResult> {
     return this.prove('transfer', witness, context);
   }
 
+  /**
+   * Prove a withdraw witness. Accepts either a witness object or pre-serialized JSON string.
+   */
   async proveWithdraw(witness: WithdrawWitnessInput | string, context: WitnessContext = {}): Promise<ProofResult> {
     return this.prove('withdraw', witness, context);
   }
 
+  /**
+   * Normalize witness build output by attaching context metadata used by tx building.
+   */
   private composeBuildResult(type: 'transfer' | 'withdraw', witness: TransferWitnessInput | WithdrawWitnessInput, context: WitnessContext): WitnessBuildResult {
     return {
       witness,
@@ -39,6 +60,10 @@ export class ProofEngine {
     };
   }
 
+  /**
+   * Serialize witness, invoke the WASM prover, parse the response,
+   * and emit start/done/error events for observability.
+   */
   private async prove(type: 'transfer' | 'withdraw', witness: TransferWitnessInput | WithdrawWitnessInput | string, context: WitnessContext): Promise<ProofResult> {
     const payload = typeof witness === 'string' ? witness : JSON.stringify(witness, bigintReplacer);
     this.emit({ type: 'zkp:start', payload: { circuit: type } });
@@ -91,6 +116,9 @@ export class ProofEngine {
     }
   }
 
+  /**
+   * Proxy event emission through the core event bus.
+   */
   private emit(event: SdkEvent) {
     this.core.emit(event);
   }

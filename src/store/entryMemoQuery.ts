@@ -1,11 +1,17 @@
 import type { EntryMemoRecord, ListEntryMemosQuery, ListEntryMemosResult } from '../types';
 
+/**
+ * Normalize numeric inputs to finite integers.
+ */
 function normalizeNumber(value: number | undefined) {
   if (value == null) return undefined;
   const num = Math.floor(value);
   return Number.isFinite(num) ? num : undefined;
 }
 
+/**
+ * Compare createdAt fields with optional presence handling.
+ */
 function compareCreatedAt(a: EntryMemoRecord, b: EntryMemoRecord, factor: number) {
   const aHas = a.createdAt != null;
   const bHas = b.createdAt != null;
@@ -15,6 +21,9 @@ function compareCreatedAt(a: EntryMemoRecord, b: EntryMemoRecord, factor: number
   return diff === 0 ? 0 : diff * factor;
 }
 
+/**
+ * Apply filters/sort/pagination for entry memo rows.
+ */
 export function applyEntryMemoQuery(rows: EntryMemoRecord[], query: ListEntryMemosQuery): ListEntryMemosResult {
   const orderBy = query.orderBy ?? 'cid';
   const order = query.order ?? 'asc';

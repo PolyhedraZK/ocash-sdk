@@ -2,12 +2,17 @@ import type { Address, PublicClient } from 'viem';
 import type { ListOperationsQuery, OperationCreateInput, OperationDetailFor, OperationType, StoredOperation } from './store/operationTypes';
 export type { ListOperationsQuery, OperationCreateInput, OperationDetailFor, OperationType, StoredOperation } from './store/operationTypes';
 
+/** Hex-encoded bytes with 0x prefix. */
 export type Hex = `0x${string}`;
+/** Decimal string representing a bigint value. */
 export type BigintLikeString = string;
+/** viem transaction receipt type alias. */
 export type TransactionReceipt = Awaited<ReturnType<PublicClient['waitForTransactionReceipt']>>;
 
+/** SDK error code namespaces. */
 export type SdkErrorCode = 'CONFIG' | 'ASSETS' | 'STORAGE' | 'SYNC' | 'CRYPTO' | 'MERKLE' | 'WITNESS' | 'PROOF' | 'RELAYER';
 
+/** Token configuration for a shielded pool. */
 export interface TokenMetadata {
   id: string;
   symbol: string;
@@ -21,6 +26,7 @@ export interface TokenMetadata {
   withdrawMaxAmount?: bigint | string;
 }
 
+/** Chain configuration input for SDK initialization. */
 export interface ChainConfigInput {
   chainId: number;
   rpcUrl?: string;
@@ -37,17 +43,20 @@ export interface ChainConfigInput {
   contract?: Address;
 }
 
+/** Relayer fee entry for a specific pool. */
 export interface RelayerFeeEntry {
   token_address: Hex;
   fee: bigint;
 }
 
+/** Relayer fee tables for transfer/withdraw actions. */
 export interface RelayerFeeConfigure {
   valid_time: number;
   transfer: Record<string, RelayerFeeEntry>;
   withdraw: Record<string, RelayerFeeEntry>;
 }
 
+/** Relayer configuration fetched from relayer service. */
 export interface RelayerConfig {
   config: {
     contract_address: Address;
@@ -61,19 +70,23 @@ export interface RelayerConfig {
   fetched_at?: number;
 }
 
+/** Worker configuration for memo decryption. */
 export interface MemoWorkerConfig {
   workerUrl?: string;
   concurrency?: number;
   type?: 'classic' | 'module';
 }
 
+/** Asset override entry: URL/path or sharded list. */
 export type AssetOverrideEntry = string | string[];
 
+/** Map of required runtime assets to URLs/paths. */
 export interface AssetsOverride {
   [filename: string]: AssetOverrideEntry;
 }
 
 /** SDK configuration passed to {@link createSdk}. */
+/** SDK configuration passed to createSdk(). */
 export interface OCashSdkConfig {
   chains: ChainConfigInput[];
   assetsOverride?: AssetsOverride;
@@ -106,6 +119,7 @@ export interface OCashSdkConfig {
   onEvent?: (event: SdkEvent) => void;
 }
 
+/** Serialized error payload used in events. */
 export interface SdkErrorPayload {
   code: SdkErrorCode;
   message: string;
@@ -113,6 +127,7 @@ export interface SdkErrorPayload {
   cause?: unknown;
 }
 
+/** Union of all SDK event payloads. */
 export type SdkEvent =
   | { type: 'core:ready'; payload: { assetsVersion: string; durationMs: number } }
   | { type: 'core:progress'; payload: { stage: 'fetch' | 'compile' | 'init'; loaded: number; total?: number } }
@@ -141,6 +156,7 @@ export type SdkEvent =
   | { type: 'zkp:done'; payload: { circuit: 'transfer' | 'withdraw'; costMs: number } }
   | { type: 'error'; payload: SdkErrorPayload };
 
+/** Record opening used in commitments and memos. */
 export interface CommitmentData {
   asset_id: bigint;
   asset_amount: bigint;
@@ -149,6 +165,7 @@ export interface CommitmentData {
   is_frozen: boolean;
 }
 
+/** Decoded memo record with metadata. */
 export interface MemoRecord {
   commitment: Hex;
   memo: Hex;
@@ -158,12 +175,14 @@ export interface MemoRecord {
   mk_index: number;
 }
 
+/** Batch decrypt request entry. */
 export interface MemoDecryptRequest {
   memo: Hex;
   secretKey: bigint;
   metadata?: Record<string, unknown>;
 }
 
+/** Batch decrypt response entry. */
 export interface MemoDecryptResult {
   memo: Hex;
   record: CommitmentData | null;
@@ -171,6 +190,7 @@ export interface MemoDecryptResult {
   error?: { message: string };
 }
 
+/** Accumulator membership witness used by circuits. */
 export interface AccMemberWitness {
   /**
    * Circuits witness format (matches `circuits/pkg/core/policies/witness_json.go`):
@@ -183,6 +203,7 @@ export interface AccMemberWitness {
   index: number;
 }
 
+/** Input secret (keypair + record opening + merkle witness). */
 export interface InputSecret {
   owner_keypair: {
     user_pk: {
@@ -202,21 +223,25 @@ export interface InputSecret {
   acc_member_witness: AccMemberWitness;
 }
 
+/** Circuits JSON format for field points. */
 export interface FrPointJson {
   X: bigint;
   Y: bigint;
 }
 
+/** Circuits JSON format for viewer public key. */
 export interface ViewerPkJson {
   EncryptionKey: {
     Key: FrPointJson;
   };
 }
 
+/** Circuits JSON format for freezer public key. */
 export interface FreezerPkJson {
   Point: FrPointJson;
 }
 
+/** Witness input for transfer circuit. */
 export interface TransferWitnessInput {
   asset_id: string;
   asset_token_id: string;
@@ -233,6 +258,7 @@ export interface TransferWitnessInput {
   proof_binding?: string;
 }
 
+/** Witness input for withdraw circuit. */
 export interface WithdrawWitnessInput {
   asset_id: string;
   asset_token_id: string;
@@ -250,6 +276,7 @@ export interface WithdrawWitnessInput {
   proof_binding?: string;
 }
 
+/** Witness build output with metadata from context. */
 export interface WitnessBuildResult {
   witness: TransferWitnessInput | WithdrawWitnessInput | Record<string, any>;
   array_hash_index?: number;
@@ -263,6 +290,7 @@ export interface WitnessBuildResult {
   warnings?: string[];
 }
 
+/** Context fields attached to witness/proof creation. */
 export interface WitnessContext {
   array_hash_index?: number;
   merkle_root_index?: number;
@@ -275,6 +303,7 @@ export interface WitnessContext {
   withdraw_amount?: bigint;
 }
 
+/** Proof result returned from the prover bridge. */
 export interface ProofResult {
   proof: [string, string, string, string, string, string, string, string];
   flatten_input: string[];
@@ -294,10 +323,14 @@ export interface ProofResult {
   warnings?: string[];
 }
 
+/** Extra data payload for transfer proofs (3 memos). */
 export type TransferExtraData = readonly [Hex, Hex, Hex];
+/** Extra data payload for withdraw proofs (1 memo). */
 export type WithdrawExtraData = Hex;
+/** Union of extra data payloads by action. */
 export type WitnessExtraData = TransferExtraData | WithdrawExtraData;
 
+/** Low-level WASM proof bridge interface. */
 export interface ProofBridge {
   init(): Promise<void>;
   initTransfer(): Promise<void>;
@@ -312,12 +345,14 @@ export interface ProofBridge {
   createDummyInputSecret(): Promise<InputSecret>;
 }
 
+/** Commitment function overloads by return format. */
 export interface CommitmentFn {
   (ro: CommitmentData, format: 'hex'): Hex;
   (ro: CommitmentData, format: 'bigint'): bigint;
   (ro: CommitmentData, format?: undefined): Hex;
 }
 
+/** Sync cursors for memo/nullifier/merkle resources. */
 export interface SyncCursor {
   memo: number;
   nullifier: number;
@@ -328,12 +363,14 @@ export interface SyncCursor {
   merkle: number;
 }
 
+/** Per-chain sync status (memo/nullifier/merkle). */
 export interface SyncChainStatus {
   memo: { status: 'idle' | 'syncing' | 'synced' | 'error'; downloaded: number; total?: number; errorMessage?: string };
   nullifier: { status: 'idle' | 'syncing' | 'synced' | 'error'; downloaded: number; total?: number; errorMessage?: string };
   merkle: { status: 'idle' | 'syncing' | 'synced' | 'error'; cursor: number; errorMessage?: string };
 }
 
+/** UTXO list query options. */
 export type ListUtxosQuery = {
   /** Filter by chain id. */
   chainId?: number;
@@ -357,6 +394,7 @@ export type ListUtxosQuery = {
   order?: 'asc' | 'desc';
 };
 
+/** Persisted entry memo record (raw EntryService memo). */
 export type EntryMemoRecord = {
   /** Chain id (scoped). */
   chainId: number;
@@ -380,6 +418,7 @@ export type EntryMemoRecord = {
   createdAt?: number | null;
 };
 
+/** Persisted entry nullifier record (raw EntryService nullifier). */
 export type EntryNullifierRecord = {
   /** Chain id (scoped). */
   chainId: number;
@@ -394,6 +433,7 @@ export type EntryNullifierRecord = {
   createdAt?: number | null;
 };
 
+/** Query options for entry memos. */
 export type ListEntryMemosQuery = {
   chainId: number;
   /** Start cid (inclusive). Defaults to 0. */
@@ -414,6 +454,7 @@ export type ListEntryMemosQuery = {
   createdAtTo?: number;
 };
 
+/** Query options for entry nullifiers. */
 export type ListEntryNullifiersQuery = {
   chainId: number;
   /** nid offset (defaults to 0). */
@@ -434,21 +475,25 @@ export type ListEntryNullifiersQuery = {
   createdAtTo?: number;
 };
 
+/** Paged result for entry memos. */
 export type ListEntryMemosResult = {
   total: number;
   rows: EntryMemoRecord[];
 };
 
+/** Paged result for entry nullifiers. */
 export type ListEntryNullifiersResult = {
   total: number;
   rows: EntryNullifierRecord[];
 };
 
+/** Paged result for UTXOs. */
 export type ListUtxosResult = {
   total: number;
   rows: UtxoRecord[];
 };
 
+/** Persisted merkle tree state metadata. */
 export type MerkleTreeState = {
   /** Chain id (scoped). */
   chainId: number;
@@ -463,12 +508,14 @@ export type MerkleTreeState = {
   lastUpdated: number;
 };
 
+/** Persisted merkle leaf record. */
 export type MerkleLeafRecord = {
   chainId: number;
   cid: number;
   commitment: Hex;
 };
 
+/** Persisted merkle node record. */
 export type MerkleNodeRecord = {
   chainId: number;
   /**
@@ -482,6 +529,7 @@ export type MerkleNodeRecord = {
   hash: Hex;
 };
 
+/** Storage adapter interface for persistence. */
 export interface StorageAdapter {
   /**
    * Initialize adapter state, optionally scoping storage by wallet id.
@@ -577,6 +625,7 @@ export interface StorageAdapter {
 }
 
 /** WASM & circuit initialization. Call `ready()` before any proof operations. */
+/** Core API for WASM initialization and eventing. */
 export interface CoreApi {
   /** Load Go WASM runtime, compile circuits, and initialize proof engine. */
   ready: (onProgress?: (value: number) => void) => Promise<void>;
@@ -589,6 +638,7 @@ export interface CoreApi {
 }
 
 /** Cryptographic primitives: Poseidon2 commitments, nullifiers, memo encryption. */
+/** Crypto primitives exposed by the SDK. */
 export interface CryptoApi {
   /** Compute Poseidon2 commitment from record opening data. */
   commitment: CommitmentFn;
@@ -623,6 +673,7 @@ export interface CryptoApi {
 }
 
 /** BabyJubjub key derivation and address conversion. Seed must be >= 16 characters. */
+/** Key derivation and address conversion API. */
 export interface KeysApi {
   /** Derive full key pair (secret + public) from seed via HKDF-SHA256. */
   deriveKeyPair: (seed: string, nonce?: string) => UserKeyPair;
@@ -637,6 +688,7 @@ export interface KeysApi {
 }
 
 /** Chain, token, and relayer configuration queries. */
+/** Assets API for chain/token/relayer configuration. */
 export interface AssetsApi {
   getChains: () => ChainConfigInput[];
   getChain: (chainId: number) => ChainConfigInput;
@@ -652,11 +704,13 @@ export interface AssetsApi {
   syncAllRelayerConfigs: () => Promise<void>;
 }
 
+/** Storage API exposure for adapter access. */
 export interface StorageApi {
   getAdapter: () => StorageAdapter;
 }
 
 /** Memo, nullifier, and Merkle tree synchronization from Entry service. */
+/** Sync API for EntryService resources. */
 export interface SyncApi {
   /** Start background polling. Syncs immediately then repeats at `pollMs` interval. */
   start(options?: { chainIds?: number[]; pollMs?: number }): Promise<void>;
@@ -674,12 +728,14 @@ export interface SyncApi {
   getStatus(): Record<number, SyncChainStatus>;
 }
 
+/** Merkle proof response shape from remote service. */
 export interface RemoteMerkleProofResponse {
   proof: Array<{ path: Array<Hex | BigintLikeString>; leaf_index: string | number }>;
   merkle_root: Hex | BigintLikeString;
   latest_cid: number;
 }
 
+/** Merkle API for proof generation and witness building. */
 export interface MerkleApi {
   currentMerkleRootIndex: (totalElements: number, tempArraySize?: number) => number;
   /**
@@ -714,11 +770,13 @@ export interface MerkleApi {
   }) => Promise<InputSecret[]>;
 }
 
+/** Wallet open session parameters. */
 export interface WalletSessionInput {
   seed: string | Uint8Array;
   accountNonce?: number;
 }
 
+/** UTXO record stored in local persistence. */
 export interface UtxoRecord {
   chainId: number;
   assetId: string;
@@ -733,6 +791,7 @@ export interface UtxoRecord {
 }
 
 /** Wallet session, UTXO queries, and balance. */
+/** Wallet API for UTXO queries and session lifecycle. */
 export interface WalletApi {
   /** Open wallet session: derive keys from seed, initialize storage. */
   open(session: WalletSessionInput): Promise<void>;
@@ -746,6 +805,7 @@ export interface WalletApi {
   markSpent(input: { chainId: number; nullifiers: Hex[] }): Promise<void>;
 }
 
+/** Planner estimate result for transfer. */
 export type PlannerEstimateTransferResult = {
   action: 'transfer';
   chainId: number;
@@ -762,6 +822,7 @@ export type PlannerEstimateTransferResult = {
   constraints: { maxInputs: number };
 };
 
+/** Planner estimate result for withdraw. */
 export type PlannerEstimateWithdrawResult = {
   action: 'withdraw';
   chainId: number;
@@ -778,8 +839,10 @@ export type PlannerEstimateWithdrawResult = {
   constraints: { requiresSingleInput: true };
 };
 
+/** Planner estimate union. */
 export type PlannerEstimateResult = PlannerEstimateTransferResult | PlannerEstimateWithdrawResult;
 
+/** Summary of fees and inputs used by planner. */
 export type PlannerFeeSummary = {
   mergeCount: number;
   feeCount: number;
@@ -791,6 +854,7 @@ export type PlannerFeeSummary = {
   inputCount: number;
 };
 
+/** Planner max estimate result for transfer/withdraw. */
 export type PlannerMaxEstimateResult = {
   action: 'transfer' | 'withdraw';
   chainId: number;
@@ -799,6 +863,7 @@ export type PlannerMaxEstimateResult = {
   maxSummary: PlannerFeeSummary;
 };
 
+/** Transfer plan with inputs/outputs and proof binding. */
 export type TransferPlan = {
   action: 'transfer';
   chainId: number;
@@ -821,6 +886,7 @@ export type TransferPlan = {
   proofBinding: string;
 };
 
+/** Transfer-merge plan including merge step. */
 export type TransferMergePlan = {
   action: 'transfer-merge';
   chainId: number;
@@ -838,6 +904,7 @@ export type TransferMergePlan = {
   mergePlan: TransferPlan;
 };
 
+/** Withdraw plan with input/output and proof binding. */
 export type WithdrawPlan = {
   action: 'withdraw';
   chainId: number;
@@ -860,9 +927,11 @@ export type WithdrawPlan = {
   recipient: Hex;
 };
 
+/** Planner plan union. */
 export type PlannerPlanResult = TransferPlan | TransferMergePlan | WithdrawPlan;
 
 /** Coin selection, fee estimation, and transaction planning. */
+/** Planner API for fee estimation and plan creation. */
 export interface PlannerApi {
   /** Estimate fees and check if balance is sufficient for an operation. */
   estimate(input: { chainId: number; assetId: string; action: 'transfer' | 'withdraw'; amount: bigint; payIncludesFee?: boolean }): Promise<PlannerEstimateResult>;
@@ -873,6 +942,7 @@ export interface PlannerApi {
 }
 
 /** zk-SNARK proof generation via Go WASM (Groth16). Requires `core.ready()`. */
+/** ZKP API for witness/proof generation. */
 export interface ZkpApi {
   createWitnessTransfer: (input: TransferWitnessInput, context?: WitnessContext) => Promise<WitnessBuildResult>;
   createWitnessWithdraw: (input: WithdrawWitnessInput, context?: WitnessContext) => Promise<WitnessBuildResult>;
@@ -880,6 +950,7 @@ export interface ZkpApi {
   proveWithdraw: (witness: WithdrawWitnessInput | string, context?: WitnessContext) => Promise<ProofResult>;
 }
 
+/** Relayer request payload built from proofs. */
 export interface RelayerRequest {
   kind: 'relayer';
   method: 'POST';
@@ -887,12 +958,14 @@ export interface RelayerRequest {
   body: Record<string, unknown>;
 }
 
+/** Tx builder API for relayer request construction. */
 export interface TxBuilderApi {
   buildTransferCalldata: (input: { chainId: number; proof: ProofResult }) => Promise<RelayerRequest>;
   buildWithdrawCalldata: (input: { chainId: number; proof: ProofResult }) => Promise<RelayerRequest>;
 }
 
 /** End-to-end operation orchestration: plan → Merkle proof → witness → zk-SNARK proof → relayer request. */
+/** Ops API for end-to-end operations (plan → proof → relayer). */
 export interface OpsApi {
   /** Prepare a private transfer (auto-merges UTXOs if needed when `autoMerge: true`). */
   prepareTransfer(input: { chainId: number; assetId: string; amount: bigint; to: Hex; ownerKeyPair: UserKeyPair; publicClient: PublicClient; relayerUrl?: string; autoMerge?: boolean }): Promise<
@@ -1010,6 +1083,7 @@ export interface OpsApi {
  *
  * Lifecycle: `core.ready()` → `wallet.open()` → `sync.syncOnce()` → operations → `wallet.close()`
  */
+/** SDK instance returned by createSdk(config). */
 export interface OCashSdk {
   /** WASM & circuit initialization. */
   core: CoreApi;
@@ -1037,16 +1111,19 @@ export interface OCashSdk {
   ops: OpsApi;
 }
 
+/** User public key. */
 export interface UserPublicKey {
   user_pk: {
     user_address: [bigint, bigint];
   };
 }
 
+/** User secret key (includes public key). */
 export interface UserSecretKey extends UserPublicKey {
   user_sk: {
     address_sk: bigint;
   };
 }
 
+/** User key pair alias (secret + public). */
 export interface UserKeyPair extends UserSecretKey {}

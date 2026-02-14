@@ -4,6 +4,9 @@ import type { CommitmentData, Hex } from '../types';
 import { Poseidon2, Poseidon2Domain } from './poseidon2';
 import { randomBytes32Bigint } from '../utils/random';
 
+/**
+ * Cryptographic helpers for commitments, nullifiers, and record openings.
+ */
 export class CryptoToolkit {
   static commitment(record: CommitmentData, format: 'hex'): Hex;
   static commitment(record: CommitmentData, format: 'bigint'): bigint;
@@ -18,6 +21,10 @@ export class CryptoToolkit {
     return format === 'bigint' ? BigInt(hex) : hex;
   }
 
+  /**
+   * Compute nullifier for a commitment using secret key and optional freezer PK.
+   * If freezer PK is default (0,1), the secret key is used directly.
+   */
   static nullifier(secretKey: bigint, commitment: `0x${string}`, freezerPk?: [bigint, bigint]): `0x${string}` {
     let nullifierKey: bigint;
     const defaultFreezer = !freezerPk || (freezerPk[0] === 0n && freezerPk[1] === 1n);
@@ -35,6 +42,10 @@ export class CryptoToolkit {
     return toHex(n, { size: 32 });
   }
 
+  /**
+   * Create a record opening with normalized fields and a random blinding factor.
+   * Ensures non-zero commitment when auto-generating the blinding factor.
+   */
   static createRecordOpening(input: {
     asset_id: bigint | number | string;
     asset_amount: bigint | number | string;
@@ -67,6 +78,9 @@ export class CryptoToolkit {
     throw new Error('Failed to derive non-zero commitment');
   }
 
+  /**
+   * Generate randomness for memo encryption (BabyJubjub scalar).
+   */
   static viewingRandomness(): Uint8Array {
     const scalar = randomBytes32Bigint(true) % BABYJUBJUB_ORDER;
     const buf = new Uint8Array(32);
@@ -77,6 +91,9 @@ export class CryptoToolkit {
     return buf;
   }
 
+  /**
+   * Compute pool id from token address and policy keys.
+   */
   static poolId(tokenAddress: Hex | bigint | number | string, viewerPk: [bigint, bigint], freezerPk: [bigint, bigint]): bigint {
     const inputs = [BigInt(viewerPk[0]), BigInt(viewerPk[1]), BigInt(freezerPk[0]), BigInt(freezerPk[1])];
     const seed = typeof tokenAddress === 'bigint' ? tokenAddress : BigInt(tokenAddress);

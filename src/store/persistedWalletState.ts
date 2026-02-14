@@ -8,8 +8,14 @@ export type PersistedWalletState = {
   utxos: Record<string, PersistedUtxoRecord>;
 };
 
+/**
+ * Default cursor shape for new chains.
+ */
 export const defaultCursor = (): SyncCursor => ({ memo: 0, nullifier: 0, merkle: 0 });
 
+/**
+ * Serialize wallet state (convert bigint amounts to strings).
+ */
 export function serializeWalletState(input: { walletId?: string; cursors: Map<number, SyncCursor>; utxos: Map<string, UtxoRecord> }): PersistedWalletState {
   const cursors: PersistedWalletState['cursors'] = {};
   for (const [chainId, cursor] of input.cursors.entries()) {
@@ -24,6 +30,9 @@ export function serializeWalletState(input: { walletId?: string; cursors: Map<nu
   return { walletId: input.walletId, cursors, utxos };
 }
 
+/**
+ * Hydrate wallet state from persisted JSON (convert amounts to bigint).
+ */
 export function hydrateWalletState(state: PersistedWalletState | undefined) {
   const cursors = new Map<number, SyncCursor>();
   const utxos = new Map<string, UtxoRecord>();

@@ -1,6 +1,9 @@
 import { bytesToHex } from '@noble/hashes/utils';
 import { BN254_FIELD_MODULUS } from '../crypto/field';
 
+/**
+ * Read cryptographically secure random bytes from global crypto.
+ */
 const getRandomBytes = (size: number): Uint8Array => {
   if (typeof globalThis.crypto === 'undefined' || typeof globalThis.crypto.getRandomValues !== 'function') {
     throw new Error('Secure random generator is not available in this environment');
@@ -10,6 +13,9 @@ const getRandomBytes = (size: number): Uint8Array => {
   return array;
 };
 
+/**
+ * 32-byte random buffer.
+ */
 export const randomBytes32 = (): Uint8Array => getRandomBytes(32);
 
 /**

@@ -20,6 +20,9 @@ type NormalizedSyncEngineOptions = Omit<Required<SyncEngineOptions>, 'retry'> & 
   retry: { attempts: number; baseDelayMs: number; maxDelayMs: number };
 };
 
+/**
+ * Clamp a numeric input to a bounded integer with fallback.
+ */
 const toBoundedInt = (value: unknown, fallback: number, bounds: { min: number; max?: number }): number => {
   if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
   const floored = Math.floor(value);
@@ -28,6 +31,9 @@ const toBoundedInt = (value: unknown, fallback: number, bounds: { min: number; m
   return Math.min(max, Math.max(bounds.min, floored));
 };
 
+/**
+ * Normalize sync options and apply defaults/safety bounds.
+ */
 const normalizeSyncEngineOptions = (options?: SyncEngineOptions): NormalizedSyncEngineOptions => {
   const merged = {
     pageSize: DEFAULT_PAGE_SIZE,
@@ -51,16 +57,25 @@ const normalizeSyncEngineOptions = (options?: SyncEngineOptions): NormalizedSync
   };
 };
 
+/**
+ * Default cursor for a chain when no state is persisted.
+ */
 const defaultCursor = (): SyncCursor => ({ memo: 0, nullifier: 0, merkle: 0 });
 
 // Merkle cursor represents the current merkle root index (not leaf/cid).
 // The on-chain accumulator advances the root index in fixed batches (default 32 leaves).
+/**
+ * Derive the current merkle root index from total leaf count.
+ */
 const currentMerkleRootIndex = (totalElements: number, tempArraySize = MERKLE_TEMP_ARRAY_SIZE_DEFAULT) => {
   if (!Number.isFinite(totalElements) || totalElements <= 0) return 0;
   if (totalElements <= tempArraySize) return 0;
   return Math.floor((totalElements - 1) / tempArraySize);
 };
 
+/**
+ * Filter and retain only contiguous memo entries starting at expected cid.
+ */
 const sanitizeContiguousMemos = <T extends { cid: number | null }>(memos: T[], expectedCid: number): T[] => {
   const sorted = memos.filter((m): m is T & { cid: number } => typeof m.cid === 'number').sort((a, b) => a.cid - b.cid);
   const contiguous: T[] = [];
@@ -74,6 +89,9 @@ const sanitizeContiguousMemos = <T extends { cid: number | null }>(memos: T[], e
   return contiguous;
 };
 
+/**
+ * Small helper to compute the minimum cid in a batch.
+ */
 const minCid = (memos: Array<{ cid: number | null }>): number | null => {
   let min: number | null = null;
   for (const memo of memos) {
@@ -84,6 +102,9 @@ const minCid = (memos: Array<{ cid: number | null }>): number | null => {
   return min;
 };
 
+/**
+ * Sample up to N cids for diagnostics.
+ */
 const sampleCids = (memos: Array<{ cid: number | null }>, limit = 10): number[] => {
   const out = memos
     .map((m) => m.cid)
@@ -94,6 +115,9 @@ const sampleCids = (memos: Array<{ cid: number | null }>, limit = 10): number[] 
 
 import { signalTimeout, signalAny } from '../utils/signal';
 
+/**
+ * Find first duplicate in a list (case-insensitive).
+ */
 const findDuplicate = (values: string[]): string | null => {
   const seen = new Set<string>();
   for (const v of values) {
@@ -104,11 +128,17 @@ const findDuplicate = (values: string[]): string | null => {
   return null;
 };
 
+/**
+ * Convert error objects to a user-facing message string.
+ */
 const stringifyError = (error: unknown): string => {
   if (error instanceof Error) return error.message;
   return String(error);
 };
 
+/**
+ * Produce a descriptive sync error message with HTTP context when available.
+ */
 const formatSyncErrorMessage = (error: unknown): string => {
   if (error instanceof SdkError) {
     const base = error.message;
@@ -137,6 +167,10 @@ const formatSyncErrorMessage = (error: unknown): string => {
   return stringifyError(error);
 };
 
+/**
+ * Synchronizes EntryService memos/nullifiers and updates local storage/UTXO state.
+ * Also derives the merkle cursor from memo total element counts.
+ */
 export class SyncEngine implements SyncApi {
   private readonly status: Record<number, SyncChainStatus> = {};
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -155,10 +189,16 @@ export class SyncEngine implements SyncApi {
     this.options = normalizeSyncEngineOptions(options);
   }
 
+  /**
+   * Return shallow copy of current sync status per chain.
+   */
   getStatus() {
     return { ...this.status };
   }
 
+  /**
+   * Start background polling. Runs an initial sync immediately.
+   */
   async start(options?: { chainIds?: number[]; pollMs?: number }) {
     if (this.timer) return;
     this.abortController = new AbortController();
@@ -171,6 +211,9 @@ export class SyncEngine implements SyncApi {
     }, pollMs);
   }
 
+  /**
+   * Stop background polling and abort in-flight syncs.
+   */
   stop() {
     this.abortController?.abort();
     this.abortController = null;
@@ -178,6 +221,9 @@ export class SyncEngine implements SyncApi {
     this.timer = null;
   }
 
+  /**
+   * Run a single sync pass for requested chains/resources.
+   */
   async syncOnce(options?: { chainIds?: number[]; resources?: Array<'memo' | 'nullifier' | 'merkle'>; signal?: AbortSignal; requestTimeoutMs?: number; pageSize?: number; continueOnError?: boolean }) {
     const chainIds = options?.chainIds ?? this.assets.getChains().map((c) => c.chainId);
     const requestTimeoutMs = toBoundedInt(options?.requestTimeoutMs, this.options.requestTimeoutMs, { min: 1000 });
@@ -214,6 +260,9 @@ export class SyncEngine implements SyncApi {
     await Promise.all(tasks);
   }
 
+  /**
+   * Initialize or return existing status record for a chain.
+   */
   private initChainStatus(chainId: number): SyncChainStatus {
     return (
       this.status[chainId] ??
@@ -225,6 +274,9 @@ export class SyncEngine implements SyncApi {
     );
   }
 
+  /**
+   * Sync a single chain's memo/nullifier resources and update cursors.
+   */
   private async syncChain(chainId: number, resources?: Array<'memo' | 'nullifier' | 'merkle'>, options?: { signal?: AbortSignal; requestTimeoutMs: number; pageSize: number }) {
     const chain = this.assets.getChain(chainId);
     const cursor = (await this.storage.getSyncCursor(chainId)) ?? defaultCursor();
@@ -504,6 +556,9 @@ export class SyncEngine implements SyncApi {
     }
   }
 
+  /**
+   * Retry wrapper with exponential backoff and abort support.
+   */
   private async withRetries<T>(fn: () => Promise<T>, meta: { chainId: number; resource: 'memo' | 'nullifier' | 'merkle'; signal?: AbortSignal }): Promise<T> {
     const attempts = this.options.retry.attempts;
     const baseDelayMs = this.options.retry.baseDelayMs;
@@ -543,6 +598,9 @@ export class SyncEngine implements SyncApi {
     throw lastError;
   }
 
+  /**
+   * Determine whether a failure is retryable (HTTP 429/5xx or transport).
+   */
   private shouldRetry(error: unknown): boolean {
     if (error instanceof SdkError) {
       const status = (error.detail as any)?.status;

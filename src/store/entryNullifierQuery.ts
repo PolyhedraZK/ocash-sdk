@@ -1,11 +1,17 @@
 import type { EntryNullifierRecord, ListEntryNullifiersQuery, ListEntryNullifiersResult } from '../types';
 
+/**
+ * Normalize numeric inputs to finite integers.
+ */
 function normalizeNumber(value: number | undefined) {
   if (value == null) return undefined;
   const num = Math.floor(value);
   return Number.isFinite(num) ? num : undefined;
 }
 
+/**
+ * Compare createdAt fields with optional presence handling.
+ */
 function compareCreatedAt(a: EntryNullifierRecord, b: EntryNullifierRecord, factor: number) {
   const aHas = a.createdAt != null;
   const bHas = b.createdAt != null;
@@ -15,6 +21,9 @@ function compareCreatedAt(a: EntryNullifierRecord, b: EntryNullifierRecord, fact
   return diff === 0 ? 0 : diff * factor;
 }
 
+/**
+ * Apply filters/sort/pagination for entry nullifier rows.
+ */
 export function applyEntryNullifierQuery(rows: EntryNullifierRecord[], query: ListEntryNullifiersQuery): ListEntryNullifiersResult {
   const orderBy = query.orderBy ?? 'nid';
   const order = query.order ?? 'asc';

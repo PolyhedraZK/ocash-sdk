@@ -40,6 +40,9 @@ const toFrPointJson = (input: [string, string]) => ({ X: BigInt(input[0]), Y: Bi
 const toViewerPkJson = (input: [string, string]) => ({ EncryptionKey: { Key: toFrPointJson(input) } });
 const toFreezerPkJson = (input: [string, string]) => ({ Point: toFrPointJson(input) });
 
+/**
+ * Build transfer witness JSON structure expected by the circuits.
+ */
 const buildTransferWitness = (input: { token: TokenMetadata; inputSecrets: any[]; outputs: any[]; array: any; relayerFee: bigint; proofBinding: string }): TransferWitnessInput => {
   const token = input.token;
   return {
@@ -65,6 +68,9 @@ const buildTransferWitness = (input: { token: TokenMetadata; inputSecrets: any[]
   };
 };
 
+/**
+ * Build withdraw witness JSON structure expected by the circuits.
+ */
 const buildWithdrawWitness = (input: {
   token: TokenMetadata;
   inputSecret: any;
@@ -94,6 +100,10 @@ const buildWithdrawWitness = (input: {
   };
 };
 
+/**
+ * Ops is the end-to-end orchestrator:
+ * plan → merkle proof → witness → proof → relayer request → optional submission.
+ */
 export class Ops implements OpsApi {
   private readonly publicClients = new Map<number, PublicClient>();
 
@@ -108,14 +118,23 @@ export class Ops implements OpsApi {
     private readonly emit?: (evt: SdkEvent) => void,
   ) {}
 
+  /**
+   * Emit a debug event with a scoped message.
+   */
   private debug(scope: string, message: string, detail?: Record<string, unknown>) {
     this.emit?.({ type: 'debug', payload: { scope, message, detail } });
   }
 
+  /**
+   * Emit an operations:update event.
+   */
   private emitOperationUpdate(payload: Extract<SdkEvent, { type: 'operations:update' }>['payload']) {
     this.emit?.({ type: 'operations:update', payload });
   }
 
+  /**
+   * Get or create a PublicClient for a chain using its rpcUrl.
+   */
   private getPublicClient(chainId: number): PublicClient {
     const cached = this.publicClients.get(chainId);
     if (cached) return cached;
@@ -128,6 +147,9 @@ export class Ops implements OpsApi {
     return client;
   }
 
+  /**
+   * Helper to record debug timings around async work.
+   */
   private async timed<T>(scope: string, label: string, detail: Record<string, unknown>, fn: () => Promise<T>): Promise<T> {
     const startedAt = Date.now();
     this.debug(scope, `${label}:start`, detail);
@@ -145,6 +167,9 @@ export class Ops implements OpsApi {
     }
   }
 
+  /**
+   * Update operation record (best-effort) and emit update event.
+   */
   private updateOperation(operationId: string | undefined, patch: Parameters<StorageAdapter['updateOperation']>[1]) {
     if (!operationId) return;
     try {
@@ -155,6 +180,9 @@ export class Ops implements OpsApi {
     }
   }
 
+  /**
+   * Wrap a stage with standardized SdkError mapping.
+   */
   private async stage<T>(code: SdkErrorCode, message: string, detail: Record<string, unknown>, fn: () => Promise<T>): Promise<T> {
     try {
       return await fn();
@@ -164,6 +192,9 @@ export class Ops implements OpsApi {
     }
   }
 
+  /**
+   * Prepare a transfer from an already built plan (single operation).
+   */
   private async prepareTransferFromPlan(input: { plan: TransferPlan; ownerKeyPair: UserKeyPair; publicClient: PublicClient }) {
     const scope = 'ops:prepareTransfer';
     const chain = this.assets.getChain(input.plan.chainId);
@@ -271,6 +302,9 @@ export class Ops implements OpsApi {
     };
   }
 
+  /**
+   * Prepare a transfer. If planner returns a merge plan, returns merge info.
+   */
   async prepareTransfer(input: { chainId: number; assetId: string; amount: bigint; to: Hex; ownerKeyPair: UserKeyPair; publicClient: PublicClient; relayerUrl?: string; autoMerge?: boolean }) {
     const scope = 'ops:prepareTransfer';
     this.debug(scope, 'start', { chainId: input.chainId, assetId: input.assetId, to: input.to });
@@ -330,6 +364,9 @@ export class Ops implements OpsApi {
     return { kind: 'transfer' as const, ...prepared };
   }
 
+  /**
+   * Prepare a withdrawal: plan, merkle proof, witness, proof, relayer request.
+   */
   async prepareWithdraw(input: {
     chainId: number;
     assetId: string;
@@ -483,6 +520,9 @@ export class Ops implements OpsApi {
     };
   }
 
+  /**
+   * Build a storage operation record from a transfer/withdraw plan.
+   */
   private buildOperationFromPlan(plan: TransferPlan | WithdrawPlan): OperationCreateInput {
     if (plan.action === 'transfer') {
       const inputCommitments = plan.selectedInputs.map((u) => u.commitment);
@@ -529,6 +569,9 @@ export class Ops implements OpsApi {
     };
   }
 
+  /**
+   * Submit a prepared relayer request and optionally wait for tx confirmation.
+   */
   async submitRelayerRequest<T = unknown>(input: {
     prepared: { plan: TransferPlan | WithdrawPlan; request: RelayerRequest; kind?: 'transfer' | 'merge' };
     relayerUrl?: string;
@@ -663,6 +706,9 @@ export class Ops implements OpsApi {
     }
   }
 
+  /**
+   * Prepare a deposit operation: compute RO/memo, fees, and contract calls.
+   */
   async prepareDeposit(input: { chainId: number; assetId: string; amount: bigint; ownerPublicKey: UserPublicKey; account: Address; publicClient: PublicClient }): Promise<{
     chainId: number;
     assetId: string;
@@ -789,6 +835,9 @@ export class Ops implements OpsApi {
     };
   }
 
+  /**
+   * Submit a prepared deposit: optionally approve ERC20, then deposit.
+   */
   async submitDeposit(input: {
     prepared: Awaited<ReturnType<Ops['prepareDeposit']>>;
     walletClient: { writeContract: (request: { address: Address; abi: any; functionName: string; args: any; value?: bigint; chainId?: number }) => Promise<Hex> };
@@ -835,6 +884,9 @@ export class Ops implements OpsApi {
     return { txHash, approveTxHash, receipt, operationId };
   }
 
+  /**
+   * Poll the relayer for the on-chain tx hash of a submitted relayer request.
+   */
   async waitRelayerTxHash(input: { relayerUrl: string; relayerTxHash: Hex; timeoutMs?: number; intervalMs?: number; signal?: AbortSignal; operationId?: string; requestUrl?: string }): Promise<Hex> {
     const timeoutMs = input.timeoutMs ?? 120_000;
     const intervalMs = input.intervalMs ?? 2_000;
@@ -867,6 +919,9 @@ export class Ops implements OpsApi {
     throw new SdkError('RELAYER', 'waitRelayerTxHash timeout', { relayerUrl: input.relayerUrl, relayerTxHash: input.relayerTxHash });
   }
 
+  /**
+   * Wait for a transaction receipt and update operation status.
+   */
   async waitForTransactionReceipt(input: {
     publicClient: PublicClient;
     txHash: Hex;

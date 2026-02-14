@@ -3,16 +3,25 @@ import { SdkError } from '../errors';
 import { getAddress, type Address } from 'viem';
 import { isHexStrict } from '../utils/hex';
 
+/**
+ * Require a finite number from unknown input.
+ */
 const requireNumber = (value: unknown, name: string): number => {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   throw new SdkError('CONFIG', `Missing ${name}`);
 };
 
+/**
+ * Require a strict hex string from unknown input.
+ */
 const requireHex = (value: unknown, name: string): `0x${string}` => {
   if (isHexStrict(value, { minBytes: 1 })) return value as `0x${string}`;
   throw new SdkError('CONFIG', `Missing ${name}`);
 };
 
+/**
+ * Require a valid EVM address from unknown input.
+ */
 const requireAddress = (value: unknown, name: string): Address => {
   if (typeof value !== 'string') {
     throw new SdkError('CONFIG', `Missing ${name}`);
@@ -20,6 +29,9 @@ const requireAddress = (value: unknown, name: string): Address => {
   return getAddress(value);
 };
 
+/**
+ * Require a bigint-like value from unknown input.
+ */
 const requireBigint = (value: unknown, name: string): bigint => {
   if (typeof value === 'bigint') return value;
   if (typeof value === 'string' && value.length) return BigInt(value);
@@ -27,7 +39,13 @@ const requireBigint = (value: unknown, name: string): bigint => {
   throw new SdkError('CONFIG', `Missing ${name}`);
 };
 
+/**
+ * Build relayer request payloads from proof results.
+ */
 export class TxBuilder implements TxBuilderApi {
+  /**
+   * Build relayer request for transfer proofs.
+   */
   async buildTransferCalldata(input: { chainId: number; proof: ProofResult }): Promise<RelayerRequest> {
     const proof = input.proof;
     const arrayHashIndex = requireNumber(proof.array_hash_index, 'array_hash_index');
@@ -58,6 +76,9 @@ export class TxBuilder implements TxBuilderApi {
     return request;
   }
 
+  /**
+   * Build relayer request for withdraw proofs.
+   */
   async buildWithdrawCalldata(input: { chainId: number; proof: ProofResult }): Promise<RelayerRequest> {
     const proof = input.proof;
     const arrayHashIndex = requireNumber(proof.array_hash_index, 'array_hash_index');

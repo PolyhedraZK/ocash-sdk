@@ -1,3 +1,6 @@
+/**
+ * Create an AbortSignal that fires after a timeout.
+ */
 export const signalTimeout = (ms: number): AbortSignal => {
   const anyAbortSignal = AbortSignal;
   if (typeof anyAbortSignal?.timeout === 'function') return anyAbortSignal.timeout(ms) as AbortSignal;
@@ -7,6 +10,9 @@ export const signalTimeout = (ms: number): AbortSignal => {
   return controller.signal;
 };
 
+/**
+ * Combine multiple signals into one that aborts on the first abort.
+ */
 export const signalAny = (signals: Array<AbortSignal | undefined>): AbortSignal | undefined => {
   const list = signals.filter(Boolean) as AbortSignal[];
   if (!list.length) return undefined;

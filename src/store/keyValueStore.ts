@@ -27,6 +27,9 @@ export type KeyValueStoreOptions = {
   maxOperations?: number;
 };
 
+/**
+ * Generic key-value backed StorageAdapter for Redis/SQLite/etc.
+ */
 export class KeyValueStore implements StorageAdapter {
   private walletId: string | undefined;
   private readonly cursors = new Map<number, SyncCursor>();
@@ -40,26 +43,41 @@ export class KeyValueStore implements StorageAdapter {
   private saveChain: Promise<void> = Promise.resolve();
   private readonly maxOperations: number;
 
+  /**
+   * Create a KeyValueStore with a backend client and optional config.
+   */
   constructor(private readonly options: KeyValueStoreOptions) {
     const max = options.maxOperations;
     this.maxOperations = max == null ? Number.POSITIVE_INFINITY : Math.max(0, Math.floor(max));
   }
 
+  /**
+   * Initialize store for a wallet id and load persisted state.
+   */
   async init(options?: { walletId?: string }) {
     this.walletId = options?.walletId ?? this.walletId;
     await this.load();
   }
 
+  /**
+   * Persist state to the backend store.
+   */
   async close() {
     await this.save();
   }
 
+  /**
+   * Compute the storage key for the current wallet id.
+   */
   private stateKey() {
     const prefix = this.options.keyPrefix ?? 'ocash:sdk:store';
     const id = this.walletId ?? 'default';
     return `${prefix}:${id}`;
   }
 
+  /**
+   * Load persisted state from the backend store.
+   */
   private async load() {
     // Reset local state first; if the remote has no state for this wallet, we should not leak data from a previous walletId.
     this.cursors.clear();
@@ -111,6 +129,9 @@ export class KeyValueStore implements StorageAdapter {
     if (pruned) void this.save().catch(() => undefined);
   }
 
+  /**
+   * Persist current state to the backend store.
+   */
   private async save() {
     this.saveChain = this.saveChain
       .catch(() => undefined)
@@ -130,6 +151,9 @@ export class KeyValueStore implements StorageAdapter {
     return this.saveChain;
   }
 
+  /**
+   * Get a merkle node by id.
+   */
   async getMerkleNode(chainId: number, id: string): Promise<MerkleNodeRecord | undefined> {
     const node = this.merkleNodes[String(chainId)]?.[id];
     if (!node) return undefined;
@@ -138,6 +162,9 @@ export class KeyValueStore implements StorageAdapter {
     return { ...node, chainId };
   }
 
+  /**
+   * Upsert merkle nodes and persist.
+   */
   async upsertMerkleNodes(chainId: number, nodes: MerkleNodeRecord[]): Promise<void> {
     if (!nodes.length) return;
     const key = String(chainId);
@@ -149,11 +176,17 @@ export class KeyValueStore implements StorageAdapter {
     await this.save();
   }
 
+  /**
+   * Clear merkle nodes for a chain.
+   */
   async clearMerkleNodes(chainId: number): Promise<void> {
     delete this.merkleNodes[String(chainId)];
     await this.save();
   }
 
+  /**
+   * Get persisted merkle tree metadata for a chain.
+   */
   async getMerkleTree(chainId: number): Promise<MerkleTreeState | undefined> {
     const row = this.merkleTrees[String(chainId)];
     if (!row) return undefined;
@@ -165,16 +198,25 @@ export class KeyValueStore implements StorageAdapter {
     return { chainId, root, totalElements: Math.floor(totalElements), lastUpdated: Number.isFinite(lastUpdated) ? Math.floor(lastUpdated) : 0 };
   }
 
+  /**
+   * Persist merkle tree metadata for a chain.
+   */
   async setMerkleTree(chainId: number, tree: MerkleTreeState): Promise<void> {
     this.merkleTrees[String(chainId)] = { ...tree, chainId };
     await this.save();
   }
 
+  /**
+   * Clear merkle tree metadata for a chain.
+   */
   async clearMerkleTree(chainId: number): Promise<void> {
     delete this.merkleTrees[String(chainId)];
     await this.save();
   }
 
+  /**
+   * Upsert entry memos and persist.
+   */
   async upsertEntryMemos(memos: EntryMemoRecord[]): Promise<number> {
     let updated = 0;
     const grouped = new Map<number, EntryMemoRecord[]>();
@@ -203,6 +245,9 @@ export class KeyValueStore implements StorageAdapter {
     return updated;
   }
 
+  /**
+   * List entry memos with query filtering and pagination.
+   */
   async listEntryMemos(query: ListEntryMemosQuery): Promise<{ total: number; rows: EntryMemoRecord[] }> {
     const rows = this.entryMemos[String(query.chainId)];
     if (!Array.isArray(rows) || rows.length === 0) return { total: 0, rows: [] };
@@ -210,11 +255,17 @@ export class KeyValueStore implements StorageAdapter {
     return { total: paged.total, rows: paged.rows.map((r) => ({ ...r })) };
   }
 
+  /**
+   * Clear entry memo cache for a chain.
+   */
   async clearEntryMemos(chainId: number): Promise<void> {
     delete this.entryMemos[String(chainId)];
     await this.save();
   }
 
+  /**
+   * Upsert entry nullifiers and persist.
+   */
   async upsertEntryNullifiers(nullifiers: EntryNullifierRecord[]): Promise<number> {
     let updated = 0;
     const grouped = new Map<number, EntryNullifierRecord[]>();
@@ -243,6 +294,9 @@ export class KeyValueStore implements StorageAdapter {
     return updated;
   }
 
+  /**
+   * List entry nullifiers with query filtering and pagination.
+   */
   async listEntryNullifiers(query: ListEntryNullifiersQuery): Promise<{ total: number; rows: EntryNullifierRecord[] }> {
     const rows = this.entryNullifiers[String(query.chainId)];
     if (!Array.isArray(rows) || rows.length === 0) return { total: 0, rows: [] };
@@ -250,11 +304,17 @@ export class KeyValueStore implements StorageAdapter {
     return { total: paged.total, rows: paged.rows.map((r) => ({ ...r })) };
   }
 
+  /**
+   * Clear entry nullifier cache for a chain.
+   */
   async clearEntryNullifiers(chainId: number): Promise<void> {
     delete this.entryNullifiers[String(chainId)];
     await this.save();
   }
 
+  /**
+   * Get persisted merkle leaves for a chain.
+   */
   async getMerkleLeaves(chainId: number): Promise<Array<{ cid: number; commitment: Hex }> | undefined> {
     const rows = this.merkleLeaves[String(chainId)];
     if (!Array.isArray(rows) || rows.length === 0) return undefined;
@@ -270,6 +330,9 @@ export class KeyValueStore implements StorageAdapter {
     return out.length ? out : undefined;
   }
 
+  /**
+   * Get a merkle leaf by cid.
+   */
   async getMerkleLeaf(chainId: number, cid: number) {
     const rows = await this.getMerkleLeaves(chainId);
     const row = rows?.[cid];
@@ -277,6 +340,9 @@ export class KeyValueStore implements StorageAdapter {
     return { chainId, cid: row.cid, commitment: row.commitment };
   }
 
+  /**
+   * Append contiguous merkle leaves and persist.
+   */
   async appendMerkleLeaves(chainId: number, leaves: Array<{ cid: number; commitment: Hex }>): Promise<void> {
     if (!leaves.length) return;
     const key = String(chainId);
@@ -300,21 +366,33 @@ export class KeyValueStore implements StorageAdapter {
     await this.save();
   }
 
+  /**
+   * Clear merkle leaves for a chain.
+   */
   async clearMerkleLeaves(chainId: number): Promise<void> {
     delete this.merkleLeaves[String(chainId)];
     await this.save();
   }
 
+  /**
+   * Get persisted sync cursor for a chain.
+   */
   async getSyncCursor(chainId: number): Promise<SyncCursor | undefined> {
     const cursor = this.cursors.get(chainId);
     return cursor ? { ...cursor } : undefined;
   }
 
+  /**
+   * Set persisted sync cursor for a chain.
+   */
   async setSyncCursor(chainId: number, cursor: SyncCursor): Promise<void> {
     this.cursors.set(chainId, { ...cursor });
     await this.save();
   }
 
+  /**
+   * Upsert UTXOs and persist.
+   */
   async upsertUtxos(utxos: UtxoRecord[]): Promise<void> {
     for (const utxo of utxos) {
       const key = `${utxo.chainId}:${utxo.commitment}`;
@@ -324,12 +402,18 @@ export class KeyValueStore implements StorageAdapter {
     await this.save();
   }
 
+  /**
+   * List UTXOs with query filtering and pagination.
+   */
   async listUtxos(query?: ListUtxosQuery): Promise<{ total: number; rows: UtxoRecord[] }> {
     const records = Array.from(this.utxos.values());
     const paged = applyUtxoQuery(records, query);
     return { total: paged.total, rows: paged.rows.map((utxo) => ({ ...utxo })) };
   }
 
+  /**
+   * Mark UTXOs as spent by nullifier and persist.
+   */
   async markSpent(input: { chainId: number; nullifiers: Hex[] }): Promise<number> {
     const wanted = new Set(input.nullifiers.map((nf) => nf.toLowerCase()));
     let updated = 0;
@@ -345,6 +429,9 @@ export class KeyValueStore implements StorageAdapter {
     return updated;
   }
 
+  /**
+   * Create and persist an operation record.
+   */
   createOperation<TType extends OperationType>(
     input: Omit<StoredOperation<OperationDetailFor<TType>>, 'id' | 'createdAt' | 'status'> & Partial<Pick<StoredOperation<OperationDetailFor<TType>>, 'createdAt' | 'id' | 'status'>> & { type: TType },
   ) {
@@ -360,6 +447,9 @@ export class KeyValueStore implements StorageAdapter {
     return created;
   }
 
+  /**
+   * Update an operation record and persist.
+   */
   updateOperation(id: string, patch: Partial<StoredOperation>) {
     const idx = this.operations.findIndex((op) => op.id === id);
     if (idx === -1) return;
@@ -367,6 +457,9 @@ export class KeyValueStore implements StorageAdapter {
     void this.save().catch(() => undefined);
   }
 
+  /**
+   * Delete an operation record and persist.
+   */
   deleteOperation(id: string): boolean {
     const idx = this.operations.findIndex((op) => op.id === id);
     if (idx === -1) return false;
@@ -375,11 +468,17 @@ export class KeyValueStore implements StorageAdapter {
     return true;
   }
 
+  /**
+   * Clear all operations and persist.
+   */
   clearOperations(): void {
     this.operations = [];
     void this.save().catch(() => undefined);
   }
 
+  /**
+   * Prune operations to a maximum count and persist.
+   */
   pruneOperations(options?: { max?: number }): number {
     const limit = Math.max(0, Math.floor(options?.max ?? this.maxOperations));
     const before = this.operations.length;
@@ -387,12 +486,18 @@ export class KeyValueStore implements StorageAdapter {
     return before - this.operations.length;
   }
 
+  /**
+   * List operations with filtering/pagination.
+   */
   listOperations(input?: number | ListOperationsQuery) {
     return applyOperationsQuery(this.operations, input);
   }
 }
 
 export type RedisStoreOptions = KeyValueStoreOptions;
+/**
+ * Redis-backed store with a default key prefix.
+ */
 export class RedisStore extends KeyValueStore {
   constructor(options: RedisStoreOptions) {
     super({ ...options, keyPrefix: options.keyPrefix ?? 'ocash:sdk:redis:store' });
@@ -400,6 +505,9 @@ export class RedisStore extends KeyValueStore {
 }
 
 export type SqliteStoreOptions = KeyValueStoreOptions;
+/**
+ * SQLite-backed store with a default key prefix.
+ */
 export class SqliteStore extends KeyValueStore {
   constructor(options: SqliteStoreOptions) {
     super({ ...options, keyPrefix: options.keyPrefix ?? 'ocash:sdk:sqlite:store' });

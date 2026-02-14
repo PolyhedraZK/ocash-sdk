@@ -28,6 +28,10 @@ export type FileStoreOptions = {
   maxOperations?: number;
 };
 
+/**
+ * JSON-file backed StorageAdapter for Node environments.
+ * Persists wallet state and merkle data to disk.
+ */
 export class FileStore implements StorageAdapter {
   private walletId: string | undefined;
   private readonly cursors = new Map<number, SyncCursor>();
@@ -41,30 +45,48 @@ export class FileStore implements StorageAdapter {
   private readonly maxOperations: number;
   private readonly merkleNextCid = new Map<number, number>();
 
+  /**
+   * Create a FileStore with a base directory and optional limits.
+   */
   constructor(private readonly options: FileStoreOptions) {
     const max = options.maxOperations;
     this.maxOperations = max == null ? Number.POSITIVE_INFINITY : Math.max(0, Math.floor(max));
   }
 
+  /**
+   * Initialize store for a wallet id and load from disk.
+   */
   async init(options?: { walletId?: string }) {
     this.walletId = options?.walletId ?? this.walletId;
     await this.load();
   }
 
+  /**
+   * Flush pending state to disk.
+   */
   async close() {
     await this.save();
   }
 
+  /**
+   * Compute the primary JSON state file path for the current wallet id.
+   */
   private filePath() {
     const suffix = this.walletId ? this.walletId.replace(/[^a-zA-Z0-9._-]/g, '_') : 'default';
     return path.join(this.options.baseDir, `${suffix}.store.json`);
   }
 
+  /**
+   * Compute the merkle leaves jsonl file path for a chain.
+   */
   private merkleFilePath(chainId: number) {
     const suffix = this.walletId ? this.walletId.replace(/[^a-zA-Z0-9._-]/g, '_') : 'default';
     return path.join(this.options.baseDir, `${suffix}.merkle.${chainId}.jsonl`);
   }
 
+  /**
+   * Infer the next merkle cid from the tail of the jsonl file.
+   */
   private async getMerkleNextCid(chainId: number): Promise<number> {
     const cached = this.merkleNextCid.get(chainId);
     if (cached != null) return cached;
@@ -86,6 +108,9 @@ export class FileStore implements StorageAdapter {
     }
   }
 
+  /**
+   * Load persisted state from disk into memory.
+   */
   private async load() {
     await mkdir(this.options.baseDir, { recursive: true });
     // Reset local state first; if the file is missing/bad for this wallet, we should not leak data from a previous walletId.
@@ -134,6 +159,9 @@ export class FileStore implements StorageAdapter {
     if (pruned) void this.save().catch(() => undefined);
   }
 
+  /**
+   * Persist current state to disk using a temp file swap.
+   */
   private async save() {
     this.saveChain = this.saveChain
       .catch(() => undefined)
@@ -157,6 +185,9 @@ export class FileStore implements StorageAdapter {
     return this.saveChain;
   }
 
+  /**
+   * Get persisted merkle tree metadata for a chain.
+   */
   async getMerkleTree(chainId: number): Promise<MerkleTreeState | undefined> {
     const row = this.merkleTrees[String(chainId)];
     if (!row) return undefined;
@@ -168,20 +199,32 @@ export class FileStore implements StorageAdapter {
     return { chainId, root, totalElements: Math.floor(totalElements), lastUpdated: Number.isFinite(lastUpdated) ? Math.floor(lastUpdated) : 0 };
   }
 
+  /**
+   * Persist merkle tree metadata for a chain.
+   */
   async setMerkleTree(chainId: number, tree: MerkleTreeState): Promise<void> {
     this.merkleTrees[String(chainId)] = { ...tree, chainId };
     await this.save();
   }
 
+  /**
+   * Clear merkle tree metadata for a chain.
+   */
   async clearMerkleTree(chainId: number): Promise<void> {
     delete this.merkleTrees[String(chainId)];
     await this.save();
   }
 
+  /**
+   * Get a merkle node by id.
+   */
   async getMerkleNode(chainId: number, id: string): Promise<MerkleNodeRecord | undefined> {
     return this.merkleNodes[String(chainId)]?.[id];
   }
 
+  /**
+   * Upsert merkle nodes for a chain and persist.
+   */
   async upsertMerkleNodes(chainId: number, nodes: MerkleNodeRecord[]): Promise<void> {
     if (!nodes.length) return;
     const key = String(chainId);
@@ -193,11 +236,17 @@ export class FileStore implements StorageAdapter {
     await this.save();
   }
 
+  /**
+   * Clear merkle nodes for a chain.
+   */
   async clearMerkleNodes(chainId: number): Promise<void> {
     delete this.merkleNodes[String(chainId)];
     await this.save();
   }
 
+  /**
+   * Upsert entry memos (raw EntryService cache) and persist.
+   */
   async upsertEntryMemos(memos: EntryMemoRecord[]): Promise<number> {
     let updated = 0;
     const grouped = new Map<number, EntryMemoRecord[]>();
@@ -226,6 +275,9 @@ export class FileStore implements StorageAdapter {
     return updated;
   }
 
+  /**
+   * List entry memos with query filtering and pagination.
+   */
   async listEntryMemos(query: ListEntryMemosQuery): Promise<{ total: number; rows: EntryMemoRecord[] }> {
     const rows = this.entryMemos[String(query.chainId)];
     if (!Array.isArray(rows) || rows.length === 0) return { total: 0, rows: [] };
@@ -233,11 +285,17 @@ export class FileStore implements StorageAdapter {
     return { total: paged.total, rows: paged.rows.map((r) => ({ ...r })) };
   }
 
+  /**
+   * Clear entry memo cache for a chain.
+   */
   async clearEntryMemos(chainId: number): Promise<void> {
     delete this.entryMemos[String(chainId)];
     await this.save();
   }
 
+  /**
+   * Upsert entry nullifiers (raw EntryService cache) and persist.
+   */
   async upsertEntryNullifiers(nullifiers: EntryNullifierRecord[]): Promise<number> {
     let updated = 0;
     const grouped = new Map<number, EntryNullifierRecord[]>();
@@ -266,6 +324,9 @@ export class FileStore implements StorageAdapter {
     return updated;
   }
 
+  /**
+   * List entry nullifiers with query filtering and pagination.
+   */
   async listEntryNullifiers(query: ListEntryNullifiersQuery): Promise<{ total: number; rows: EntryNullifierRecord[] }> {
     const rows = this.entryNullifiers[String(query.chainId)];
     if (!Array.isArray(rows) || rows.length === 0) return { total: 0, rows: [] };
@@ -273,21 +334,33 @@ export class FileStore implements StorageAdapter {
     return { total: paged.total, rows: paged.rows.map((r) => ({ ...r })) };
   }
 
+  /**
+   * Clear entry nullifier cache for a chain.
+   */
   async clearEntryNullifiers(chainId: number): Promise<void> {
     delete this.entryNullifiers[String(chainId)];
     await this.save();
   }
 
+  /**
+   * Get persisted sync cursor for a chain.
+   */
   async getSyncCursor(chainId: number): Promise<SyncCursor | undefined> {
     const cursor = this.cursors.get(chainId);
     return cursor ? { ...cursor } : undefined;
   }
 
+  /**
+   * Set persisted sync cursor for a chain.
+   */
   async setSyncCursor(chainId: number, cursor: SyncCursor): Promise<void> {
     this.cursors.set(chainId, { ...cursor });
     await this.save();
   }
 
+  /**
+   * Upsert UTXOs and persist.
+   */
   async upsertUtxos(utxos: UtxoRecord[]): Promise<void> {
     for (const utxo of utxos) {
       const key = `${utxo.chainId}:${utxo.commitment}`;
@@ -297,12 +370,18 @@ export class FileStore implements StorageAdapter {
     await this.save();
   }
 
+  /**
+   * List UTXOs with query filtering and pagination.
+   */
   async listUtxos(query?: ListUtxosQuery): Promise<{ total: number; rows: UtxoRecord[] }> {
     const records = Array.from(this.utxos.values());
     const paged = applyUtxoQuery(records, query);
     return { total: paged.total, rows: paged.rows.map((utxo) => ({ ...utxo })) };
   }
 
+  /**
+   * Mark UTXOs as spent by nullifier and persist.
+   */
   async markSpent(input: { chainId: number; nullifiers: Hex[] }): Promise<number> {
     const wanted = new Set(input.nullifiers.map((nf) => nf.toLowerCase()));
     let updated = 0;
@@ -318,6 +397,9 @@ export class FileStore implements StorageAdapter {
     return updated;
   }
 
+  /**
+   * Load merkle leaves from jsonl file.
+   */
   async getMerkleLeaves(chainId: number): Promise<Array<{ cid: number; commitment: Hex }> | undefined> {
     try {
       const raw = await readFile(this.merkleFilePath(chainId), 'utf8');
@@ -342,6 +424,9 @@ export class FileStore implements StorageAdapter {
     }
   }
 
+  /**
+   * Get a merkle leaf by cid (loads full list then indexes).
+   */
   async getMerkleLeaf(chainId: number, cid: number) {
     const rows = await this.getMerkleLeaves(chainId);
     const row = rows?.[cid];
@@ -349,6 +434,9 @@ export class FileStore implements StorageAdapter {
     return { chainId, cid: row.cid, commitment: row.commitment };
   }
 
+  /**
+   * Append contiguous merkle leaves to jsonl file.
+   */
   async appendMerkleLeaves(chainId: number, leaves: Array<{ cid: number; commitment: Hex }>): Promise<void> {
     if (!leaves.length) return;
     const sorted = [...leaves].sort((a, b) => a.cid - b.cid);
@@ -370,6 +458,9 @@ export class FileStore implements StorageAdapter {
     this.merkleNextCid.set(chainId, next);
   }
 
+  /**
+   * Delete merkle leaves jsonl file for a chain.
+   */
   async clearMerkleLeaves(chainId: number): Promise<void> {
     try {
       await unlink(this.merkleFilePath(chainId));
@@ -379,6 +470,9 @@ export class FileStore implements StorageAdapter {
     this.merkleNextCid.set(chainId, 0);
   }
 
+  /**
+   * Create and persist an operation record.
+   */
   createOperation<TType extends OperationType>(
     input: Omit<StoredOperation<OperationDetailFor<TType>>, 'id' | 'createdAt' | 'status'> & Partial<Pick<StoredOperation<OperationDetailFor<TType>>, 'createdAt' | 'id' | 'status'>> & { type: TType },
   ) {
@@ -394,6 +488,9 @@ export class FileStore implements StorageAdapter {
     return created;
   }
 
+  /**
+   * Update an operation record and persist.
+   */
   updateOperation(id: string, patch: Partial<StoredOperation>) {
     const idx = this.operations.findIndex((op) => op.id === id);
     if (idx === -1) return;
@@ -401,6 +498,9 @@ export class FileStore implements StorageAdapter {
     void this.save().catch(() => undefined);
   }
 
+  /**
+   * Delete an operation record and persist.
+   */
   deleteOperation(id: string): boolean {
     const idx = this.operations.findIndex((op) => op.id === id);
     if (idx === -1) return false;
@@ -409,11 +509,17 @@ export class FileStore implements StorageAdapter {
     return true;
   }
 
+  /**
+   * Clear all operations and persist.
+   */
   clearOperations(): void {
     this.operations = [];
     void this.save().catch(() => undefined);
   }
 
+  /**
+   * Prune operations to a maximum count and persist.
+   */
   pruneOperations(options?: { max?: number }): number {
     const limit = Math.max(0, Math.floor(options?.max ?? this.maxOperations));
     const before = this.operations.length;
@@ -421,6 +527,9 @@ export class FileStore implements StorageAdapter {
     return before - this.operations.length;
   }
 
+  /**
+   * List operations with filtering/pagination.
+   */
   listOperations(input?: number | ListOperationsQuery) {
     return applyOperationsQuery(this.operations, input);
   }

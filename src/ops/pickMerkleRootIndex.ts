@@ -3,6 +3,9 @@ import { App_ABI } from '../abi/app';
 import { SdkError } from '../errors';
 import { toBigintOrThrow } from '../utils/bigint';
 
+/**
+ * Convert bigint-like values to decimal string without throwing.
+ */
 const tryToDecString = (value: string | bigint) => {
   try {
     return BigInt(value).toString();
@@ -11,6 +14,10 @@ const tryToDecString = (value: string | bigint) => {
   }
 };
 
+/**
+ * Find the on-chain merkle root index that matches the remote proof root.
+ * Searches a bounded window around the current index to tolerate lag.
+ */
 export async function pickMerkleRootIndex(input: {
   chainId?: number;
   publicClient: PublicClient;

@@ -1,9 +1,8 @@
 import type { ChainConfigInput } from './types';
 
 /**
- * OCash mainnet deployment — ETH (Chain ID 1)
- *
- * Pools: ETH, USDT, USDC
+ * OCash mainnet deployment — ETH (Chain ID 1).
+ * Pools: ETH, USDT, USDC.
  */
 export const ETH_MAINNET: ChainConfigInput = {
   chainId: 1,
@@ -53,9 +52,8 @@ export const ETH_MAINNET: ChainConfigInput = {
 };
 
 /**
- * OCash mainnet deployment — BSC (Chain ID 56)
- *
- * Pools: BNB, USDT (18 decimals), USDC (18 decimals)
+ * OCash mainnet deployment — BSC (Chain ID 56).
+ * Pools: BNB, USDT (18 decimals), USDC (18 decimals).
  */
 export const BSC_MAINNET: ChainConfigInput = {
   chainId: 56,
@@ -105,9 +103,8 @@ export const BSC_MAINNET: ChainConfigInput = {
 };
 
 /**
- * OCash mainnet deployment — Base (Chain ID 8453)
- *
- * Pools: loaded dynamically from contract
+ * OCash mainnet deployment — Base (Chain ID 8453).
+ * Pools are loaded dynamically from contract.
  */
 export const BASE_MAINNET: ChainConfigInput = {
   chainId: 8453,
@@ -119,7 +116,7 @@ export const BASE_MAINNET: ChainConfigInput = {
 };
 
 /**
- * OCash testnet deployment — Sepolia (Chain ID 11155111)
+ * OCash testnet deployment — Sepolia (Chain ID 11155111).
  */
 export const SEPOLIA_TESTNET: ChainConfigInput = {
   chainId: 11155111,
@@ -132,7 +129,7 @@ export const SEPOLIA_TESTNET: ChainConfigInput = {
 };
 
 /**
- * OCash testnet deployment — BSC Testnet (Chain ID 97)
+ * OCash testnet deployment — BSC Testnet (Chain ID 97).
  */
 export const BSC_TESTNET: ChainConfigInput = {
   chainId: 97,

@@ -21,6 +21,9 @@ export const Poseidon2Domain = {
 type DomainValue = (typeof Poseidon2Domain)[keyof typeof Poseidon2Domain];
 type HashInput = bigint | number | string;
 
+/**
+ * Poseidon2 hash helper with domain separation compatible with Solidity implementation.
+ */
 export class Poseidon2 {
   // BN254 scalar field prime
   private static readonly P = BN254_FIELD_MODULUS;

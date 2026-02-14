@@ -34,11 +34,17 @@ type PlanWithdrawInput = {
 
 type PlanInput = PlanTransferInput | PlanWithdrawInput;
 
+/**
+ * Require a valid hex string with 0x prefix.
+ */
 const requireHex = (value: unknown, name: string): `0x${string}` => {
   if (isHexStrict(value, { minBytes: 1 })) return value;
   throw new SdkError('CONFIG', `${name} must be a hex string starting with 0x`);
 };
 
+/**
+ * Parse and validate Planner.plan input from an untyped object.
+ */
 const parsePlanInput = (input: Record<string, unknown>): PlanInput => {
   const action = input.action;
   if (action !== 'transfer' && action !== 'withdraw') {
@@ -74,6 +80,9 @@ const parsePlanInput = (input: Record<string, unknown>): PlanInput => {
 // Use `size: 32` to match the relayer's canonical key format (leading zeros included).
 const tokenFeeKey = (token: TokenMetadata) => toHex(BigInt(token.id), { size: 32 }).toLowerCase();
 
+/**
+ * Select up to maxInputs UTXOs that can cover required amount (greedy by amount).
+ */
 const selectTransferInputs = (utxos: UtxoRecord[], required: bigint, maxInputs = 3) => {
   const sorted = [...utxos].sort((a, b) => (b.amount > a.amount ? 1 : b.amount < a.amount ? -1 : 0));
   const selected: UtxoRecord[] = [];
@@ -86,6 +95,9 @@ const selectTransferInputs = (utxos: UtxoRecord[], required: bigint, maxInputs =
   return { selected, sum };
 };
 
+/**
+ * Select a single UTXO that can cover the required amount (largest-first).
+ */
 const selectWithdrawInput = (utxos: UtxoRecord[], required: bigint) => {
   const sorted = [...utxos].sort((a, b) => (b.amount > a.amount ? 1 : b.amount < a.amount ? -1 : 0));
   return sorted.find((u) => u.amount >= required) ?? null;
@@ -93,6 +105,10 @@ const selectWithdrawInput = (utxos: UtxoRecord[], required: bigint) => {
 
 const INPUT_NUMBER = 3;
 
+/**
+ * Compute total fees and outputs for a sequence of records.
+ * This simulates merge behavior and relayer/protocol fee impacts.
+ */
 const recordsFee = (
   input: { withdrawFeeBps?: number },
   _records: bigint[],
@@ -204,6 +220,9 @@ const recordsFee = (
   };
 };
 
+/**
+ * Convert low-level fee computation into PlannerFeeSummary.
+ */
 const buildFeeSummary = (info: ReturnType<typeof recordsFee>, inputCount: number): PlannerFeeSummary => {
   return {
     mergeCount: Math.max(0, info.feeCount - 1),
@@ -217,6 +236,9 @@ const buildFeeSummary = (info: ReturnType<typeof recordsFee>, inputCount: number
   };
 };
 
+/**
+ * Estimate fee behavior for a candidate record set and also for max-amount.
+ */
 const estimateRecords = (input: {
   records: bigint[];
   expectedOutput: bigint;
@@ -249,6 +271,9 @@ const estimateRecords = (input: {
   return { payRecords, payInfo, maxRecords, maxInfo };
 };
 
+/**
+ * Planner handles coin selection, fee estimation, and plan generation.
+ */
 export class Planner implements PlannerApi {
   constructor(
     private readonly assets: AssetsApi,
@@ -256,11 +281,17 @@ export class Planner implements PlannerApi {
     private readonly bridge: ProofBridge,
   ) {}
 
+  /**
+   * Select N inputs for a merge operation (smallest-first to minimize change).
+   */
   private selectMergeInputs(utxos: UtxoRecord[], count = INPUT_NUMBER) {
     const sorted = [...utxos].sort((a, b) => (a.amount > b.amount ? 1 : a.amount < b.amount ? -1 : 0));
     return sorted.slice(0, count);
   }
 
+  /**
+   * Build a transfer plan including outputs, memos, and proof binding.
+   */
   private async buildTransferPlan(input: {
     chainId: number;
     assetId: string;
@@ -331,6 +362,9 @@ export class Planner implements PlannerApi {
     };
   }
 
+  /**
+   * Estimate fees and balance sufficiency for transfer/withdraw without building a plan.
+   */
   async estimate(input: { chainId: number; assetId: string; action: 'transfer' | 'withdraw'; amount: bigint; payIncludesFee?: boolean }) {
     const token = this.assets.getPoolInfo(input.chainId, input.assetId);
     if (!token) {
@@ -412,6 +446,9 @@ export class Planner implements PlannerApi {
     };
   }
 
+  /**
+   * Estimate maximum sendable/withdrawable amount after fees.
+   */
   async estimateMax(input: { chainId: number; assetId: string; action: 'transfer' | 'withdraw'; payIncludesFee?: boolean }): Promise<PlannerMaxEstimateResult> {
     const token = this.assets.getPoolInfo(input.chainId, input.assetId);
     if (!token) {
@@ -444,6 +481,9 @@ export class Planner implements PlannerApi {
     };
   }
 
+  /**
+   * Build a full plan (transfer, withdraw, or transfer-merge).
+   */
   async plan(input: Record<string, unknown>) {
     const parsed = parsePlanInput(input);
     const token = this.assets.getPoolInfo(parsed.chainId, parsed.assetId);
@@ -651,6 +691,9 @@ export class Planner implements PlannerApi {
     };
   }
 
+  /**
+   * Resolve relayer config, honoring optional override URL.
+   */
   private async getRelayerConfig(chainId: number, relayerUrlOverride?: string): Promise<RelayerConfig> {
     if (relayerUrlOverride) {
       const config = await fetchRelayerConfigFromRelayerUrl(relayerUrlOverride);
@@ -664,6 +707,9 @@ export class Planner implements PlannerApi {
     return this.assets.syncRelayerConfig(chainId);
   }
 
+  /**
+   * Lookup relayer fee for a token/action; defaults to 0 when missing.
+   */
   private getRelayerFee(config: RelayerConfig, token: TokenMetadata, action: 'transfer' | 'withdraw'): bigint {
     const key = tokenFeeKey(token);
     const table = action === 'transfer' ? config.fee_configure.transfer : config.fee_configure.withdraw;

@@ -10,6 +10,9 @@ export type TokenMetadataInput = Omit<TokenMetadata, 'viewerPk' | 'freezerPk' | 
   withdrawFeeBps?: number | bigint;
 };
 
+/**
+ * Convert a bigint/string pair into a string tuple, throwing on shape mismatch.
+ */
 const toStringPair = (value: readonly [string, string] | readonly [bigint, bigint], name: string): [string, string] => {
   if (!Array.isArray(value) || value.length !== 2) {
     throw new SdkError('CONFIG', `Invalid ${name}: expected [x,y]`, { value });
@@ -17,17 +20,26 @@ const toStringPair = (value: readonly [string, string] | readonly [bigint, bigin
   return [String(value[0] ?? ''), String(value[1] ?? '')];
 };
 
+/**
+ * Normalize a numeric bps input into a finite number, or undefined if invalid.
+ */
 const toFiniteNumberOrUndefined = (value: number | bigint | undefined): number | undefined => {
   if (value == null) return undefined;
   const n = typeof value === 'bigint' ? Number(value) : value;
   return Number.isFinite(n) ? n : undefined;
 };
 
+/**
+ * Validate and normalize an EVM address or throw.
+ */
 const toAddressOrThrow = (value: Address, name: string): Address => {
   if (isHexStrict(value, { minBytes: 20 })) return value;
   throw new SdkError('CONFIG', `Invalid ${name}: expected 20-byte hex address`, { value });
 };
 
+/**
+ * Accept bigint or numeric-like string; coerce to bigint or return undefined.
+ */
 const toBigintStringOrUndefined = (value: bigint | string | undefined): bigint | string | undefined => {
   if (value == null) return undefined;
   if (typeof value === 'bigint') return value;
@@ -43,6 +55,10 @@ const toBigintStringOrUndefined = (value: bigint | string | undefined): bigint |
   return undefined;
 };
 
+/**
+ * Normalize arbitrary token metadata inputs into strict TokenMetadata.
+ * Ensures valid addresses, PK shapes, and fee/limit fields.
+ */
 export const normalizeTokenMetadata = (input: TokenMetadataInput): TokenMetadata => {
   if (!input || typeof input !== 'object') {
     throw new SdkError('CONFIG', 'Invalid token metadata', { input });

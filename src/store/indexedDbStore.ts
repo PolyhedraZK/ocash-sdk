@@ -30,6 +30,9 @@ export type IndexedDbStoreOptions = {
 
 type StateRow = { id: string; json: PersistedStoreState };
 
+/**
+ * IndexedDB-backed StorageAdapter for browser environments.
+ */
 export class IndexedDbStore implements StorageAdapter {
   private walletId: string | undefined;
   private readonly cursors = new Map<number, SyncCursor>();
@@ -44,26 +47,41 @@ export class IndexedDbStore implements StorageAdapter {
   private saveChain: Promise<void> = Promise.resolve();
   private readonly maxOperations: number;
 
+  /**
+   * Create an IndexedDbStore with optional database settings.
+   */
   constructor(private readonly options: IndexedDbStoreOptions = {}) {
     const max = options.maxOperations;
     this.maxOperations = max == null ? Number.POSITIVE_INFINITY : Math.max(0, Math.floor(max));
   }
 
+  /**
+   * Initialize store for a wallet id and load persisted state.
+   */
   async init(options?: { walletId?: string }) {
     this.walletId = options?.walletId ?? this.walletId;
     await this.load();
   }
 
+  /**
+   * Persist state, close the DB connection, and clear handle.
+   */
   async close() {
     await this.save();
     this.db?.close();
     this.db = null;
   }
 
+  /**
+   * Resolve object store name (default: ocash_store).
+   */
   private storeName() {
     return this.options.storeName ?? 'ocash_store';
   }
 
+  /**
+   * Open IndexedDB and ensure the store exists (create on upgrade).
+   */
   private async openDb(): Promise<IDBDatabase> {
     if (this.db) return this.db;
     const factory: IDBFactory | undefined = this.options.indexedDb ?? globalThis.indexedDB;
@@ -96,10 +114,16 @@ export class IndexedDbStore implements StorageAdapter {
     return db;
   }
 
+  /**
+   * Compute the row id for current wallet scope.
+   */
   private stateId() {
     return this.walletId ?? 'default';
   }
 
+  /**
+   * Load persisted state into memory and normalize it.
+   */
   private async load() {
     const db = await this.openDb();
     const storeName = this.storeName();
@@ -163,6 +187,9 @@ export class IndexedDbStore implements StorageAdapter {
     if (pruned) void this.save().catch(() => undefined);
   }
 
+  /**
+   * Persist current state to IndexedDB (write transaction).
+   */
   private async save() {
     this.saveChain = this.saveChain
       .catch(() => undefined)
@@ -192,6 +219,9 @@ export class IndexedDbStore implements StorageAdapter {
     return this.saveChain;
   }
 
+  /**
+   * Get a merkle node by id.
+   */
   async getMerkleNode(chainId: number, id: string): Promise<MerkleNodeRecord | undefined> {
     const node = this.merkleNodes[String(chainId)]?.[id];
     if (!node) return undefined;
@@ -200,6 +230,9 @@ export class IndexedDbStore implements StorageAdapter {
     return { ...node, chainId };
   }
 
+  /**
+   * Upsert merkle nodes and persist.
+   */
   async upsertMerkleNodes(chainId: number, nodes: MerkleNodeRecord[]): Promise<void> {
     if (!nodes.length) return;
     const key = String(chainId);
@@ -211,11 +244,17 @@ export class IndexedDbStore implements StorageAdapter {
     await this.save();
   }
 
+  /**
+   * Clear merkle nodes for a chain.
+   */
   async clearMerkleNodes(chainId: number): Promise<void> {
     delete this.merkleNodes[String(chainId)];
     await this.save();
   }
 
+  /**
+   * Get persisted merkle tree metadata for a chain.
+   */
   async getMerkleTree(chainId: number): Promise<MerkleTreeState | undefined> {
     const row = this.merkleTrees[String(chainId)];
     if (!row) return undefined;
@@ -227,16 +266,25 @@ export class IndexedDbStore implements StorageAdapter {
     return { chainId, root, totalElements: Math.floor(totalElements), lastUpdated: Number.isFinite(lastUpdated) ? Math.floor(lastUpdated) : 0 };
   }
 
+  /**
+   * Persist merkle tree metadata for a chain.
+   */
   async setMerkleTree(chainId: number, tree: MerkleTreeState): Promise<void> {
     this.merkleTrees[String(chainId)] = { ...tree, chainId };
     await this.save();
   }
 
+  /**
+   * Clear merkle tree metadata for a chain.
+   */
   async clearMerkleTree(chainId: number): Promise<void> {
     delete this.merkleTrees[String(chainId)];
     await this.save();
   }
 
+  /**
+   * Upsert entry memos and persist.
+   */
   async upsertEntryMemos(memos: EntryMemoRecord[]): Promise<number> {
     let updated = 0;
     const grouped = new Map<number, EntryMemoRecord[]>();
@@ -265,6 +313,9 @@ export class IndexedDbStore implements StorageAdapter {
     return updated;
   }
 
+  /**
+   * List entry memos with query filtering and pagination.
+   */
   async listEntryMemos(query: ListEntryMemosQuery): Promise<{ total: number; rows: EntryMemoRecord[] }> {
     const rows = this.entryMemos[String(query.chainId)];
     if (!Array.isArray(rows) || rows.length === 0) return { total: 0, rows: [] };
@@ -272,11 +323,17 @@ export class IndexedDbStore implements StorageAdapter {
     return { total: paged.total, rows: paged.rows.map((r) => ({ ...r })) };
   }
 
+  /**
+   * Clear entry memo cache for a chain.
+   */
   async clearEntryMemos(chainId: number): Promise<void> {
     delete this.entryMemos[String(chainId)];
     await this.save();
   }
 
+  /**
+   * Upsert entry nullifiers and persist.
+   */
   async upsertEntryNullifiers(nullifiers: EntryNullifierRecord[]): Promise<number> {
     let updated = 0;
     const grouped = new Map<number, EntryNullifierRecord[]>();
@@ -305,6 +362,9 @@ export class IndexedDbStore implements StorageAdapter {
     return updated;
   }
 
+  /**
+   * List entry nullifiers with query filtering and pagination.
+   */
   async listEntryNullifiers(query: ListEntryNullifiersQuery): Promise<{ total: number; rows: EntryNullifierRecord[] }> {
     const rows = this.entryNullifiers[String(query.chainId)];
     if (!Array.isArray(rows) || rows.length === 0) return { total: 0, rows: [] };
@@ -312,11 +372,17 @@ export class IndexedDbStore implements StorageAdapter {
     return { total: paged.total, rows: paged.rows.map((r) => ({ ...r })) };
   }
 
+  /**
+   * Clear entry nullifier cache for a chain.
+   */
   async clearEntryNullifiers(chainId: number): Promise<void> {
     delete this.entryNullifiers[String(chainId)];
     await this.save();
   }
 
+  /**
+   * Get persisted merkle leaves for a chain.
+   */
   async getMerkleLeaves(chainId: number): Promise<Array<{ cid: number; commitment: Hex }> | undefined> {
     const rows = this.merkleLeaves[String(chainId)];
     if (!Array.isArray(rows) || rows.length === 0) return undefined;
@@ -332,6 +398,9 @@ export class IndexedDbStore implements StorageAdapter {
     return out.length ? out : undefined;
   }
 
+  /**
+   * Get a merkle leaf by cid.
+   */
   async getMerkleLeaf(chainId: number, cid: number) {
     const rows = await this.getMerkleLeaves(chainId);
     const row = rows?.[cid];
@@ -339,6 +408,9 @@ export class IndexedDbStore implements StorageAdapter {
     return { chainId, cid: row.cid, commitment: row.commitment };
   }
 
+  /**
+   * Append contiguous merkle leaves and persist.
+   */
   async appendMerkleLeaves(chainId: number, leaves: Array<{ cid: number; commitment: Hex }>): Promise<void> {
     if (!leaves.length) return;
     const key = String(chainId);
@@ -362,21 +434,33 @@ export class IndexedDbStore implements StorageAdapter {
     await this.save();
   }
 
+  /**
+   * Clear merkle leaves for a chain.
+   */
   async clearMerkleLeaves(chainId: number): Promise<void> {
     delete this.merkleLeaves[String(chainId)];
     await this.save();
   }
 
+  /**
+   * Get persisted sync cursor for a chain.
+   */
   async getSyncCursor(chainId: number): Promise<SyncCursor | undefined> {
     const cursor = this.cursors.get(chainId);
     return cursor ? { ...cursor } : undefined;
   }
 
+  /**
+   * Set persisted sync cursor for a chain.
+   */
   async setSyncCursor(chainId: number, cursor: SyncCursor): Promise<void> {
     this.cursors.set(chainId, { ...cursor });
     await this.save();
   }
 
+  /**
+   * Upsert UTXOs and persist.
+   */
   async upsertUtxos(utxos: UtxoRecord[]): Promise<void> {
     for (const utxo of utxos) {
       const key = `${utxo.chainId}:${utxo.commitment}`;
@@ -386,12 +470,18 @@ export class IndexedDbStore implements StorageAdapter {
     await this.save();
   }
 
+  /**
+   * List UTXOs with query filtering and pagination.
+   */
   async listUtxos(query?: ListUtxosQuery): Promise<{ total: number; rows: UtxoRecord[] }> {
     const records = Array.from(this.utxos.values());
     const paged = applyUtxoQuery(records, query);
     return { total: paged.total, rows: paged.rows.map((utxo) => ({ ...utxo })) };
   }
 
+  /**
+   * Mark UTXOs as spent by nullifier and persist.
+   */
   async markSpent(input: { chainId: number; nullifiers: Hex[] }): Promise<number> {
     const wanted = new Set(input.nullifiers.map((nf) => nf.toLowerCase()));
     let updated = 0;
@@ -407,6 +497,9 @@ export class IndexedDbStore implements StorageAdapter {
     return updated;
   }
 
+  /**
+   * Create and persist an operation record.
+   */
   createOperation<TType extends OperationType>(
     input: Omit<StoredOperation<OperationDetailFor<TType>>, 'id' | 'createdAt' | 'status'> & Partial<Pick<StoredOperation<OperationDetailFor<TType>>, 'createdAt' | 'id' | 'status'>> & { type: TType },
   ) {
@@ -422,6 +515,9 @@ export class IndexedDbStore implements StorageAdapter {
     return created;
   }
 
+  /**
+   * Update an operation record and persist.
+   */
   updateOperation(id: string, patch: Partial<StoredOperation>) {
     const idx = this.operations.findIndex((op) => op.id === id);
     if (idx === -1) return;
@@ -429,6 +525,9 @@ export class IndexedDbStore implements StorageAdapter {
     void this.save().catch(() => undefined);
   }
 
+  /**
+   * Delete an operation record and persist.
+   */
   deleteOperation(id: string): boolean {
     const idx = this.operations.findIndex((op) => op.id === id);
     if (idx === -1) return false;
@@ -437,11 +536,17 @@ export class IndexedDbStore implements StorageAdapter {
     return true;
   }
 
+  /**
+   * Clear all operations and persist.
+   */
   clearOperations(): void {
     this.operations = [];
     void this.save().catch(() => undefined);
   }
 
+  /**
+   * Prune operations to a maximum count and persist.
+   */
   pruneOperations(options?: { max?: number }): number {
     const limit = Math.max(0, Math.floor(options?.max ?? this.maxOperations));
     const before = this.operations.length;
@@ -449,6 +554,9 @@ export class IndexedDbStore implements StorageAdapter {
     return before - this.operations.length;
   }
 
+  /**
+   * List operations with filtering/pagination.
+   */
   listOperations(input?: number | ListOperationsQuery) {
     return applyOperationsQuery(this.operations, input);
   }

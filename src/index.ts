@@ -1,3 +1,4 @@
+// Public type surface exported from the SDK package.
 export type {
   OCashSdk,
   OCashSdkConfig,
@@ -32,7 +33,9 @@ export type {
   OpsApi,
   RelayerRequest,
 } from './types';
+// Default runtime asset overrides for mainnet/testnet.
 export { defaultAssetsOverrideMainnet, defaultAssetsOverrideTestnet } from './assets/defaultAssetsOverride';
+// High-level helpers re-exported for advanced usage.
 export { MemoKit } from './memo/memoKit';
 export { CryptoToolkit } from './crypto/cryptoToolkit';
 export { KeyManager } from './crypto/keyManager';
@@ -99,23 +102,30 @@ function commitment(ro: CommitmentData, format?: 'hex' | 'bigint') {
  * await sdk.wallet.open({ seed: 'my-secret-seed' });
  * ```
  */
+/**
+ * SDK factory. Wires together all modules and returns a stable API surface.
+ */
 export const createSdk = (config: OCashSdkConfig): OCashSdk => {
+  // Normalize config and ensure a default assets override is always present.
   const normalizedConfig: OCashSdkConfig = {
     ...config,
     assetsOverride: config.assetsOverride ?? defaultAssetsOverrideMainnet,
   };
+  // Runtime bridge handles WASM + circuit loading and proof helpers.
   const bridge = new UniversalWasmBridge({
     assetsOverride: normalizedConfig.assetsOverride,
     cacheDir: normalizedConfig.cacheDir,
     runtime: normalizedConfig.runtime,
   });
 
+  // Core and ZKP wiring.
   const core = new SdkCore(normalizedConfig, bridge);
   const zkp = new ProofEngine(bridge, core);
   const dummy = new DummyFactory(bridge);
   const ledger = new LedgerInfo(normalizedConfig.chains ?? []);
   const memoWorker = new MemoWorker(normalizedConfig.memoWorker);
   const store: StorageAdapter = normalizedConfig.storage ?? new MemoryStore();
+  // Assets API is a thin adapter over LedgerInfo.
   const assetsApi: AssetsApi = {
     getChains: () => ledger.getChains(),
     getChain: (chainId: number) => ledger.getChain(chainId),
@@ -129,8 +139,10 @@ export const createSdk = (config: OCashSdkConfig): OCashSdk => {
     syncAllRelayerConfigs: () => ledger.syncAllRelayerConfigs(),
   };
 
+  // Centralized event emitter for submodules.
   const emit = (evt: SdkEvent) => core.emit(evt);
 
+  // Module wiring for wallet/sync/merkle/planner/tx/ops.
   const walletService = new WalletService(assetsApi, store, emit);
   const merkle = new MerkleEngine((chainId) => assetsApi.getChain(chainId), bridge, normalizedConfig.merkle, store);
   const syncEngine = new SyncEngine(assetsApi, store, walletService, emit, merkle, normalizedConfig.sync);
@@ -138,6 +150,7 @@ export const createSdk = (config: OCashSdkConfig): OCashSdk => {
   const tx = new TxBuilder();
   const ops = new Ops(assetsApi, planner, merkle, zkp, tx, walletService, store, emit);
 
+  // Public SDK surface: expose APIs with stable shapes and minimal coupling.
   return {
     core: {
       ready: (cb) => core.ready(cb),
@@ -202,6 +215,7 @@ export const createSdk = (config: OCashSdkConfig): OCashSdk => {
   };
 };
 
+// Default export for backward compatibility / convenience imports.
 const OcashSdk = {
   createSdk,
   MemoKit,

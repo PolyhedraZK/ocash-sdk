@@ -6,6 +6,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> => Boolean(v
 
 const isAddress = (value: unknown): value is Address => typeof value === 'string' && /^0x[0-9a-fA-F]{40}$/.test(value);
 
+/**
+ * Assert helpers for runtime validation of config inputs.
+ */
 const assertArray = (value: unknown, name: string): unknown[] => {
   if (!Array.isArray(value)) throw new SdkError('CONFIG', `Invalid ${name}: expected array`, { value });
   return value;
@@ -66,6 +69,9 @@ const assertBigintPairStrings = (value: unknown, name: string): [string, string]
   return [assertBigIntString(arr[0], `${name}[0]`), assertBigIntString(arr[1], `${name}[1]`)];
 };
 
+/**
+ * Validate token metadata input at runtime. Throws SdkError on mismatch.
+ */
 export function assertTokenMetadata(value: unknown, name = 'token'): asserts value is TokenMetadata {
   if (!isRecord(value)) throw new SdkError('CONFIG', `Invalid ${name}: expected object`, { value });
   const token = value;
@@ -98,6 +104,9 @@ export function assertTokenMetadata(value: unknown, name = 'token'): asserts val
   if (!id.length) throw new SdkError('CONFIG', `Invalid ${name}.id`, { value: token.id });
 }
 
+/**
+ * Validate a list of tokens.
+ */
 export function assertTokenList(value: unknown, name = 'tokens'): asserts value is TokenMetadata[] {
   const arr = assertArray(value, name);
   for (let i = 0; i < arr.length; i++) {
@@ -105,6 +114,9 @@ export function assertTokenList(value: unknown, name = 'tokens'): asserts value 
   }
 }
 
+/**
+ * Validate a chain config input at runtime. Throws SdkError on mismatch.
+ */
 export function assertChainConfigInput(value: unknown, name = 'chain'): asserts value is ChainConfigInput {
   if (!isRecord(value)) throw new SdkError('CONFIG', `Invalid ${name}: expected object`, { value });
   const chain = value;

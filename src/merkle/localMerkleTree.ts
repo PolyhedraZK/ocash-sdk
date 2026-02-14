@@ -2,10 +2,17 @@ import { Poseidon2, Poseidon2Domain } from '../crypto/poseidon2';
 import type { Hex, RemoteMerkleProofResponse } from '../types';
 import { getZeroHash, TREE_DEPTH_DEFAULT } from './zeroHashes';
 
+/**
+ * Poseidon2 merkle hash for a left/right pair.
+ */
 const hashPair = (left: Hex, right: Hex): Hex => {
   return Poseidon2.hashToHex(BigInt(left), BigInt(right), Poseidon2Domain.Merkle);
 };
 
+/**
+ * Simple in-memory Merkle tree for contiguous leaves.
+ * Used for local proof generation in tests or local mode.
+ */
 export class LocalMerkleTree {
   private readonly depth: number;
   private readonly leaves: Hex[] = [];
@@ -15,18 +22,30 @@ export class LocalMerkleTree {
     this.depth = Math.max(1, Math.floor(options?.depth ?? TREE_DEPTH_DEFAULT));
   }
 
+  /**
+   * Number of leaves currently stored.
+   */
   get leafCount() {
     return this.leaves.length;
   }
 
+  /**
+   * Latest cid (leaf index) available in the tree.
+   */
   get latestCid(): number {
     return Math.max(0, this.leaves.length - 1);
   }
 
+  /**
+   * Current merkle root at the configured depth.
+   */
   get root(): Hex {
     return this.node(this.depth, 0);
   }
 
+  /**
+   * Append contiguous leaves in order, rejecting gaps.
+   */
   appendLeaves(input: Array<{ index: number; commitment: Hex }>) {
     if (!input.length) return;
     const sorted = [...input].sort((a, b) => a.index - b.index);
@@ -42,6 +61,9 @@ export class LocalMerkleTree {
     this.nodeCache.clear();
   }
 
+  /**
+   * Build a Merkle proof response for one or more cids.
+   */
   buildProofByCids(cids: number[]): RemoteMerkleProofResponse {
     if (!cids.length) {
       throw new Error('Merkle proof requires at least one cid');
@@ -68,6 +90,9 @@ export class LocalMerkleTree {
     };
   }
 
+  /**
+   * Recursively compute a node at (level, position) with memoization.
+   */
   private node(level: number, position: number): Hex {
     if (level < 0) throw new Error('Invalid merkle level');
     if (position < 0) throw new Error('Invalid merkle position');

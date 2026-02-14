@@ -1,11 +1,17 @@
 import type { ListUtxosQuery, ListUtxosResult, UtxoRecord } from '../types';
 
+/**
+ * Normalize numeric inputs to finite integers.
+ */
 function normalizeNumber(value: number | undefined) {
   if (value == null) return undefined;
   const num = Math.floor(value);
   return Number.isFinite(num) ? num : undefined;
 }
 
+/**
+ * Compare createdAt fields with optional presence handling.
+ */
 function compareCreatedAt(a: UtxoRecord, b: UtxoRecord, factor: number) {
   const aHas = a.createdAt != null;
   const bHas = b.createdAt != null;
@@ -15,6 +21,9 @@ function compareCreatedAt(a: UtxoRecord, b: UtxoRecord, factor: number) {
   return diff === 0 ? 0 : diff * factor;
 }
 
+/**
+ * Apply filters/sort/pagination for UTXO rows.
+ */
 export function applyUtxoQuery(rows: UtxoRecord[], query?: ListUtxosQuery): ListUtxosResult {
   const includeSpent = query?.includeSpent ?? false;
   const includeFrozen = query?.includeFrozen ?? false;
