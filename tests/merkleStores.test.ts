@@ -5,53 +5,151 @@ import { KeyValueStore } from '../src/store/keyValueStore';
 import { IndexedDbStore } from '../src/store/indexedDbStore';
 import type { Hex } from '../src/types';
 
-type FakeDbState = Map<string, Map<string, any>>;
+type FakeDbState = Map<
+  string,
+  {
+    keyPath: string | string[];
+    data: Map<string, any>;
+    indexes: Map<string, { keyPath: string | string[] }>;
+  }
+>;
 
 function createFakeIndexedDb() {
   const storesByDbName = new Map<string, FakeDbState>();
+
+  if (!(globalThis as any).IDBKeyRange) {
+    (globalThis as any).IDBKeyRange = { only: (key: unknown) => ({ __only: key }) };
+  }
+
+  const normalizeKey = (key: unknown) => {
+    if (Array.isArray(key)) return `a:${JSON.stringify(key)}`;
+    return `s:${String(key)}`;
+  };
+
+  const getKeyFromRow = (row: any, keyPath: string | string[]) => {
+    if (Array.isArray(keyPath)) return keyPath.map((k) => row?.[k]);
+    return row?.[keyPath];
+  };
+
+  const ensureStore = (stores: FakeDbState, storeName: string, keyPath: string | string[]) => {
+    const existing = stores.get(storeName);
+    if (existing) return existing;
+    const meta = { keyPath, data: new Map<string, any>(), indexes: new Map<string, { keyPath: string | string[] }>() };
+    stores.set(storeName, meta);
+    return meta;
+  };
+
+  const makeObjectStore = (meta: FakeDbState extends Map<string, infer T> ? T : never, tx: any) => {
+    return {
+      indexNames: {
+        contains: (name: string) => meta.indexes.has(name),
+      },
+      createIndex: (name: string, keyPath: string | string[]) => {
+        meta.indexes.set(name, { keyPath });
+      },
+      get: (id: IDBValidKey) => {
+        const getReq: any = { result: undefined, error: null, onsuccess: null, onerror: null };
+        queueMicrotask(() => {
+          getReq.result = meta.data.get(normalizeKey(id));
+          getReq.onsuccess?.();
+        });
+        return getReq;
+      },
+      getAll: () => {
+        const req: any = { result: undefined, error: null, onsuccess: null, onerror: null };
+        queueMicrotask(() => {
+          req.result = Array.from(meta.data.values());
+          req.onsuccess?.();
+        });
+        return req;
+      },
+      put: (row: any) => {
+        const key = normalizeKey(getKeyFromRow(row, meta.keyPath));
+        meta.data.set(key, row);
+        queueMicrotask(() => tx.oncomplete?.());
+      },
+      delete: (id: IDBValidKey) => {
+        meta.data.delete(normalizeKey(id));
+        queueMicrotask(() => tx.oncomplete?.());
+      },
+      index: (name: string) => {
+        const index = meta.indexes.get(name);
+        if (!index) throw new Error(`index ${name} not found`);
+        return {
+          getAll: (key: IDBValidKey) => {
+            const req: any = { result: undefined, error: null, onsuccess: null, onerror: null };
+            queueMicrotask(() => {
+              const wanted = normalizeKey(key);
+              const rows = Array.from(meta.data.values()).filter((row) => normalizeKey(getKeyFromRow(row, index.keyPath)) === wanted);
+              req.result = rows;
+              req.onsuccess?.();
+            });
+            return req;
+          },
+          openCursor: (range: any) => {
+            const req: any = { result: undefined, error: null, onsuccess: null, onerror: null };
+            const key = range && typeof range === 'object' && '__only' in range ? range.__only : range;
+            const wanted = normalizeKey(key);
+            const entries = Array.from(meta.data.entries())
+              .filter(([, row]) => normalizeKey(getKeyFromRow(row, index.keyPath)) === wanted)
+              .map(([primaryKey, row]) => ({ primaryKey, row }));
+            let idx = 0;
+            const next = () => {
+              if (idx >= entries.length) {
+                req.result = null;
+                req.onsuccess?.();
+                return;
+              }
+              const entry = entries[idx]!;
+              req.result = {
+                delete: () => meta.data.delete(entry.primaryKey),
+                continue: () => {
+                  idx += 1;
+                  queueMicrotask(next);
+                },
+              };
+              req.onsuccess?.();
+            };
+            queueMicrotask(next);
+            return req;
+          },
+        };
+      },
+    };
+  };
 
   const open = (name: string) => {
     const req: any = { result: null, error: null, onsuccess: null, onerror: null, onupgradeneeded: null };
     queueMicrotask(() => {
       try {
-        const stores = storesByDbName.get(name) ?? new Map<string, Map<string, any>>();
+        const stores = storesByDbName.get(name) ?? new Map<string, { keyPath: string | string[]; data: Map<string, any>; indexes: Map<string, { keyPath: string | string[] }> }>();
         storesByDbName.set(name, stores);
 
         const db: any = {
           objectStoreNames: {
             contains: (storeName: string) => stores.has(storeName),
           },
-          createObjectStore: (storeName: string) => {
-            if (!stores.has(storeName)) stores.set(storeName, new Map());
+          createObjectStore: (storeName: string, options?: { keyPath?: string | string[] }) => {
+            const keyPath = options?.keyPath ?? 'id';
+            const meta = ensureStore(stores, storeName, keyPath);
+            return makeObjectStore(meta as any, req.transaction);
           },
           transaction: (storeName: string, _mode: 'readonly' | 'readwrite') => {
             const tx: any = { oncomplete: null, onerror: null, error: null };
-            const bucket = stores.get(storeName) ?? new Map();
-            stores.set(storeName, bucket);
-
-            tx.objectStore = () => {
-              return {
-                get: (id: string) => {
-                  const getReq: any = { result: undefined, error: null, onsuccess: null, onerror: null };
-                  queueMicrotask(() => {
-                    getReq.result = bucket.get(id);
-                    getReq.onsuccess?.();
-                  });
-                  return getReq;
-                },
-                put: (row: any) => {
-                  const id = row.id;
-                  bucket.set(id, row);
-                  queueMicrotask(() => tx.oncomplete?.());
-                },
-              };
-            };
+            const meta = ensureStore(stores, storeName, 'id');
+            tx.objectStore = () => makeObjectStore(meta as any, tx);
             return tx;
           },
           close: () => {},
         };
 
         req.result = db;
+        req.transaction = {
+          objectStore: (storeName: string) => {
+            const meta = ensureStore(stores, storeName, 'id');
+            return makeObjectStore(meta as any, req.transaction);
+          },
+        };
         req.onupgradeneeded?.();
         req.onsuccess?.();
       } catch (e) {

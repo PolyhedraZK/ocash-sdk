@@ -40,6 +40,8 @@ export class KeyValueStore implements StorageAdapter {
   private entryMemos: Record<string, EntryMemoRecord[]> = {};
   private entryNullifiers: Record<string, EntryNullifierRecord[]> = {};
   private saveChain: Promise<void> = Promise.resolve();
+  private sharedLoaded = false;
+  private sharedDirty = false;
   private readonly maxOperations: number;
 
   /**
@@ -97,7 +99,6 @@ export class KeyValueStore implements StorageAdapter {
     this.entryNullifiers = {};
 
     const rawWallet = await this.options.client.get(this.stateKey());
-    const rawShared = await this.options.client.get(this.sharedKey());
     try {
       if (rawWallet) {
         const parsed = JSON.parse(rawWallet) as Partial<PersistedStoreState>;
@@ -112,31 +113,38 @@ export class KeyValueStore implements StorageAdapter {
       // ignore bad state
     }
 
+    const pruned = this.pruneOperations();
+    if (pruned) void this.save().catch(() => undefined);
+  }
+
+  /**
+   * Load shared chain-level caches lazily.
+   */
+  private async loadShared() {
+    if (this.sharedLoaded) return;
+    this.sharedLoaded = true;
     try {
-      if (rawShared) {
-        const parsed = JSON.parse(rawShared) as Partial<PersistedSharedState>;
-        if (parsed.merkleLeaves && typeof parsed.merkleLeaves === 'object' && !Array.isArray(parsed.merkleLeaves)) {
-          this.merkleLeaves = parsed.merkleLeaves;
-        }
-        if (parsed.merkleTrees && typeof parsed.merkleTrees === 'object' && !Array.isArray(parsed.merkleTrees)) {
-          this.merkleTrees = parsed.merkleTrees;
-        }
-        if (parsed.merkleNodes && typeof parsed.merkleNodes === 'object' && !Array.isArray(parsed.merkleNodes)) {
-          this.merkleNodes = parsed.merkleNodes;
-        }
-        if (parsed.entryMemos && typeof parsed.entryMemos === 'object' && !Array.isArray(parsed.entryMemos)) {
-          this.entryMemos = parsed.entryMemos;
-        }
-        if (parsed.entryNullifiers && typeof parsed.entryNullifiers === 'object' && !Array.isArray(parsed.entryNullifiers)) {
-          this.entryNullifiers = parsed.entryNullifiers;
-        }
+      const rawShared = await this.options.client.get(this.sharedKey());
+      if (!rawShared) return;
+      const parsed = JSON.parse(rawShared) as Partial<PersistedSharedState>;
+      if (parsed.merkleLeaves && typeof parsed.merkleLeaves === 'object' && !Array.isArray(parsed.merkleLeaves)) {
+        this.merkleLeaves = parsed.merkleLeaves;
+      }
+      if (parsed.merkleTrees && typeof parsed.merkleTrees === 'object' && !Array.isArray(parsed.merkleTrees)) {
+        this.merkleTrees = parsed.merkleTrees;
+      }
+      if (parsed.merkleNodes && typeof parsed.merkleNodes === 'object' && !Array.isArray(parsed.merkleNodes)) {
+        this.merkleNodes = parsed.merkleNodes;
+      }
+      if (parsed.entryMemos && typeof parsed.entryMemos === 'object' && !Array.isArray(parsed.entryMemos)) {
+        this.entryMemos = parsed.entryMemos;
+      }
+      if (parsed.entryNullifiers && typeof parsed.entryNullifiers === 'object' && !Array.isArray(parsed.entryNullifiers)) {
+        this.entryNullifiers = parsed.entryNullifiers;
       }
     } catch {
       // ignore bad shared state
     }
-
-    const pruned = this.pruneOperations();
-    if (pruned) void this.save().catch(() => undefined);
   }
 
   /**
@@ -151,15 +159,18 @@ export class KeyValueStore implements StorageAdapter {
           wallet,
           operations: this.operations,
         };
-        const sharedState: PersistedSharedState = {
-          merkleLeaves: this.merkleLeaves,
-          merkleTrees: this.merkleTrees,
-          merkleNodes: this.merkleNodes,
-          entryMemos: this.entryMemos,
-          entryNullifiers: this.entryNullifiers,
-        };
         await this.options.client.set(this.stateKey(), JSON.stringify(walletState));
-        await this.options.client.set(this.sharedKey(), JSON.stringify(sharedState));
+        if (this.sharedLoaded || this.sharedDirty) {
+          const sharedState: PersistedSharedState = {
+            merkleLeaves: this.merkleLeaves,
+            merkleTrees: this.merkleTrees,
+            merkleNodes: this.merkleNodes,
+            entryMemos: this.entryMemos,
+            entryNullifiers: this.entryNullifiers,
+          };
+          await this.options.client.set(this.sharedKey(), JSON.stringify(sharedState));
+          this.sharedDirty = false;
+        }
       });
     return this.saveChain;
   }
@@ -168,6 +179,7 @@ export class KeyValueStore implements StorageAdapter {
    * Get a merkle node by id.
    */
   async getMerkleNode(chainId: number, id: string): Promise<MerkleNodeRecord | undefined> {
+    await this.loadShared();
     const node = this.merkleNodes[String(chainId)]?.[id];
     if (!node) return undefined;
     const hash = node.hash;
@@ -180,12 +192,14 @@ export class KeyValueStore implements StorageAdapter {
    */
   async upsertMerkleNodes(chainId: number, nodes: MerkleNodeRecord[]): Promise<void> {
     if (!nodes.length) return;
+    await this.loadShared();
     const key = String(chainId);
     const existing = this.merkleNodes[key] ?? {};
     for (const node of nodes) {
       existing[node.id] = { ...node, chainId };
     }
     this.merkleNodes[key] = existing;
+    this.sharedDirty = true;
     await this.save();
   }
 
@@ -193,7 +207,9 @@ export class KeyValueStore implements StorageAdapter {
    * Clear merkle nodes for a chain.
    */
   async clearMerkleNodes(chainId: number): Promise<void> {
+    await this.loadShared();
     delete this.merkleNodes[String(chainId)];
+    this.sharedDirty = true;
     await this.save();
   }
 
@@ -201,6 +217,7 @@ export class KeyValueStore implements StorageAdapter {
    * Get persisted merkle tree metadata for a chain.
    */
   async getMerkleTree(chainId: number): Promise<MerkleTreeState | undefined> {
+    await this.loadShared();
     const row = this.merkleTrees[String(chainId)];
     if (!row) return undefined;
     const totalElements = Number(row.totalElements);
@@ -215,7 +232,9 @@ export class KeyValueStore implements StorageAdapter {
    * Persist merkle tree metadata for a chain.
    */
   async setMerkleTree(chainId: number, tree: MerkleTreeState): Promise<void> {
+    await this.loadShared();
     this.merkleTrees[String(chainId)] = { ...tree, chainId };
+    this.sharedDirty = true;
     await this.save();
   }
 
@@ -223,7 +242,9 @@ export class KeyValueStore implements StorageAdapter {
    * Clear merkle tree metadata for a chain.
    */
   async clearMerkleTree(chainId: number): Promise<void> {
+    await this.loadShared();
     delete this.merkleTrees[String(chainId)];
+    this.sharedDirty = true;
     await this.save();
   }
 
@@ -232,6 +253,7 @@ export class KeyValueStore implements StorageAdapter {
    */
   async upsertEntryMemos(memos: EntryMemoRecord[]): Promise<number> {
     let updated = 0;
+    await this.loadShared();
     const grouped = new Map<number, EntryMemoRecord[]>();
     for (const memo of memos) {
       if (!Number.isInteger(memo.cid) || memo.cid < 0) continue;
@@ -254,7 +276,10 @@ export class KeyValueStore implements StorageAdapter {
       }
       this.entryMemos[key] = Array.from(byCid.values()).sort((a, b) => a.cid - b.cid);
     }
-    if (updated) await this.save();
+    if (updated) {
+      this.sharedDirty = true;
+      await this.save();
+    }
     return updated;
   }
 
@@ -262,6 +287,7 @@ export class KeyValueStore implements StorageAdapter {
    * List entry memos with query filtering and pagination.
    */
   async listEntryMemos(query: ListEntryMemosQuery): Promise<{ total: number; rows: EntryMemoRecord[] }> {
+    await this.loadShared();
     const rows = this.entryMemos[String(query.chainId)];
     if (!Array.isArray(rows) || rows.length === 0) return { total: 0, rows: [] };
     const paged = applyEntryMemoQuery(rows, query);
@@ -272,7 +298,9 @@ export class KeyValueStore implements StorageAdapter {
    * Clear entry memo cache for a chain.
    */
   async clearEntryMemos(chainId: number): Promise<void> {
+    await this.loadShared();
     delete this.entryMemos[String(chainId)];
+    this.sharedDirty = true;
     await this.save();
   }
 
@@ -281,6 +309,7 @@ export class KeyValueStore implements StorageAdapter {
    */
   async upsertEntryNullifiers(nullifiers: EntryNullifierRecord[]): Promise<number> {
     let updated = 0;
+    await this.loadShared();
     const grouped = new Map<number, EntryNullifierRecord[]>();
     for (const row of nullifiers) {
       const list = grouped.get(row.chainId) ?? [];
@@ -303,7 +332,10 @@ export class KeyValueStore implements StorageAdapter {
       }
       this.entryNullifiers[key] = Array.from(byNid.values()).sort((a, b) => a.nid - b.nid);
     }
-    if (updated) await this.save();
+    if (updated) {
+      this.sharedDirty = true;
+      await this.save();
+    }
     return updated;
   }
 
@@ -311,6 +343,7 @@ export class KeyValueStore implements StorageAdapter {
    * List entry nullifiers with query filtering and pagination.
    */
   async listEntryNullifiers(query: ListEntryNullifiersQuery): Promise<{ total: number; rows: EntryNullifierRecord[] }> {
+    await this.loadShared();
     const rows = this.entryNullifiers[String(query.chainId)];
     if (!Array.isArray(rows) || rows.length === 0) return { total: 0, rows: [] };
     const paged = applyEntryNullifierQuery(rows, query);
@@ -321,7 +354,9 @@ export class KeyValueStore implements StorageAdapter {
    * Clear entry nullifier cache for a chain.
    */
   async clearEntryNullifiers(chainId: number): Promise<void> {
+    await this.loadShared();
     delete this.entryNullifiers[String(chainId)];
+    this.sharedDirty = true;
     await this.save();
   }
 
@@ -329,6 +364,7 @@ export class KeyValueStore implements StorageAdapter {
    * Get persisted merkle leaves for a chain.
    */
   async getMerkleLeaves(chainId: number): Promise<Array<{ cid: number; commitment: Hex }> | undefined> {
+    await this.loadShared();
     const rows = this.merkleLeaves[String(chainId)];
     if (!Array.isArray(rows) || rows.length === 0) return undefined;
     const out: Array<{ cid: number; commitment: Hex }> = [];
@@ -358,6 +394,7 @@ export class KeyValueStore implements StorageAdapter {
    */
   async appendMerkleLeaves(chainId: number, leaves: Array<{ cid: number; commitment: Hex }>): Promise<void> {
     if (!leaves.length) return;
+    await this.loadShared();
     const key = String(chainId);
     const existing = (await this.getMerkleLeaves(chainId)) ?? [];
     const sorted = [...leaves].sort((a, b) => a.cid - b.cid);
@@ -376,6 +413,7 @@ export class KeyValueStore implements StorageAdapter {
       next++;
     }
     this.merkleLeaves[key] = existing;
+    this.sharedDirty = true;
     await this.save();
   }
 
@@ -383,7 +421,9 @@ export class KeyValueStore implements StorageAdapter {
    * Clear merkle leaves for a chain.
    */
   async clearMerkleLeaves(chainId: number): Promise<void> {
+    await this.loadShared();
     delete this.merkleLeaves[String(chainId)];
+    this.sharedDirty = true;
     await this.save();
   }
 

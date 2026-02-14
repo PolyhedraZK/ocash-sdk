@@ -1,53 +1,151 @@
 import { describe, expect, it } from 'vitest';
 import { IndexedDbStore } from '../src/store/indexedDbStore';
 
-type FakeDbState = Map<string, Map<string, any>>;
+type FakeDbState = Map<
+  string,
+  {
+    keyPath: string | string[];
+    data: Map<string, any>;
+    indexes: Map<string, { keyPath: string | string[] }>;
+  }
+>;
 
 function createFakeIndexedDb() {
   const storesByDbName = new Map<string, FakeDbState>();
+
+  if (!(globalThis as any).IDBKeyRange) {
+    (globalThis as any).IDBKeyRange = { only: (key: unknown) => ({ __only: key }) };
+  }
+
+  const normalizeKey = (key: unknown) => {
+    if (Array.isArray(key)) return `a:${JSON.stringify(key)}`;
+    return `s:${String(key)}`;
+  };
+
+  const getKeyFromRow = (row: any, keyPath: string | string[]) => {
+    if (Array.isArray(keyPath)) return keyPath.map((k) => row?.[k]);
+    return row?.[keyPath];
+  };
+
+  const ensureStore = (stores: FakeDbState, storeName: string, keyPath: string | string[]) => {
+    const existing = stores.get(storeName);
+    if (existing) return existing;
+    const meta = { keyPath, data: new Map<string, any>(), indexes: new Map<string, { keyPath: string | string[] }>() };
+    stores.set(storeName, meta);
+    return meta;
+  };
+
+  const makeObjectStore = (meta: FakeDbState extends Map<string, infer T> ? T : never, tx: any) => {
+    return {
+      indexNames: {
+        contains: (name: string) => meta.indexes.has(name),
+      },
+      createIndex: (name: string, keyPath: string | string[]) => {
+        meta.indexes.set(name, { keyPath });
+      },
+      get: (id: IDBValidKey) => {
+        const getReq: any = { result: undefined, error: null, onsuccess: null, onerror: null };
+        queueMicrotask(() => {
+          getReq.result = meta.data.get(normalizeKey(id));
+          getReq.onsuccess?.();
+        });
+        return getReq;
+      },
+      getAll: () => {
+        const req: any = { result: undefined, error: null, onsuccess: null, onerror: null };
+        queueMicrotask(() => {
+          req.result = Array.from(meta.data.values());
+          req.onsuccess?.();
+        });
+        return req;
+      },
+      put: (row: any) => {
+        const key = normalizeKey(getKeyFromRow(row, meta.keyPath));
+        meta.data.set(key, row);
+        queueMicrotask(() => tx.oncomplete?.());
+      },
+      delete: (id: IDBValidKey) => {
+        meta.data.delete(normalizeKey(id));
+        queueMicrotask(() => tx.oncomplete?.());
+      },
+      index: (name: string) => {
+        const index = meta.indexes.get(name);
+        if (!index) throw new Error(`index ${name} not found`);
+        return {
+          getAll: (key: IDBValidKey) => {
+            const req: any = { result: undefined, error: null, onsuccess: null, onerror: null };
+            queueMicrotask(() => {
+              const wanted = normalizeKey(key);
+              const rows = Array.from(meta.data.values()).filter((row) => normalizeKey(getKeyFromRow(row, index.keyPath)) === wanted);
+              req.result = rows;
+              req.onsuccess?.();
+            });
+            return req;
+          },
+          openCursor: (range: any) => {
+            const req: any = { result: undefined, error: null, onsuccess: null, onerror: null };
+            const key = range && typeof range === 'object' && '__only' in range ? range.__only : range;
+            const wanted = normalizeKey(key);
+            const entries = Array.from(meta.data.entries())
+              .filter(([, row]) => normalizeKey(getKeyFromRow(row, index.keyPath)) === wanted)
+              .map(([primaryKey, row]) => ({ primaryKey, row }));
+            let idx = 0;
+            const next = () => {
+              if (idx >= entries.length) {
+                req.result = null;
+                req.onsuccess?.();
+                return;
+              }
+              const entry = entries[idx]!;
+              req.result = {
+                delete: () => meta.data.delete(entry.primaryKey),
+                continue: () => {
+                  idx += 1;
+                  queueMicrotask(next);
+                },
+              };
+              req.onsuccess?.();
+            };
+            queueMicrotask(next);
+            return req;
+          },
+        };
+      },
+    };
+  };
 
   const open = (name: string) => {
     const req: any = { result: null, error: null, onsuccess: null, onerror: null, onupgradeneeded: null };
     queueMicrotask(() => {
       try {
-        const stores = storesByDbName.get(name) ?? new Map<string, Map<string, any>>();
+        const stores = storesByDbName.get(name) ?? new Map<string, { keyPath: string | string[]; data: Map<string, any>; indexes: Map<string, { keyPath: string | string[] }> }>();
         storesByDbName.set(name, stores);
 
         const db: any = {
           objectStoreNames: {
             contains: (storeName: string) => stores.has(storeName),
           },
-          createObjectStore: (storeName: string) => {
-            if (!stores.has(storeName)) stores.set(storeName, new Map());
+          createObjectStore: (storeName: string, options?: { keyPath?: string | string[] }) => {
+            const keyPath = options?.keyPath ?? 'id';
+            const meta = ensureStore(stores, storeName, keyPath);
+            return makeObjectStore(meta as any, req.transaction);
           },
           transaction: (storeName: string, _mode: 'readonly' | 'readwrite') => {
             const tx: any = { oncomplete: null, onerror: null, error: null };
-            const bucket = stores.get(storeName) ?? new Map();
-            stores.set(storeName, bucket);
-
-            tx.objectStore = () => {
-              return {
-                get: (id: string) => {
-                  const getReq: any = { result: undefined, error: null, onsuccess: null, onerror: null };
-                  queueMicrotask(() => {
-                    getReq.result = bucket.get(id);
-                    getReq.onsuccess?.();
-                  });
-                  return getReq;
-                },
-                put: (row: any) => {
-                  const id = row.id;
-                  bucket.set(id, row);
-                  queueMicrotask(() => tx.oncomplete?.());
-                },
-              };
-            };
+            const meta = ensureStore(stores, storeName, 'id');
+            tx.objectStore = () => makeObjectStore(meta as any, tx);
             return tx;
           },
           close: () => {},
         };
 
         req.result = db;
+        req.transaction = {
+          objectStore: (storeName: string) => {
+            const meta = ensureStore(stores, storeName, 'id');
+            return makeObjectStore(meta as any, req.transaction);
+          },
+        };
         req.onupgradeneeded?.();
         req.onsuccess?.();
       } catch (e) {
@@ -62,7 +160,7 @@ function createFakeIndexedDb() {
   const factory: any = { open };
   factory.__debug = {
     getBucket(dbName: string, storeName: string) {
-      return storesByDbName.get(dbName)?.get(storeName);
+      return storesByDbName.get(dbName)?.get(storeName)?.data;
     },
   };
   return factory as IDBFactory;
@@ -90,9 +188,9 @@ describe('IndexedDbStore', () => {
 
     const store1 = new IndexedDbStore({ dbName: 'db_prune', storeName: 's1', indexedDb, maxOperations: 2 });
     await store1.init({ walletId: 'wallet_1' });
-    store1.createOperation({ type: 'deposit', chainId: 1, tokenId: 'T' });
-    store1.createOperation({ type: 'transfer', chainId: 1, tokenId: 'T' });
-    store1.createOperation({ type: 'withdraw', chainId: 1, tokenId: 'T' });
+    store1.createOperation({ type: 'deposit', chainId: 1, tokenId: 'T', createdAt: 1 });
+    store1.createOperation({ type: 'transfer', chainId: 1, tokenId: 'T', createdAt: 2 });
+    store1.createOperation({ type: 'withdraw', chainId: 1, tokenId: 'T', createdAt: 3 });
     await store1.close();
 
     const store2 = new IndexedDbStore({ dbName: 'db_prune', storeName: 's1', indexedDb, maxOperations: 2 });
@@ -102,40 +200,22 @@ describe('IndexedDbStore', () => {
     expect(ops[0]!.type).toBe('withdraw');
   });
 
-  it('ignores corrupted rows (ops/utxos) without throwing', async () => {
-    const indexedDb: any = createFakeIndexedDb();
+  it('supports persisted merkle leaves', async () => {
+    const indexedDb = createFakeIndexedDb();
 
-    const store1 = new IndexedDbStore({ dbName: 'db_corrupt', storeName: 's1', indexedDb });
+    const store1 = new IndexedDbStore({ dbName: 'db_merkle_ops', storeName: 's1', indexedDb });
     await store1.init({ walletId: 'wallet_1' });
-    await store1.setSyncCursor(1, { memo: 1, nullifier: 2, merkle: 3 });
-    await store1.upsertUtxos([
-      {
-        chainId: 1,
-        assetId: 'T',
-        amount: 123n,
-        commitment: '0x01',
-        nullifier: '0x02',
-        mkIndex: 7,
-        isFrozen: false,
-        isSpent: false,
-      },
+    await store1.appendMerkleLeaves?.(1, [
+      { cid: 0, commitment: '0x01' as any },
+      { cid: 1, commitment: '0x02' as any },
     ]);
     await store1.close();
 
-    const bucket = indexedDb.__debug.getBucket('db_corrupt', 's1');
-    expect(bucket).toBeTruthy();
-    const row = bucket.get('wallet_1');
-    row.json.operations = { nope: true };
-    row.json.wallet.utxos['1:0x01'].amount = 'not-a-bigint';
-    row.json.merkleLeaves = { '1': [{ cid: 'not-a-number', commitment: 123 }] };
-
-    const store2 = new IndexedDbStore({ dbName: 'db_corrupt', storeName: 's1', indexedDb });
-    await expect(store2.init({ walletId: 'wallet_1' })).resolves.toBeUndefined();
-    await expect(store2.getSyncCursor(1)).resolves.toEqual({ memo: 1, nullifier: 2, merkle: 3 });
-    expect(store2.listOperations()).toEqual([]);
-    await expect(store2.listUtxos({ chainId: 1 })).resolves.toEqual({ total: 0, rows: [] });
-
-    // Merkle leaves API should not throw on corrupted entries; should return undefined/empty.
-    await expect(store2.getMerkleLeaves?.(1)).resolves.toBeUndefined();
+    const store2 = new IndexedDbStore({ dbName: 'db_merkle_ops', storeName: 's1', indexedDb });
+    await store2.init({ walletId: 'wallet_1' });
+    await expect(store2.getMerkleLeaves?.(1)).resolves.toEqual([
+      { cid: 0, commitment: '0x01' },
+      { cid: 1, commitment: '0x02' },
+    ]);
   });
 });

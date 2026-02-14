@@ -17,6 +17,7 @@ import { applyOperationsQuery } from './operationsQuery';
 import { applyEntryMemoQuery } from './entryMemoQuery';
 import { applyEntryNullifierQuery } from './entryNullifierQuery';
 import { applyUtxoQuery } from './utxoQuery';
+import { isHex } from 'viem';
 
 export type IndexedDbStoreOptions = {
   dbName?: string;
@@ -534,7 +535,10 @@ export class IndexedDbStore implements StorageAdapter {
       next++;
     }
     this.merkleLeaves[key] = existing;
-    await this.putMany(this.storeNames().merkleLeaves, fresh.map((row) => ({ ...row, chainId })));
+    await this.putMany(
+      this.storeNames().merkleLeaves,
+      fresh.map((row) => ({ ...row, chainId })),
+    );
   }
 
   /**
