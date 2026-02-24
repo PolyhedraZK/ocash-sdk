@@ -1,0 +1,47 @@
+import React from 'react';
+import classnames from 'classnames';
+
+import { IconColor, Display } from '../../../helpers/constants/design-system';
+
+import { Box, BoxProps } from '../box';
+import type { PolymorphicRef } from '../box';
+
+import { IconSize, IconProps, IconComponent } from './icon.types';
+
+/**
+ * @deprecated Please update your code to use `Icon` from `@metamask/design-system-react`
+ */
+export const Icon: IconComponent = React.forwardRef(
+  // TODO: Fix in https://github.com/MetaMask/metamask-extension/issues/31860
+  // eslint-disable-next-line @typescript-eslint/naming-convention
+  <C extends React.ElementType = 'span'>(
+    {
+      name,
+      size = IconSize.Md,
+      color = IconColor.inherit,
+      className = '',
+      style,
+      ...props
+    }: IconProps<C>,
+    ref?: PolymorphicRef<C>,
+  ) => (
+    <Box
+      className={classnames(className, 'mm-icon', `mm-icon--size-${size}`)}
+      ref={ref}
+      as="span"
+      display={Display.InlineBlock}
+      color={color}
+      style={{
+        /**
+         * To reduce the possibility of injection attacks
+         * the icon component uses mask-image instead of rendering
+         * the svg directly.
+         */
+        maskImage: `url('./images/icons/${String(name)}.svg')`,
+        WebkitMaskImage: `url('./images/icons/${String(name)}.svg')`,
+        ...style,
+      }}
+      {...(props as BoxProps<C>)}
+    />
+  ),
+);
