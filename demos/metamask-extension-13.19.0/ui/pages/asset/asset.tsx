@@ -9,7 +9,9 @@ import { ScrollContainer } from '../../contexts/scroll-container';
 import { getNFTsByChainId } from '../../ducks/metamask/metamask';
 import { DEFAULT_ROUTE } from '../../helpers/constants/routes';
 import { getTokenByAccountAndAddressAndChainId } from '../../selectors/assets';
+import { getOcashTokenConfig } from '../../constants/ocash';
 import NativeAsset from './components/native-asset';
+import OcashAsset from './components/ocash-asset';
 import TokenAsset from './components/token-asset';
 
 const Asset = () => {
@@ -48,6 +50,11 @@ const Asset = () => {
   const content = (() => {
     if (nft) {
       return <NftDetails nft={nft} nftChainId={chainId} />;
+    }
+
+    const ocashToken = getOcashTokenConfig(chainId, decodedAsset);
+    if (chainId && ocashToken) {
+      return <OcashAsset chainId={chainId} token={ocashToken} />;
     }
 
     const isInvalid = !token || !chainId;

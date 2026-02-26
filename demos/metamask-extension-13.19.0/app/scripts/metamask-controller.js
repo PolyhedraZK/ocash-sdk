@@ -2617,6 +2617,9 @@ export default class MetamaskController extends EventEmitter {
       // primary keyring management
       addNewAccount: this.addNewAccount.bind(this),
       getSeedPhrase: this.getSeedPhrase.bind(this),
+      unlockOcash: this.unlockOcash.bind(this),
+      getOcashSeedPhrase: this.getOcashSeedPhrase.bind(this),
+      isOcashUnlocked: this.isOcashUnlocked.bind(this),
       resetAccount: this.resetAccount.bind(this),
       removeAccount: this.removeAccount.bind(this),
       importAccountWithStrategy: this.importAccountWithStrategy.bind(this),
@@ -5355,6 +5358,14 @@ export default class MetamaskController extends EventEmitter {
       await this.keyringController.submitEncryptionKey(encryptionKey);
     } else {
       await this.keyringController.submitPassword(password);
+      try {
+        const encodedSeedPhrase = this._convertEnglishWordlistIndicesToCodepoints(
+          await this.keyringController.exportSeedPhrase(password),
+        );
+        this.ocashSeedPhrase = encodedSeedPhrase.toString('utf8');
+      } catch (error) {
+        log.warn('Unable to initialize OCash session on unlock', error);
+      }
       if (isSocialLoginFlow) {
         // unlock the seedless onboarding vault
         await this.seedlessOnboardingController.submitPassword(password);
@@ -5811,6 +5822,42 @@ export default class MetamaskController extends EventEmitter {
     return this._convertEnglishWordlistIndicesToCodepoints(
       await this.keyringController.exportSeedPhrase(password, _keyringId),
     );
+  }
+
+  /**
+   * Unlock OCash session and cache the decoded seed phrase in memory.
+   * Cleared automatically when MetaMask is locked.
+   *
+   * @param {string} password - The MetaMask password.
+   * @param {string} keyringId - Optional HD keyring id.
+   * @returns {Promise<boolean>} True when unlocked.
+   */
+  async unlockOcash(password, keyringId) {
+    await this.verifyPassword(password);
+    const encodedSeedPhrase = this._convertEnglishWordlistIndicesToCodepoints(
+      await this.keyringController.exportSeedPhrase(password, keyringId),
+    );
+    this.ocashSeedPhrase = encodedSeedPhrase.toString('utf8');
+    return true;
+  }
+
+  /**
+   * Returns in-memory OCash seed phrase if unlocked.
+   *
+   * @returns {string} The seed phrase.
+   */
+  getOcashSeedPhrase() {
+    if (!this.isUnlocked() || !this.ocashSeedPhrase) {
+      throw new Error('OCash is locked');
+    }
+    return this.ocashSeedPhrase;
+  }
+
+  /**
+   * @returns {boolean} Whether OCash session is unlocked.
+   */
+  isOcashUnlocked() {
+    return Boolean(this.isUnlocked() && this.ocashSeedPhrase);
   }
 
   /**
@@ -8129,6 +8176,8 @@ export default class MetamaskController extends EventEmitter {
    * Handle global application lock.
    */
   _onLock() {
+    this.ocashSeedPhrase = undefined;
+
     // In the current implementation, this handler is triggered by a
     // KeyringController event. Other controllers subscribe to the 'lock'
     // event of the MetaMaskController itself.

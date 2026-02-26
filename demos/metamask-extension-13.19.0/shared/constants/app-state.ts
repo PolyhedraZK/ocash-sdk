@@ -5,6 +5,7 @@ import { MetaMetricsEventName } from './metametrics';
 
 export enum AccountOverviewTabKey {
   Tokens = 'tokens',
+  OCash = 'ocash',
   Nfts = 'nfts',
   Activity = 'activity',
   DeFi = 'defi',
@@ -22,6 +23,7 @@ export const ACCOUNT_OVERVIEW_TAB_KEY_TO_METAMETRICS_EVENT_NAME_MAP = {
 
 export const ACCOUNT_OVERVIEW_TAB_KEY_TO_TRACE_NAME_MAP = {
   [AccountOverviewTabKey.Tokens]: TraceName.AccountOverviewAssetListTab,
+  [AccountOverviewTabKey.OCash]: TraceName.AccountOverviewAssetListTab,
   [AccountOverviewTabKey.Nfts]: TraceName.AccountOverviewNftsTab,
   [AccountOverviewTabKey.Activity]: TraceName.AccountOverviewActivityTab,
   [AccountOverviewTabKey.DeFi]: TraceName.AccountOverviewDeFiTab,

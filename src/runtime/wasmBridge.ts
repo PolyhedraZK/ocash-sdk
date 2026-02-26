@@ -235,11 +235,59 @@ export class UniversalWasmBridge implements ProofBridge {
     return text;
   }
 
+  private async resolveTextAssetSource(filename: string): Promise<AssetSource> {
+    const override = this.config.assetsOverride?.[filename];
+    if (!override) {
+      throw new SdkError('ASSETS', `Missing assetsOverride for ${filename}`, { filename });
+    }
+    if (typeof override !== 'string') {
+      throw new SdkError('ASSETS', `Asset ${filename} must be provided as a single URL or file path`, { filename });
+    }
+    return this.resolveAssetSource(override);
+  }
+
+  private async loadScriptTag(url: string): Promise<boolean> {
+    const doc = (globalThis as any).document as Document | undefined;
+    if (!doc?.createElement || !doc.head?.appendChild) return false;
+    await new Promise<void>((resolve, reject) => {
+      const el = doc.createElement('script');
+      el.type = 'text/javascript';
+      el.async = true;
+      el.src = url;
+      el.onload = () => {
+        el.remove();
+        resolve();
+      };
+      el.onerror = () => {
+        el.remove();
+        reject(new Error(`Failed to load script: ${url}`));
+      };
+      doc.head.appendChild(el);
+    });
+    return true;
+  }
+
+  private async loadImportScripts(url: string): Promise<boolean> {
+    const importScriptsFn = (globalThis as any).importScripts as ((...urls: string[]) => void) | undefined;
+    if (typeof importScriptsFn !== 'function') return false;
+    importScriptsFn(url);
+    return true;
+  }
+
   /**
    * Ensure the Go WASM runtime is loaded on globalThis by evaluating wasm_exec.js.
    */
   private async ensureGoRuntime() {
     if (typeof getGlobal('Go') === 'function') return;
+    const source = await this.resolveTextAssetSource('wasm_exec.js');
+    if (source.kind === 'url') {
+      try {
+        const loaded = (await this.loadScriptTag(source.url)) || (await this.loadImportScripts(source.url));
+        if (loaded && typeof getGlobal('Go') === 'function') return;
+      } catch {
+        // Fall back to eval-based loader for environments that block script tag/importScripts paths.
+      }
+    }
     const scriptText = await this.fetchText('wasm_exec.js');
     // eslint-disable-next-line no-new-func
     const initializer = new Function(scriptText + '\nreturn Go;');

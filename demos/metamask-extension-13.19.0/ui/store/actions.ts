@@ -1174,6 +1174,21 @@ export async function getSeedPhrase(password: string, keyringId?: string) {
   return Buffer.from(encodedSeedPhrase).toString('utf8');
 }
 
+export async function unlockOcash(password: string, keyringId?: string) {
+  return await submitRequestToBackground<boolean>('unlockOcash', [
+    password,
+    keyringId,
+  ]);
+}
+
+export async function getOcashSeedPhrase() {
+  return await submitRequestToBackground<string>('getOcashSeedPhrase');
+}
+
+export async function isOcashUnlocked() {
+  return await submitRequestToBackground<boolean>('isOcashUnlocked');
+}
+
 export function requestRevealSeedWords(
   password: string,
   keyringId: string,

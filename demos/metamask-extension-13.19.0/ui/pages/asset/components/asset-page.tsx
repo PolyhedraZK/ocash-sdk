@@ -95,9 +95,13 @@ import { TronDailyResources } from './tron-daily-resources';
 const AssetPage = ({
   asset,
   optionsButton,
+  actionButtons,
+  activityContent,
 }: {
   asset: Asset;
   optionsButton: React.ReactNode;
+  actionButtons?: React.ReactNode;
+  activityContent?: React.ReactNode;
 }) => {
   const t = useI18nContext();
   const navigate = useNavigate();
@@ -262,6 +266,19 @@ const AssetPage = ({
     };
   }
 
+  if (asset.balance) {
+    balance = asset.balance.display;
+    tokenFiatAmount = Number(asset.balance.fiat ?? '0');
+    updatedAsset = {
+      ...asset,
+      balance: {
+        value: asset.balance.value,
+        display: asset.balance.display,
+        fiat: asset.balance.fiat,
+      },
+    };
+  }
+
   const shouldShowSpendingCaps = isEvm;
   const portfolioSpendingCapsUrl = useMemo(
     () =>
@@ -369,22 +386,23 @@ const AssetPage = ({
         asset={tokenWithFiatAmount as TokenFiatDisplayInfo}
       />
       <Box marginTop={4} paddingLeft={4} paddingRight={4}>
-        {isNativeAsset(updatedAsset) ? (
-          <CoinButtons
-            {...{
-              account: selectedAccount,
-              trackingLocation: 'asset-page',
-              isBuyableChain,
-              isSigningEnabled,
-              isSwapsChain,
-              isBridgeChain,
-              chainId,
-              disableSendForNonEvm: true,
-            }}
-          />
-        ) : (
-          <TokenButtons token={updatedAsset} disableSendForNonEvm />
-        )}
+        {actionButtons ??
+          (isNativeAsset(updatedAsset) ? (
+            <CoinButtons
+              {...{
+                account: selectedAccount,
+                trackingLocation: 'asset-page',
+                isBuyableChain,
+                isSigningEnabled,
+                isSwapsChain,
+                isBridgeChain,
+                chainId,
+                disableSendForNonEvm: true,
+              }}
+            />
+          ) : (
+            <TokenButtons token={updatedAsset} disableSendForNonEvm />
+          ))}
       </Box>
       <Box
         display={Display.Flex}
@@ -526,17 +544,18 @@ const AssetPage = ({
             <Text paddingInline={4} variant={TextVariant.headingSm}>
               {t('yourActivity')}
             </Text>
-            {showUnifiedTransactionList ? (
-              <UnifiedTransactionList
-                tokenAddress={address}
-                tokenChainIdOverride={chainId}
-              />
-            ) : (
-              <TransactionList
-                tokenAddress={address}
-                overrideFilterForCurrentChain={type === AssetType.native}
-              />
-            )}
+            {activityContent ??
+              (showUnifiedTransactionList ? (
+                <UnifiedTransactionList
+                  tokenAddress={address}
+                  tokenChainIdOverride={chainId}
+                />
+              ) : (
+                <TransactionList
+                  tokenAddress={address}
+                  overrideFilterForCurrentChain={type === AssetType.native}
+                />
+              ))}
           </Box>
         </Box>
       </Box>

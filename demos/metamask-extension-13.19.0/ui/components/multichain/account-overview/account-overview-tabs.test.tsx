@@ -81,7 +81,7 @@ describe('AccountOverviewTabs - event metrics', () => {
       <MetaMetricsContext.Provider value={mockMetaMetricsContext}>
         <AccountOverviewTabs
           showTokens={true}
-          showNfts={false}
+          showOcash={true}
           showActivity={true}
           setBasicFunctionalityModalOpen={jest.fn()}
           onSupportLinkClick={jest.fn()}

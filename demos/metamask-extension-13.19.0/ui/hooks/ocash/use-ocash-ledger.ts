@@ -1,0 +1,547 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { AnyAction } from 'redux';
+import type { ThunkDispatch } from 'redux-thunk';
+import { type Hex } from '@metamask/utils';
+import { encodeFunctionData, createPublicClient, http, toHex } from 'viem';
+import {
+  createSdk,
+  IndexedDbStore,
+  type OCashSdk,
+  type StoredOperation,
+  type ChainConfigInput,
+} from './sdk-bridge';
+import {
+  addTransactionAndRouteToConfirmationPage,
+  getOcashSeedPhrase,
+  isOcashUnlocked,
+  findNetworkClientIdByChainId,
+  unlockOcash,
+} from '../../store/actions';
+import {
+  getOcashChainConfig,
+  getOcashTokenConfig,
+} from '../../constants/ocash';
+
+export type OcashOperationType = 'deposit' | 'withdraw' | 'transfer';
+
+type SubmitOperationInput = {
+  kind: OcashOperationType;
+  account: string;
+  chainId: string;
+  assetAddress: string;
+  amount: string;
+  recipient?: string;
+  dispatch: ThunkDispatch<unknown, unknown, AnyAction>;
+};
+
+type SubmitOperationResult =
+  | { ok: true; operation?: StoredOperation; txHash?: Hex }
+  | { ok: false; error: string };
+
+type GetReceiveAddressInput = {
+  account: string;
+  chainId: string;
+};
+
+type GetReceiveAddressResult =
+  | { ok: true; address: Hex }
+  | { ok: false; error: string };
+
+type UnlockWalletInput = {
+  account: string;
+  chainId: string;
+  password: string;
+};
+
+type UnlockWalletResult = { ok: true } | { ok: false; error: string };
+
+type OcashSdkContext = {
+  sdk: OCashSdk;
+  chainConfig: ChainConfigInput;
+  account: string;
+  readyPromise?: Promise<void>;
+  unlockedSeed?: string;
+  syncPromise?: Promise<void>;
+};
+
+const SDK_CONTEXTS = new Map<string, OcashSdkContext>();
+const ACCOUNT_SEED_CACHE = new Map<string, string>();
+
+function normalizeAddress(value: string): string {
+  return value.toLowerCase();
+}
+
+function normalizeChainId(chainId: string): string {
+  if (chainId.startsWith('eip155:')) {
+    const decimalChainId = Number(chainId.slice('eip155:'.length));
+    if (Number.isFinite(decimalChainId)) {
+      return `0x${decimalChainId.toString(16)}`;
+    }
+  }
+
+  if (/^\d+$/u.test(chainId)) {
+    const decimalChainId = Number(chainId);
+    if (Number.isFinite(decimalChainId)) {
+      return `0x${decimalChainId.toString(16)}`;
+    }
+  }
+
+  return chainId.toLowerCase();
+}
+
+function parseAmountToUnits(input: string, decimals: number): bigint | null {
+  const trimmed = input.trim();
+  if (!trimmed || !/^(\d+(\.\d+)?|\.\d+)$/u.test(trimmed)) {
+    return null;
+  }
+
+  const [intPartRaw, fracPartRaw = ''] = trimmed.split('.');
+  const intPart = intPartRaw || '0';
+  const fracPart = fracPartRaw.slice(0, decimals).padEnd(decimals, '0');
+  const unitsText = `${intPart}${fracPart}`.replace(/^0+/u, '') || '0';
+
+  try {
+    return BigInt(unitsText);
+  } catch {
+    return null;
+  }
+}
+
+function formatUnits(units: bigint, decimals: number): string {
+  if (decimals === 0) {
+    return units.toString();
+  }
+
+  const negative = units < 0n;
+  const abs = negative ? -units : units;
+  const text = abs.toString().padStart(decimals + 1, '0');
+  const intPart = text.slice(0, -decimals);
+  const fracPart = text.slice(-decimals).replace(/0+$/u, '');
+  const formatted = fracPart ? `${intPart}.${fracPart}` : intPart;
+  return negative ? `-${formatted}` : formatted;
+}
+
+function getContext(account: string, chainId: string): OcashSdkContext | null {
+  const normalizedAccount = normalizeAddress(account);
+  const normalizedChainId = normalizeChainId(chainId);
+  const chain = getOcashChainConfig(normalizedChainId);
+  if (!chain || !chain.rpcUrl) {
+    return null;
+  }
+
+  const key = `${normalizedAccount}:${normalizedChainId}`;
+  const existing = SDK_CONTEXTS.get(key);
+  if (existing) {
+    return existing;
+  }
+
+  const chainConfig: ChainConfigInput = {
+    chainId: chain.chainIdDecimal,
+    rpcUrl: chain.rpcUrl,
+    entryUrl: chain.entryUrl,
+    merkleProofUrl: chain.merkleProofUrl,
+    ocashContractAddress: chain.ocashContractAddress as Hex | undefined,
+    relayerUrl: chain.relayerUrl,
+    tokens: chain.tokens,
+  };
+
+  const sdk = createSdk({
+    runtime: 'browser',
+    chains: [chainConfig],
+    storage: new IndexedDbStore({
+      dbName: 'ocash-sdk-metamask',
+      storeName: `ocash_${chain.chainIdDecimal}`,
+    }),
+  });
+
+  const created: OcashSdkContext = {
+    sdk,
+    chainConfig,
+    account: normalizedAccount,
+  };
+  SDK_CONTEXTS.set(key, created);
+  return created;
+}
+
+async function ensureReady(ctx: OcashSdkContext) {
+  if (!ctx.readyPromise) {
+    ctx.readyPromise = ctx.sdk.core.ready();
+  }
+  await ctx.readyPromise;
+}
+
+async function ensureUnlocked(
+  ctx: OcashSdkContext,
+  password?: string,
+): Promise<string> {
+  await ensureReady(ctx);
+  let seed = ACCOUNT_SEED_CACHE.get(ctx.account);
+  if (password) {
+    await unlockOcash(password);
+    seed = await getOcashSeedPhrase();
+    ACCOUNT_SEED_CACHE.set(ctx.account, seed);
+  }
+
+  if (!seed) {
+    seed = await getOcashSeedPhrase();
+    ACCOUNT_SEED_CACHE.set(ctx.account, seed);
+  }
+
+  if (ctx.unlockedSeed !== seed) {
+    await ctx.sdk.wallet.open({
+      seed,
+      walletId: ctx.account,
+    });
+    ctx.unlockedSeed = seed;
+  }
+
+  return seed;
+}
+
+async function resolveUnlockedSeed(
+  account: string,
+  password?: string,
+): Promise<string> {
+  const normalizedAccount = normalizeAddress(account);
+  let seed = ACCOUNT_SEED_CACHE.get(normalizedAccount);
+
+  if (password) {
+    await unlockOcash(password);
+    seed = await getOcashSeedPhrase();
+    ACCOUNT_SEED_CACHE.set(normalizedAccount, seed);
+  }
+
+  if (!seed) {
+    seed = await getOcashSeedPhrase();
+    ACCOUNT_SEED_CACHE.set(normalizedAccount, seed);
+  }
+
+  return seed;
+}
+
+async function syncWallet(ctx: OcashSdkContext) {
+  if (!ctx.syncPromise) {
+    ctx.syncPromise = ctx.sdk.sync
+      .syncOnce({ chainIds: [ctx.chainConfig.chainId], continueOnError: true })
+      .finally(() => {
+        ctx.syncPromise = undefined;
+      });
+  }
+  await ctx.syncPromise;
+}
+
+function isAddress(input: string): boolean {
+  return /^0x[a-fA-F0-9]{40}$/u.test(input);
+}
+
+export function useOcashLedger(account?: string) {
+  const [balances, setBalances] = useState<Record<string, bigint>>({});
+  const [operations, setOperations] = useState<StoredOperation[]>([]);
+  const [ocashUnlocked, setOcashUnlocked] = useState(false);
+
+  const refresh = useCallback(async () => {
+    if (!account) {
+      setBalances({});
+      setOperations([]);
+      return;
+    }
+
+    const allSupportedChains = ['0x1', '0x38', '0x2105', '0xaa36a7', '0x61'];
+    const nextBalances: Record<string, bigint> = {};
+    const nextOperations: StoredOperation[] = [];
+    const unlocked = await isOcashUnlocked().catch(() => false);
+    setOcashUnlocked(unlocked);
+    if (!unlocked) {
+      ACCOUNT_SEED_CACHE.clear();
+    }
+
+    await Promise.all(
+      allSupportedChains.map(async (chainId) => {
+        const ctx = getContext(account, chainId);
+        if (!ctx) {
+          return;
+        }
+
+        try {
+          await ensureUnlocked(ctx);
+          await syncWallet(ctx);
+          const chain = getOcashChainConfig(chainId);
+          if (!chain) {
+            return;
+          }
+
+          await Promise.all(
+            chain.tokens.map(async (token) => {
+              const balance = await ctx.sdk.wallet.getBalance({
+                chainId: chain.chainIdDecimal,
+                assetId: token.id,
+              });
+              const key = `${chainId}:${normalizeAddress(token.wrappedErc20)}`;
+              nextBalances[key] = balance;
+            }),
+          );
+
+          const storedOps = ctx.sdk.storage
+            .getAdapter()
+            .listOperations({ chainId: chain.chainIdDecimal, sort: 'desc', limit: 50 });
+          nextOperations.push(...storedOps);
+        } catch {
+          // Ignore per-chain load errors so UI can still render partial results.
+        }
+      }),
+    );
+
+    nextOperations.sort((a, b) => b.createdAt - a.createdAt);
+    setBalances(nextBalances);
+    setOperations(nextOperations);
+  }, [account]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const getBalanceUnits = useCallback(
+    (chainId: string, assetAddress: string) => {
+      const key = `${normalizeChainId(chainId)}:${normalizeAddress(assetAddress)}`;
+      return balances[key] ?? 0n;
+    },
+    [balances],
+  );
+
+  const getBalanceDisplay = useCallback(
+    (chainId: string, assetAddress: string, decimals: number) =>
+      formatUnits(getBalanceUnits(chainId, assetAddress), decimals),
+    [getBalanceUnits],
+  );
+
+  const submitOperation = useCallback(
+    async (input: SubmitOperationInput): Promise<SubmitOperationResult> => {
+      const chainId = normalizeChainId(input.chainId);
+      const chain = getOcashChainConfig(chainId);
+      if (!chain || !chain.rpcUrl) {
+        return { ok: false, error: '当前网络不支持 OCash SDK。' };
+      }
+
+      const token = getOcashTokenConfig(chainId, input.assetAddress);
+      if (!token) {
+        return { ok: false, error: '未找到 OCash 资产配置。' };
+      }
+
+      const amount = parseAmountToUnits(input.amount, token.decimals);
+      if (!amount || amount <= 0n) {
+        return { ok: false, error: '请输入有效数量。' };
+      }
+
+      const ctx = getContext(input.account, chainId);
+      if (!ctx) {
+        return { ok: false, error: 'OCash SDK 初始化失败。' };
+      }
+
+      try {
+        const seed = await ensureUnlocked(ctx);
+        await syncWallet(ctx);
+
+        const publicClient = createPublicClient({
+          transport: http(chain.rpcUrl),
+        });
+
+        if (input.kind === 'deposit') {
+          const ownerPublicKey = ctx.sdk.keys.getPublicKeyBySeed(seed);
+          const prepared = await ctx.sdk.ops.prepareDeposit({
+            chainId: chain.chainIdDecimal,
+            assetId: token.id,
+            amount,
+            ownerPublicKey,
+            account: input.account as Hex,
+            publicClient,
+          });
+
+          const networkClientId = await findNetworkClientIdByChainId(chainId);
+          if (prepared.approveNeeded && prepared.approveRequest) {
+            await input.dispatch(
+              addTransactionAndRouteToConfirmationPage(
+                {
+                  from: input.account as Hex,
+                  to: prepared.approveRequest.address,
+                  data: encodeFunctionData({
+                    abi: prepared.approveRequest.abi,
+                    functionName: prepared.approveRequest.functionName,
+                    args: prepared.approveRequest.args,
+                  }),
+                },
+                { networkClientId },
+              ),
+            );
+          }
+
+          await input.dispatch(
+            addTransactionAndRouteToConfirmationPage(
+              {
+                from: input.account as Hex,
+                to: prepared.depositRequest.address,
+                data: encodeFunctionData({
+                  abi: prepared.depositRequest.abi,
+                  functionName: prepared.depositRequest.functionName,
+                  args: prepared.depositRequest.args,
+                }),
+                value:
+                  prepared.depositRequest.value > 0n
+                    ? toHex(prepared.depositRequest.value)
+                    : undefined,
+              },
+              { networkClientId },
+            ),
+          );
+
+          const operation = ctx.sdk.storage.getAdapter().createOperation({
+            type: 'deposit',
+            chainId: chain.chainIdDecimal,
+            tokenId: token.id,
+            detail: {
+              token: token.symbol,
+              amount: amount.toString(),
+              protocolFee: prepared.protocolFee.toString(),
+              depositRelayerFee: prepared.depositRelayerFee.toString(),
+            },
+          });
+
+          await refresh();
+          return { ok: true, operation };
+        }
+
+        const ownerKeyPair = ctx.sdk.keys.deriveKeyPair(seed);
+        if (input.kind === 'transfer') {
+          if (!input.recipient || !isAddress(input.recipient)) {
+            return { ok: false, error: '请输入有效收款地址。' };
+          }
+
+          const prepared = await ctx.sdk.ops.prepareTransfer({
+            chainId: chain.chainIdDecimal,
+            assetId: token.id,
+            amount,
+            to: input.recipient as Hex,
+            ownerKeyPair,
+            publicClient,
+            autoMerge: true,
+          });
+
+          const transferPlan =
+            prepared.kind === 'merge' ? prepared.merge : prepared;
+          const submitted = await ctx.sdk.ops.submitRelayerRequest({
+            prepared: {
+              plan: transferPlan.plan,
+              request: transferPlan.request,
+              kind: transferPlan.kind,
+            },
+            publicClient,
+          });
+
+          const txHash = await submitted.waitRelayerTxHash;
+          await syncWallet(ctx);
+          await refresh();
+          return { ok: true, txHash };
+        }
+
+        const prepared = await ctx.sdk.ops.prepareWithdraw({
+          chainId: chain.chainIdDecimal,
+          assetId: token.id,
+          amount,
+          recipient: input.account as Hex,
+          ownerKeyPair,
+          publicClient,
+        });
+        const submitted = await ctx.sdk.ops.submitRelayerRequest({
+          prepared: {
+            plan: prepared.plan,
+            request: prepared.request,
+          },
+          publicClient,
+        });
+        const txHash = await submitted.waitRelayerTxHash;
+        await syncWallet(ctx);
+        await refresh();
+        return { ok: true, txHash };
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : 'OCash 操作失败。',
+        };
+      }
+    },
+    [refresh],
+  );
+
+  const getReceiveAddress = useCallback(
+    async (input: GetReceiveAddressInput): Promise<GetReceiveAddressResult> => {
+      const chainId = normalizeChainId(input.chainId);
+      const chain = getOcashChainConfig(chainId);
+      if (!chain || !chain.rpcUrl) {
+        return { ok: false, error: '当前网络不支持 OCash SDK。' };
+      }
+
+      const ctx = getContext(input.account, chainId);
+      if (!ctx) {
+        return { ok: false, error: 'OCash SDK 初始化失败。' };
+      }
+
+      try {
+        const seed = await resolveUnlockedSeed(input.account);
+        const publicKey = ctx.sdk.keys.getPublicKeyBySeed(seed);
+        const receiveAddress = ctx.sdk.keys.userPkToAddress(publicKey.user_pk);
+        return { ok: true, address: receiveAddress };
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : '获取 OCash 收款地址失败。',
+        };
+      }
+    },
+    [],
+  );
+
+  const unlockWallet = useCallback(
+    async (input: UnlockWalletInput): Promise<UnlockWalletResult> => {
+      const chainId = normalizeChainId(input.chainId);
+      const chain = getOcashChainConfig(chainId);
+      if (!chain || !chain.rpcUrl) {
+        return { ok: false, error: '当前网络不支持 OCash SDK。' };
+      }
+
+      const ctx = getContext(input.account, chainId);
+      if (!ctx) {
+        return { ok: false, error: 'OCash SDK 初始化失败。' };
+      }
+
+      try {
+        await ensureUnlocked(ctx, input.password);
+        await syncWallet(ctx);
+        await refresh();
+        return { ok: true };
+      } catch (error) {
+        return {
+          ok: false,
+          error: error instanceof Error ? error.message : '解锁 OCash 失败。',
+        };
+      }
+    },
+    [refresh],
+  );
+
+  const hasUnlockedSeed = useMemo(() => {
+    if (!account) {
+      return false;
+    }
+    return ocashUnlocked || ACCOUNT_SEED_CACHE.has(normalizeAddress(account));
+  }, [account, ocashUnlocked]);
+
+  return {
+    getBalanceUnits,
+    getBalanceDisplay,
+    operations,
+    submitOperation,
+    getReceiveAddress,
+    unlockWallet,
+    refresh,
+    hasUnlockedSeed,
+  };
+}
