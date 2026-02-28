@@ -17,11 +17,11 @@ yarn add @ocash/sdk
 
 SDK 提供三个入口点，适用于不同环境：
 
-| 导入路径 | 环境 | 存储适配器 |
-|---------|------|-----------|
-| `@ocash/sdk` | 通用 | `MemoryStore`（默认） |
-| `@ocash/sdk/browser` | 浏览器 | `IndexedDbStore` |
-| `@ocash/sdk/node` | Node.js | `FileStore` |
+| 导入路径             | 环境    | 存储适配器            |
+| -------------------- | ------- | --------------------- |
+| `@ocash/sdk`         | 通用    | `MemoryStore`（默认） |
+| `@ocash/sdk/browser` | 浏览器  | `IndexedDbStore`      |
+| `@ocash/sdk/node`    | Node.js | `FileStore`           |
 
 ```ts
 // 通用（任何环境）
@@ -64,9 +64,7 @@ await sdk.wallet.open({ seed: 'your-secret-seed-phrase' });
 await sdk.sync.syncOnce();
 
 // 5. 查询余额
-const balance = await sdk.wallet.getBalance({
-  chainId: 11155111,
-});
+const balance = await sdk.wallet.getBalance({ chainId, assetId });
 console.log('余额:', balance);
 
 // 6. 清理

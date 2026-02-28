@@ -52,8 +52,6 @@
     "clean": "rimraf dist",
     "type-check": "tsc --noEmit",
     "build": "pnpm run clean && tsup",
-    "build:assets": "node build_wasm_assets.mjs",
-    "build:assets:local": "INCLUDE_WASM_EXEC_JS=1 node build_wasm_assets.mjs",
     "dev": "pnpm run demo:browser",
     "dev:sdk": "tsup --watch",
     "demo:browser": "vite --config demos/browser/vite.config.ts",
@@ -94,6 +92,14 @@
     "eventemitter3": "^5.0.1",
     "tweetnacl": "1.0.3",
     "viem": "^2.45.1"
+  },
+  "peerDependencies": {
+    "better-sqlite3": "^10.0.0"
+  },
+  "peerDependenciesMeta": {
+    "better-sqlite3": {
+      "optional": true
+    }
   },
   "sideEffects": false,
   "engines": {

@@ -19,4 +19,3 @@ export const isHexStrict = (value: unknown, options?: { minBytes?: number }): va
   }
   return true;
 };
-

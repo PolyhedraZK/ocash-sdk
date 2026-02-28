@@ -7,6 +7,9 @@ import { RecordCodec } from '../crypto/recordCodec';
 import { KeyManager } from '../crypto/keyManager';
 import { randomBytes32Bigint } from '../utils/random';
 
+/**
+ * Derive memo nonce from ephemeral and user public keys (keccak256).
+ */
 const memoNonce = (ephemeralPublicKey: [bigint, bigint], userPublicKey: [bigint, bigint]): Uint8Array => {
   const revert = new Uint8Array(64);
   revert.set(BabyJubjub.compressPoint(ephemeralPublicKey), 0);
@@ -15,7 +18,14 @@ const memoNonce = (ephemeralPublicKey: [bigint, bigint], userPublicKey: [bigint,
   return toBytes(hex).slice(0, 24);
 };
 
+/**
+ * Memo helpers for encrypting/decrypting record openings.
+ */
 export class MemoKit {
+  /**
+   * Encrypt a record opening into a memo payload.
+   * Payload = ephemeral PK (32 bytes) + NaCl secretbox ciphertext.
+   */
   static createMemo(ro: CommitmentData): `0x${string}` {
     const messageHex = RecordCodec.encode(ro).slice(2);
     const message = hexToBytes(messageHex);
@@ -34,6 +44,10 @@ export class MemoKit {
     return `0x${bytesToHex(sealed)}`;
   }
 
+  /**
+   * Decrypt a memo with the owner's secret key.
+   * Returns null if decryption fails or payload is invalid.
+   */
   static decryptMemo(secretKey: bigint, encoded: `0x${string}`): CommitmentData | null {
     const payload = hexToBytes(encoded.replace(/^0x/, ''));
     const bobPublicKey = BabyJubjub.scalarMult(secretKey);
@@ -52,6 +66,10 @@ export class MemoKit {
     }
   }
 
+  /**
+   * Decode memo for owner with transparent fallback.
+   * If isTransparent=true, treat memo as plaintext record opening.
+   */
   static decodeMemoForOwner(input: { secretKey: bigint; memo: Hex; expectedAddress?: Hex | null; isTransparent?: boolean }): CommitmentData | null {
     const tryTransparent = () => {
       try {
@@ -69,11 +87,14 @@ export class MemoKit {
       return tryTransparent();
     }
 
-    const decrypted = MemoKit.decryptMemo(input.secretKey, input.memo as `0x${string}`);
+    const decrypted = MemoKit.decryptMemo(input.secretKey, input.memo);
     if (decrypted) return decrypted;
     return tryTransparent();
   }
 
+  /**
+   * Expose memo nonce derivation for advanced usage/tests.
+   */
   static memoNonce(ephemeralPublicKey: [bigint, bigint], userPublicKey: [bigint, bigint]): Uint8Array {
     return memoNonce(ephemeralPublicKey, userPublicKey);
   }

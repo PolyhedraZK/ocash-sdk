@@ -8,9 +8,15 @@ type ApiResponse<T> = { code?: number; message?: string; user_message?: string; 
 
 const DEFAULT_RELAYER_REQUEST_TIMEOUT_MS = 60_000;
 
+/**
+ * Lightweight HTTP client for relayer endpoints.
+ */
 export class RelayerClient {
   constructor(private readonly baseUrl: string) {}
 
+  /**
+   * Submit a relayer request and return the parsed response data.
+   */
   async submit<T = unknown>(request: RelayerRequest, options?: { signal?: AbortSignal; requestTimeoutMs?: number }): Promise<T> {
     const url = joinUrl(this.baseUrl, request.path);
     const requestTimeoutMs = options?.requestTimeoutMs ?? DEFAULT_RELAYER_REQUEST_TIMEOUT_MS;
@@ -31,6 +37,9 @@ export class RelayerClient {
     return payload.data as T;
   }
 
+  /**
+   * Poll the relayer for the on-chain tx hash corresponding to a relayer tx hash.
+   */
   async getTxHash(input: { relayerTxHash: Hex; signal?: AbortSignal; requestTimeoutMs?: number }): Promise<Hex | null> {
     const url = new URL(joinUrl(this.baseUrl, '/api/v1/txhash'));
     url.searchParams.set('txhash', input.relayerTxHash);

@@ -8,15 +8,15 @@
 
 ```ts
 await sdk.wallet.open({
-  seed: 'my-secret-seed-phrase',  // 至少 16 个字符
+  seed: 'my-secret-seed-phrase', // 至少 16 个字符
   accountNonce: 0,
 });
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `seed` | `string \| Uint8Array` | 秘密种子（最少 16 字符/字节） |
-| `accountNonce` | `number?` | 可选，用于同一种子派生多个账户 |
+| 字段           | 类型                   | 说明                           |
+| -------------- | ---------------------- | ------------------------------ |
+| `seed`         | `string \| Uint8Array` | 秘密种子（最少 16 字符/字节）  |
+| `accountNonce` | `number?`              | 可选，用于同一种子派生多个账户 |
 
 ## `wallet.close()`
 
@@ -39,15 +39,12 @@ const { total, rows } = await sdk.wallet.getUtxos({
 });
 ```
 
-## `wallet.getBalance(query?)`
+## `wallet.getBalance(query)`
 
 返回可花费（未花费、未冻结）UTXO 的总余额。
 
 ```ts
-const balance = await sdk.wallet.getBalance({
-  chainId: 11155111,
-  assetId: 'my-token',
-});
+const balance = await sdk.wallet.getBalance({ chainId, assetId });
 // balance: bigint（基本单位）
 ```
 

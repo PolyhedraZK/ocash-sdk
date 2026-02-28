@@ -31,15 +31,8 @@ export async function demoDeposit(ctx: DemoContext) {
   });
 
   if (prepared.approveNeeded && prepared.approveRequest) {
-    console.log(
-      c.cyan('approving'),
-      prepared.approveRequest.address,
-      c.gray('to'),
-      prepared.approveRequest.args[0],
-      c.gray('amount'),
-      c.yellow(prepared.approveRequest.args[1].toString()),
-    );
-    const approveHash = await walletClient.writeContract(prepared.approveRequest as any);
+    console.log(c.cyan('approving'), prepared.approveRequest.address, c.gray('to'), prepared.approveRequest.args[0], c.gray('amount'), c.yellow(prepared.approveRequest.args[1].toString()));
+    const approveHash = await walletClient.writeContract(prepared.approveRequest);
     await publicClient.waitForTransactionReceipt({ hash: approveHash });
     console.log(c.green('approved:'), approveHash);
   }
@@ -58,16 +51,8 @@ export async function demoDeposit(ctx: DemoContext) {
     },
   });
 
-  console.log(
-    c.cyan('depositing'),
-    c.gray('poolId='),
-    token.id,
-    c.gray('amount='),
-    c.yellow(amount.toString()),
-    c.gray('value='),
-    c.yellow(prepared.value.toString()),
-  );
-  const hash = await walletClient.writeContract(prepared.depositRequest as any);
+  console.log(c.cyan('depositing'), c.gray('poolId='), token.id, c.gray('amount='), c.yellow(amount.toString()), c.gray('value='), c.yellow(prepared.value.toString()));
+  const hash = await walletClient.writeContract(prepared.depositRequest);
   ctx.store.updateOperation(op.id, { status: 'submitted', txHash: hash });
   console.log(c.green('tx:'), hash);
 

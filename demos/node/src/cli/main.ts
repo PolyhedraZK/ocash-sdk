@@ -78,7 +78,7 @@ export async function runCli(argv: string[]) {
   const config = await loadDemoConfig({ configPath: flags.config });
   const isDemoAll = command === 'demoAll' || command === 'demo-all';
   if (isDemoAll) {
-    await demoAll({ flags: flags as Record<string, string | boolean | undefined> });
+    await demoAll({ flags: flags });
     return;
   }
 
@@ -103,7 +103,7 @@ export async function runCli(argv: string[]) {
     },
   });
 
-  const ctx = { sdk, store: sdk.storage.getAdapter(), config, flags: flags as Record<string, string | boolean | undefined> };
+  const ctx = { sdk, store: sdk.storage.getAdapter(), config, flags };
 
   switch (command) {
     case 'init':

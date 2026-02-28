@@ -1,9 +1,8 @@
 import type { ChainConfigInput } from './types';
 
 /**
- * OCash mainnet deployment — ETH (Chain ID 1)
- *
- * Pools: ETH, USDT, USDC
+ * OCash mainnet deployment — ETH (Chain ID 1).
+ * Pools: ETH, USDT, USDC.
  */
 export const ETH_MAINNET: ChainConfigInput = {
   chainId: 1,
@@ -53,9 +52,8 @@ export const ETH_MAINNET: ChainConfigInput = {
 };
 
 /**
- * OCash mainnet deployment — BSC (Chain ID 56)
- *
- * Pools: BNB, USDT (18 decimals), USDC (18 decimals)
+ * OCash mainnet deployment — BSC (Chain ID 56).
+ * Pools: BNB, USDT (18 decimals), USDC (18 decimals).
  */
 export const BSC_MAINNET: ChainConfigInput = {
   chainId: 56,
@@ -105,9 +103,8 @@ export const BSC_MAINNET: ChainConfigInput = {
 };
 
 /**
- * OCash mainnet deployment — Base (Chain ID 8453)
- *
- * Pools: loaded dynamically from contract
+ * OCash mainnet deployment — Base (Chain ID 8453).
+ * Pools are loaded dynamically from contract.
  */
 export const BASE_MAINNET: ChainConfigInput = {
   chainId: 8453,
@@ -119,27 +116,27 @@ export const BASE_MAINNET: ChainConfigInput = {
 };
 
 /**
- * OCash testnet deployment — Sepolia (Chain ID 11155111)
+ * OCash testnet deployment — Sepolia (Chain ID 11155111).
  */
 export const SEPOLIA_TESTNET: ChainConfigInput = {
   chainId: 11155111,
   rpcUrl: 'https://sepolia.drpc.org',
   entryUrl: 'https://testnet-api.o.cash',
-  ocashContractAddress: '0xAeec58628cC3DC9E9C491e829051D5772679fb7f',
-  relayerUrl: 'https://testnet-relayer-sepolia.o.cash',
+  ocashContractAddress: '0x428c850be686E933DD641eE43574BA35f550c94c',
+  relayerUrl: 'https://relayer.sepolia.2.o.cash',
   merkleProofUrl: 'https://testnet-freezer-sepolia.o.cash',
   tokens: [],
 };
 
 /**
- * OCash testnet deployment — BSC Testnet (Chain ID 97)
+ * OCash testnet deployment — BSC Testnet (Chain ID 97).
  */
 export const BSC_TESTNET: ChainConfigInput = {
   chainId: 97,
   rpcUrl: 'https://data-seed-prebsc-1-s1.bnbchain.org:8545',
   entryUrl: 'https://testnet-api.o.cash',
-  ocashContractAddress: '0xAeec58628cC3DC9E9C491e829051D5772679fb7f',
-  relayerUrl: 'https://testnet-relayer-bsctestnet.o.cash',
+  ocashContractAddress: '0x428c850be686E933DD641eE43574BA35f550c94c',
+  relayerUrl: 'https://relayer.bsctestnet.2.o.cash',
   merkleProofUrl: 'https://testnet-freezer-bsctestnet.o.cash',
   tokens: [],
 };

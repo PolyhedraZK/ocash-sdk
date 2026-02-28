@@ -3,6 +3,9 @@ import { App_ABI } from '../abi/app';
 import { SdkError } from '../errors';
 import { toBigintOrThrow } from '../utils/bigint';
 
+/**
+ * Convert bigint-like values to decimal string without throwing.
+ */
 const tryToDecString = (value: string | bigint) => {
   try {
     return BigInt(value).toString();
@@ -11,6 +14,10 @@ const tryToDecString = (value: string | bigint) => {
   }
 };
 
+/**
+ * Find the on-chain merkle root index that matches the remote proof root.
+ * Searches a bounded window around the current index to tolerate lag.
+ */
 export async function pickMerkleRootIndex(input: {
   chainId?: number;
   publicClient: PublicClient;
@@ -39,17 +46,12 @@ export async function pickMerkleRootIndex(input: {
       input.onDebug?.({ message: 'readContract merkleRoots', detail: { triedIndex: idx } });
       root = await input.publicClient.readContract({
         address: input.contractAddress,
-        abi: App_ABI as any,
+        abi: App_ABI,
         functionName: 'merkleRoots',
         args: [BigInt(idx)],
       });
     } catch (error) {
-      throw new SdkError(
-        'MERKLE',
-        'Failed to read on-chain merkleRoots',
-        { chainId: input.chainId, contractAddress: input.contractAddress, currentIndex: input.currentIndex, triedIndex: idx },
-        error,
-      );
+      throw new SdkError('MERKLE', 'Failed to read on-chain merkleRoots', { chainId: input.chainId, contractAddress: input.contractAddress, currentIndex: input.currentIndex, triedIndex: idx }, error);
     }
 
     const rootDec = toBigintOrThrow(root, {

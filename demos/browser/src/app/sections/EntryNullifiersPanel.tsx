@@ -27,7 +27,7 @@ export function EntryNullifiersPanel() {
       setNullifierTotal(0);
       return;
     }
-    const store = sdk.storage.getAdapter() as StorageAdapter;
+    const store = sdk.storage.getAdapter();
     if (!store.listEntryNullifiers) {
       setNullifierRows([]);
       setNullifierTotal(0);

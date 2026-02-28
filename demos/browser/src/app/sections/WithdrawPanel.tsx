@@ -44,7 +44,7 @@ export function WithdrawPanel() {
       .estimate({ chainId: currentChain.chainId, assetId: currentToken.id, action: 'withdraw', amount })
       .then((estimate) => {
         if (!active || estimate.action !== 'withdraw') return;
-        setWithdrawEstimate(estimate as PlannerEstimateWithdrawResult);
+        setWithdrawEstimate(estimate);
       })
       .catch((error) => {
         if (!active) return;

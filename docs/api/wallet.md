@@ -8,17 +8,17 @@ Opens a wallet session by deriving keys from a seed.
 
 ```ts
 await sdk.wallet.open({
-  seed: 'my-secret-seed-phrase',  // At least 16 characters
-  accountNonce: 0,                 // Optional hierarchical nonce
+  seed: 'my-secret-seed-phrase', // At least 16 characters
+  accountNonce: 0, // Optional hierarchical nonce
 });
 ```
 
 ### Parameters
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `seed` | `string \| Uint8Array` | Secret seed (min 16 chars/bytes) |
-| `accountNonce` | `number?` | Optional nonce for multiple accounts from the same seed |
+| Field          | Type                   | Description                                             |
+| -------------- | ---------------------- | ------------------------------------------------------- |
+| `seed`         | `string \| Uint8Array` | Secret seed (min 16 chars/bytes)                        |
+| `accountNonce` | `number?`              | Optional nonce for multiple accounts from the same seed |
 
 This initializes the storage adapter with a `walletId` derived from the seed.
 
@@ -50,18 +50,18 @@ const { total, rows } = await sdk.wallet.getUtxos({
 
 ### Query Parameters
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `chainId` | `number?` | all | Filter by chain |
-| `assetId` | `string?` | all | Filter by asset |
-| `includeSpent` | `boolean?` | `false` | Include spent UTXOs |
-| `includeFrozen` | `boolean?` | `false` | Include frozen UTXOs |
-| `spent` | `boolean?` | — | Override includeSpent |
-| `frozen` | `boolean?` | — | Override includeFrozen |
-| `limit` | `number?` | — | Page size |
-| `offset` | `number?` | `0` | Page offset |
-| `orderBy` | `string?` | — | `'mkIndex'` or `'createdAt'` |
-| `order` | `string?` | — | `'asc'` or `'desc'` |
+| Field           | Type       | Default | Description                  |
+| --------------- | ---------- | ------- | ---------------------------- |
+| `chainId`       | `number?`  | all     | Filter by chain              |
+| `assetId`       | `string?`  | all     | Filter by asset              |
+| `includeSpent`  | `boolean?` | `false` | Include spent UTXOs          |
+| `includeFrozen` | `boolean?` | `false` | Include frozen UTXOs         |
+| `spent`         | `boolean?` | —       | Override includeSpent        |
+| `frozen`        | `boolean?` | —       | Override includeFrozen       |
+| `limit`         | `number?`  | —       | Page size                    |
+| `offset`        | `number?`  | `0`     | Page offset                  |
+| `orderBy`       | `string?`  | —       | `'mkIndex'` or `'createdAt'` |
+| `order`         | `string?`  | —       | `'asc'` or `'desc'`          |
 
 ### Returns
 
@@ -69,22 +69,19 @@ const { total, rows } = await sdk.wallet.getUtxos({
 { total: number; rows: UtxoRecord[] }
 ```
 
-## `wallet.getBalance(query?)`
+## `wallet.getBalance(query)`
 
 Returns the total balance of spendable (unspent, unfrozen) UTXOs.
 
 ```ts
-const balance = await sdk.wallet.getBalance({
-  chainId: 11155111,
-  assetId: 'my-token',
-});
+const balance = await sdk.wallet.getBalance({ chainId, assetId });
 // balance: bigint (in base units)
 ```
 
 ### Parameters
 
-| Field | Type | Description |
-|-------|------|-------------|
+| Field     | Type      | Description     |
+| --------- | --------- | --------------- |
 | `chainId` | `number?` | Filter by chain |
 | `assetId` | `string?` | Filter by asset |
 

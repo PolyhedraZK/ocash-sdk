@@ -6,6 +6,9 @@ import { joinUrl } from '../utils/url';
 
 const DEFAULT_MERKLE_REQUEST_TIMEOUT_MS = 15_000;
 
+/**
+ * Build query string with repeated keys (cid=1&cid=2...).
+ */
 const withRepeatedQuery = (url: string, key: string, values: Array<string | number>) => {
   const search = new URLSearchParams();
   for (const v of values) search.append(key, String(v));
@@ -13,6 +16,9 @@ const withRepeatedQuery = (url: string, key: string, values: Array<string | numb
   return qs ? `${url}?${qs}` : url;
 };
 
+/**
+ * Normalize latest_cid into a safe integer.
+ */
 const normalizeLatestCid = (value: unknown): number => {
   const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN;
   if (!Number.isFinite(n) || n < 0) {
@@ -21,6 +27,9 @@ const normalizeLatestCid = (value: unknown): number => {
   return Math.floor(n);
 };
 
+/**
+ * Normalize merkle path entries into string values.
+ */
 const normalizePathEntry = (value: unknown): string => {
   if (typeof value === 'string') return value;
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
@@ -28,12 +37,18 @@ const normalizePathEntry = (value: unknown): string => {
   throw new SdkError('MERKLE', 'Invalid merkle proof path entry', { value });
 };
 
+/**
+ * Normalize leaf_index into string or number.
+ */
 const normalizeLeafIndex = (value: unknown): string | number => {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   if (typeof value === 'string' && value.length) return value;
   throw new SdkError('MERKLE', 'Invalid merkle leaf_index', { leaf_index: value });
 };
 
+/**
+ * Normalize merkle root value to a decimal or hex-like string.
+ */
 const normalizeMerkleRoot = (value: unknown): string => {
   if (typeof value === 'string' && value.length) {
     try {
@@ -48,6 +63,9 @@ const normalizeMerkleRoot = (value: unknown): string => {
   throw new SdkError('MERKLE', 'Invalid merkle_root', { merkle_root: value });
 };
 
+/**
+ * Validate and normalize the remote merkle proof response.
+ */
 const normalizeResponse = (raw: unknown): RemoteMerkleProofResponse => {
   if (!raw || typeof raw !== 'object') {
     throw new SdkError('MERKLE', 'Invalid merkle proof response', { raw });
@@ -79,12 +97,18 @@ const normalizeResponse = (raw: unknown): RemoteMerkleProofResponse => {
 
 type DebugEmitter = (event: Extract<SdkEvent, { type: 'debug' }>) => void;
 
+/**
+ * HTTP client for the merkle proof service.
+ */
 export class MerkleClient {
   constructor(
     private readonly baseUrl: string,
     private readonly debugEmit?: DebugEmitter,
   ) {}
 
+  /**
+   * Fetch proofs for the given cids with optional timeout/abort.
+   */
   async getProofByCids(
     cids: number[],
     options?: { signal?: AbortSignal; requestTimeoutMs?: number },

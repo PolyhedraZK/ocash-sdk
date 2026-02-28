@@ -1,5 +1,8 @@
 import type { ListOperationsQuery, OperationStatus, OperationType, StoredOperation } from './operationTypes';
 
+/**
+ * Normalize a value or list into a Set for filtering.
+ */
 const toSet = <T extends string>(value: T | T[] | undefined): Set<T> | undefined => {
   if (value == null) return undefined;
   return new Set(Array.isArray(value) ? value : [value]);
@@ -7,6 +10,9 @@ const toSet = <T extends string>(value: T | T[] | undefined): Set<T> | undefined
 
 const defaultLimit = 50;
 
+/**
+ * Apply filtering, sorting, and pagination to operation records.
+ */
 export function applyOperationsQuery(operations: StoredOperation[], input?: number | ListOperationsQuery): StoredOperation[] {
   const query: ListOperationsQuery = typeof input === 'number' || input == null ? { limit: input } : input;
   const limit = query.limit ?? defaultLimit;
@@ -19,11 +25,10 @@ export function applyOperationsQuery(operations: StoredOperation[], input?: numb
   const filtered = source.filter((op) => {
     if (query.chainId != null && op.chainId !== query.chainId) return false;
     if (query.tokenId != null && op.tokenId !== query.tokenId) return false;
-    if (typeSet && !typeSet.has(op.type as OperationType)) return false;
+    if (typeSet && !typeSet.has(op.type)) return false;
     if (statusSet && !statusSet.has(op.status)) return false;
     return true;
   });
 
   return filtered.slice(offset, offset + limit);
 }
-

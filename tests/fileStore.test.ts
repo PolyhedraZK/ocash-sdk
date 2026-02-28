@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { FileStore } from '../src/store/fileStore';
@@ -79,6 +79,30 @@ describe('FileStore', () => {
       const ops = store2.listOperations();
       expect(ops.length).toBe(2);
       expect(ops[0]!.type).toBe('withdraw');
+    } finally {
+      await rm(await Promise.resolve(dir), { recursive: true, force: true });
+    }
+  });
+
+  it('separates wallet writes from shared writes', async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'ocash-sdk-filestore-'));
+    try {
+      const store = new FileStore({ baseDir: dir });
+      await store.init({ walletId: 'wallet_sep' });
+
+      await store.setMerkleTree?.(1, { chainId: 1, root: '0x01', totalElements: 0, lastUpdated: 1 });
+      const sharedPath = path.join(dir, 'shared.store.json');
+      const walletPath = path.join(dir, 'wallet_sep.store.json');
+      const sharedBeforeWalletWrite = await readFile(sharedPath, 'utf8');
+
+      await store.setSyncCursor(1, { memo: 11, nullifier: 12, merkle: 13 });
+      const sharedAfterWalletWrite = await readFile(sharedPath, 'utf8');
+      expect(sharedAfterWalletWrite).toBe(sharedBeforeWalletWrite);
+
+      const walletBeforeSharedWrite = await readFile(walletPath, 'utf8');
+      await store.setMerkleTree?.(1, { chainId: 1, root: '0x02', totalElements: 1, lastUpdated: 2 });
+      const walletAfterSharedWrite = await readFile(walletPath, 'utf8');
+      expect(walletAfterSharedWrite).toBe(walletBeforeSharedWrite);
     } finally {
       await rm(await Promise.resolve(dir), { recursive: true, force: true });
     }

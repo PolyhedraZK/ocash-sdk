@@ -1,8 +1,14 @@
 export interface CacheControllerConfig {
+  /** Base directory for persisted cache entries. */
   baseDir?: string;
+  /** Enable or disable caching (disabled by default when no baseDir). */
   enable?: boolean;
 }
 
+/**
+ * Small file-based cache for large binary assets (WASM, circuit files).
+ * It is a best-effort cache: failures are swallowed to avoid breaking runtime.
+ */
 export class CacheController {
   private readonly baseDir: string;
   private readonly enabled: boolean;
@@ -12,6 +18,10 @@ export class CacheController {
     this.baseDir = config.baseDir ?? '';
   }
 
+  /**
+   * Resolve the on-disk path for a cache key.
+   * Returns null when caching is disabled or path resolution fails.
+   */
   private async resolvePath(key: string): Promise<string | null> {
     if (!this.enabled) return null;
     try {
@@ -22,6 +32,9 @@ export class CacheController {
     }
   }
 
+  /**
+   * Load a cached payload if present and not expired.
+   */
   async load(key: string, maxAgeMs?: number): Promise<ArrayBuffer | null> {
     if (!this.enabled) return null;
     try {
@@ -39,6 +52,9 @@ export class CacheController {
     }
   }
 
+  /**
+   * Persist a payload to disk. Errors are ignored to keep runtime resilient.
+   */
   async save(key: string, payload: ArrayBuffer) {
     if (!this.enabled) return;
     try {

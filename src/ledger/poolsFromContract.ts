@@ -1,8 +1,7 @@
-import type { Address, PublicClient } from 'viem';
+import { erc20Abi, type Address, type PublicClient } from 'viem';
 import { SdkError } from '../errors';
 import type { TokenMetadata } from '../types';
 import { App_ABI } from '../abi/app';
-import { ERC20_ABI } from '../abi/erc20';
 import { normalizeTokenMetadata } from './tokenNormalize';
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
@@ -11,12 +10,31 @@ type PoolInfo = {
   token: Address;
   depositFeeBPS: number | bigint;
   withdrawFeeBPS: number | bigint;
-  viewerPK: readonly [bigint, bigint] | readonly [string, string] | readonly unknown[];
-  freezerPK: readonly [bigint, bigint] | readonly [string, string] | readonly unknown[];
+  viewerPK: readonly [bigint, bigint] | readonly [string, string];
+  freezerPK: readonly [bigint, bigint] | readonly [string, string];
   transferMaxAmount: bigint;
   withdrawMaxAmount: bigint;
 };
 
+/**
+ * Normalize PK pair from multicall response to a bigint or string tuple.
+ */
+const normalizePkPair = (value: unknown, name: string): readonly [bigint, bigint] | readonly [string, string] => {
+  if (!Array.isArray(value) || value.length !== 2) {
+    throw new Error(`invalid ${name}`);
+  }
+  const [x, y] = value;
+  const isBigintPair = typeof x === 'bigint' && typeof y === 'bigint';
+  const isStringPair = typeof x === 'string' && typeof y === 'string';
+  if (!isBigintPair && !isStringPair) {
+    throw new Error(`invalid ${name}`);
+  }
+  return value as any;
+};
+
+/**
+ * Normalize getPoolInfo response into a structured PoolInfo object.
+ */
 const toPoolInfo = (value: unknown): PoolInfo => {
   if (!value || typeof value !== 'object') throw new Error('invalid pool info');
   const v: any = value;
@@ -26,8 +44,8 @@ const toPoolInfo = (value: unknown): PoolInfo => {
       token: v[0],
       depositFeeBPS: v[1],
       withdrawFeeBPS: v[2],
-      viewerPK: v[4],
-      freezerPK: v[5],
+      viewerPK: normalizePkPair(v[4], 'viewerPK'),
+      freezerPK: normalizePkPair(v[5], 'freezerPK'),
       transferMaxAmount: v[6],
       withdrawMaxAmount: v[7],
     } as PoolInfo;
@@ -35,13 +53,11 @@ const toPoolInfo = (value: unknown): PoolInfo => {
   return v as PoolInfo;
 };
 
-export async function fetchPoolTokensFromContract(input: {
-  publicClient: PublicClient;
-  chainId: number;
-  contractAddress: Address;
-  maxPools?: number;
-  includeErc20Metadata?: boolean;
-}) {
+/**
+ * Read pool metadata from the OCash contract and return normalized TokenMetadata[].
+ * Optionally includes ERC20 symbol/decimals via a second multicall.
+ */
+export async function fetchPoolTokensFromContract(input: { publicClient: PublicClient; chainId: number; contractAddress: Address; maxPools?: number; includeErc20Metadata?: boolean }) {
   const maxPools = input.maxPools == null ? 16 : Math.max(1, Math.floor(input.maxPools));
   const includeErc20Metadata = Boolean(input.includeErc20Metadata);
 
@@ -53,16 +69,11 @@ export async function fetchPoolTokensFromContract(input: {
     args: [BigInt(idx)],
   }));
 
-  let poolIdsRes: any[];
-  try {
-    poolIdsRes = (await (input.publicClient as any).multicall({ contracts: poolIdsReq, allowFailure: true })) as any[];
-  } catch (error) {
+  const poolIdsRes = await input.publicClient.multicall({ contracts: poolIdsReq, allowFailure: true }).catch((error) => {
     throw new SdkError('CONFIG', 'Failed to fetch poolIds via multicall', { chainId: input.chainId, contract: input.contractAddress }, error);
-  }
+  });
 
-  const poolIds = poolIdsRes
-    .map((r) => (r && r.status === 'success' ? (r.result as bigint) : null))
-    .filter((id): id is bigint => typeof id === 'bigint' && id !== 0n);
+  const poolIds = poolIdsRes.map((r) => (r && r.status === 'success' ? r.result : null)).filter((id): id is bigint => typeof id === 'bigint' && id !== 0n);
 
   if (!poolIds.length) return [];
 
@@ -74,12 +85,9 @@ export async function fetchPoolTokensFromContract(input: {
     args: [poolId],
   }));
 
-  let poolInfoRes: any[];
-  try {
-    poolInfoRes = (await (input.publicClient as any).multicall({ contracts: poolInfoReq, allowFailure: true })) as any[];
-  } catch (error) {
+  const poolInfoRes = await input.publicClient.multicall({ contracts: poolInfoReq, allowFailure: true }).catch((error) => {
     throw new SdkError('CONFIG', 'Failed to fetch getPoolInfo via multicall', { chainId: input.chainId, contract: input.contractAddress }, error);
-  }
+  });
 
   const tokens: TokenMetadata[] = [];
   const tokenAddrByIndex: Address[] = [];
@@ -99,10 +107,10 @@ export async function fetchPoolTokensFromContract(input: {
     const token: TokenMetadata = normalizeTokenMetadata({
       id: poolId.toString(),
       wrappedErc20: info.token,
-      viewerPk: info.viewerPK as any,
-      freezerPk: info.freezerPK as any,
-      depositFeeBPS: info.depositFeeBPS as any,
-      withdrawFeeBPS: info.withdrawFeeBPS as any,
+      viewerPk: info.viewerPK,
+      freezerPk: info.freezerPK,
+      depositFeeBps: info.depositFeeBPS,
+      withdrawFeeBps: info.withdrawFeeBPS,
       transferMaxAmount: info.transferMaxAmount,
       withdrawMaxAmount: info.withdrawMaxAmount,
       symbol: '',
@@ -115,17 +123,14 @@ export async function fetchPoolTokensFromContract(input: {
   if (!includeErc20Metadata || !tokens.length) return tokens;
 
   const erc20Req = tokenAddrByIndex.flatMap((address) => [
-    { chainId: input.chainId, address, abi: ERC20_ABI, functionName: 'symbol' as const, args: [] as const },
-    { chainId: input.chainId, address, abi: ERC20_ABI, functionName: 'decimals' as const, args: [] as const },
+    { chainId: input.chainId, address, abi: erc20Abi, functionName: 'symbol' as const, args: [] },
+    { chainId: input.chainId, address, abi: erc20Abi, functionName: 'decimals' as const, args: [] },
   ]);
 
-  let erc20Res: any[];
-  try {
-    erc20Res = (await (input.publicClient as any).multicall({ contracts: erc20Req, allowFailure: true })) as any[];
-  } catch (error) {
-    // Metadata is best-effort. Return bare tokens.
-    return tokens;
-  }
+  const erc20Res = await input.publicClient.multicall({ contracts: erc20Req, allowFailure: true }).catch(() => {
+    console.warn(`Failed to fetch ERC20 metadata for tokens on chain ${input.chainId}. Returning pool info without symbol/decimals.`);
+    return Promise.resolve([]);
+  });
 
   for (let i = 0; i < tokens.length; i++) {
     const symbolRow = erc20Res[i * 2];
@@ -142,4 +147,3 @@ export async function fetchPoolTokensFromContract(input: {
 
   return tokens;
 }
-

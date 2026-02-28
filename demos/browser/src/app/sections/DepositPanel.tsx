@@ -1,28 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { message } from 'antd';
-import { CryptoToolkit, ERC20_ABI, type Hex } from '@ocash/sdk/browser';
+import { CryptoToolkit, type Hex } from '@ocash/sdk/browser';
 import { getWalletClient } from 'wagmi/actions';
 import { parseAmount } from '../../utils/format';
 import { NATIVE_ADDRESS, type DepositEstimate } from '../constants';
 import { DepositForm } from '../components';
 import { formatFeeRows, formatNativeAmount, formatTokenAmount, useDebouncedValue } from '../utils';
 import { useDemoStore } from '../state/demoStore';
+import { erc20Abi } from 'viem';
 
 export function DepositPanel() {
-  const {
-    sdk,
-    walletOpened,
-    currentToken,
-    currentChain,
-    config,
-    publicClient,
-    address,
-    isConnected,
-    walletChainId,
-    selectedChainId,
-    walletClient,
-    wagmiConfig,
-  } = useDemoStore();
+  const { sdk, walletOpened, currentToken, currentChain, config, publicClient, address, isConnected, walletChainId, selectedChainId, walletClient, wagmiConfig } = useDemoStore();
 
   const [depositAmount, setDepositAmount] = useState('0.1');
   const [depositEstimate, setDepositEstimate] = useState<DepositEstimate | null>(null);
@@ -116,12 +104,7 @@ export function DepositPanel() {
       const isNative = currentToken.wrappedErc20.toLowerCase() === NATIVE_ADDRESS.toLowerCase();
       const raw = isNative
         ? await publicClient.getBalance({ address })
-        : ((await publicClient.readContract({
-            address: currentToken.wrappedErc20,
-            abi: ERC20_ABI as any,
-            functionName: 'balanceOf',
-            args: [address],
-          })) as bigint);
+        : await publicClient.readContract({ address: currentToken.wrappedErc20, abi: erc20Abi, functionName: 'balanceOf', args: [address] });
       setDepositAmount(formatTokenAmount(raw, currentToken));
     } catch (error) {
       message.error(error instanceof Error ? error.message : String(error));
@@ -139,7 +122,7 @@ export function DepositPanel() {
       return;
     }
     const activeWalletClient = walletClient ?? (await getWalletClient(wagmiConfig, { chainId: selectedChainId ?? undefined }).catch(() => undefined));
-    if (!activeWalletClient) {
+    if (!activeWalletClient?.writeContract) {
       message.error('Wallet client not available');
       return;
     }
@@ -164,11 +147,11 @@ export function DepositPanel() {
       });
       const recipient = sdk.keys.userPkToAddress(prepared.recordOpening.user_pk);
       console.log('Prepared deposit:', recipient, prepared);
-      const commitment = CryptoToolkit.commitment(prepared.recordOpening, 'hex') as Hex;
+      const commitment = CryptoToolkit.commitment(prepared.recordOpening, 'hex');
 
       const submit = await sdk.ops.submitDeposit({
         prepared,
-        walletClient: activeWalletClient as any,
+        walletClient: activeWalletClient,
         publicClient,
         autoApprove: true,
       });
@@ -215,7 +198,7 @@ export function DepositPanel() {
         { label: 'value', value: depositEstimate ? formatNativeAmount(depositEstimate.value) : '' },
         { label: 'approveNeeded', value: depositEstimate ? String(Boolean(depositEstimate.approveNeeded)) : '' },
       ]),
-    [depositEstimate, currentToken]
+    [depositEstimate, currentToken],
   );
 
   const chainMismatch = Boolean(walletChainId && selectedChainId && walletChainId !== selectedChainId);

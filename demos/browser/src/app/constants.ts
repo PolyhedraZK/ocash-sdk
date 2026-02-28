@@ -1,4 +1,4 @@
-import type { AssetsOverride, ChainConfigInput, PlannerEstimateTransferResult, PlannerEstimateWithdrawResult, TokenMetadata } from '@ocash/sdk';
+import { defaultAssetsOverrideTestnet, type AssetsOverride, type ChainConfigInput, type PlannerEstimateTransferResult, type PlannerEstimateWithdrawResult, type TokenMetadata } from '@ocash/sdk';
 
 export type DemoConfig = {
   seed: string;
@@ -61,4 +61,5 @@ export const DEFAULT_CONFIG: DemoConfig = {
       ],
     },
   ],
+  assetsOverride: defaultAssetsOverrideTestnet,
 };

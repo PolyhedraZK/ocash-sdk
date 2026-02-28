@@ -1,6 +1,9 @@
 import type { SdkErrorCode } from '../types';
 import { SdkError } from '../errors';
 
+/**
+ * Normalize unknown numeric input to bigint or throw SdkError.
+ */
 export const toBigintOrThrow = (
   value: unknown,
   input: { code: SdkErrorCode; name: string; detail: Record<string, unknown> },
