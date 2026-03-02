@@ -117,28 +117,56 @@ export const BASE_MAINNET: ChainConfigInput = {
 
 /**
  * OCash testnet deployment — Sepolia (Chain ID 11155111).
+ * Pool: SepoliaETH.
  */
 export const SEPOLIA_TESTNET: ChainConfigInput = {
   chainId: 11155111,
   rpcUrl: 'https://sepolia.drpc.org',
-  entryUrl: 'https://testnet-api.o.cash',
-  ocashContractAddress: '0x428c850be686E933DD641eE43574BA35f550c94c',
+  entryUrl: 'https://api.2.o.cash',
+  ocashContractAddress: '0x103B9fa1355709832DEB7ff3760017f3cc49A000',
   relayerUrl: 'https://relayer.sepolia.2.o.cash',
-  merkleProofUrl: 'https://testnet-freezer-sepolia.o.cash',
-  tokens: [],
+  merkleProofUrl: 'https://freezer.sepolia.2.o.cash',
+  tokens: [
+    {
+      id: '17595164354743444723297698020223780983460773731069812515171506209398782871945',
+      symbol: 'ETH',
+      decimals: 18,
+      wrappedErc20: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
+      viewerPk: ['10431080094083715294994831484153042002358206676578707988845164128739412116223', '19779949618985856145522409496192533589639440661307361841631626271154462919413'],
+      freezerPk: ['4669474039172149691654565526011752760208335185174811747074129322851928951709', '13559226903331282409026052744251929479054127336193904689356637527155192056962'],
+      depositFeeBps: 0,
+      withdrawFeeBps: 25,
+      transferMaxAmount: '400000000000000000',
+      withdrawMaxAmount: '400000000000000000',
+    },
+  ],
 };
 
 /**
  * OCash testnet deployment — BSC Testnet (Chain ID 97).
+ * Pool: tBNB.
  */
 export const BSC_TESTNET: ChainConfigInput = {
   chainId: 97,
   rpcUrl: 'https://data-seed-prebsc-1-s1.bnbchain.org:8545',
-  entryUrl: 'https://testnet-api.o.cash',
-  ocashContractAddress: '0x428c850be686E933DD641eE43574BA35f550c94c',
+  entryUrl: 'https://api.2.o.cash',
+  ocashContractAddress: '0x103B9fa1355709832DEB7ff3760017f3cc49A000',
   relayerUrl: 'https://relayer.bsctestnet.2.o.cash',
-  merkleProofUrl: 'https://testnet-freezer-bsctestnet.o.cash',
-  tokens: [],
+  merkleProofUrl: 'https://freezer.bsctestnet.2.o.cash',
+  tokens: [
+    {
+      id: '17595164354743444723297698020223780983460773731069812515171506209398782871945',
+      symbol: 'BNB',
+      decimals: 18,
+      wrappedErc20: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
+      viewerPk: ['10431080094083715294994831484153042002358206676578707988845164128739412116223', '19779949618985856145522409496192533589639440661307361841631626271154462919413'],
+      freezerPk: ['4669474039172149691654565526011752760208335185174811747074129322851928951709', '13559226903331282409026052744251929479054127336193904689356637527155192056962'],
+      depositFeeBps: 0,
+      withdrawFeeBps: 25,
+      transferMaxAmount: '1200000000000000000',
+      withdrawMaxAmount: '1200000000000000000',
+    },
+  ],
 };
 
 /** All mainnet chain configs. */
