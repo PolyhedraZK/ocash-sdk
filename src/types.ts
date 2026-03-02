@@ -772,6 +772,10 @@ export interface MerkleApi {
 
 /** Wallet open session parameters. */
 export interface WalletSessionInput {
+  /**
+   * Secret seed for key derivation (min 16 characters).
+   * Any passphrase, hex string, or raw bytes — internally run through HKDF-SHA256.
+   */
   seed: string | Uint8Array;
   accountNonce?: number;
 }

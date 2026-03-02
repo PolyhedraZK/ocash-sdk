@@ -25,20 +25,10 @@ pnpm add @ocash/sdk
 ## Quick Start
 
 ```ts
-import { createSdk } from '@ocash/sdk';
+import { createSdk, SEPOLIA_TESTNET } from '@ocash/sdk';
 
-// See demos/node/ocash.config.example.json for testnet URLs
 const sdk = createSdk({
-  chains: [
-    {
-      chainId: 11155111,
-      entryUrl: '<ENTRY_SERVICE_URL>',
-      ocashContractAddress: '<CONTRACT_ADDRESS>',
-      relayerUrl: '<RELAYER_URL>',
-      merkleProofUrl: '<MERKLE_PROOF_URL>',
-      tokens: [],
-    },
-  ],
+  chains: [SEPOLIA_TESTNET],
   onEvent: console.log,
 });
 
@@ -46,8 +36,23 @@ await sdk.core.ready();
 await sdk.wallet.open({ seed: 'your-secret-seed-phrase' });
 await sdk.sync.syncOnce();
 
-const balance = await sdk.wallet.getBalance({ chainId, assetId });
+const balance = await sdk.wallet.getBalance({
+  chainId: SEPOLIA_TESTNET.chainId,
+  assetId: SEPOLIA_TESTNET.tokens![0]!.id,
+});
 ```
+
+Pre-configured chain presets exported from `@ocash/sdk`:
+
+| Preset | Chain | Chain ID |
+| --- | --- | --- |
+| `ETH_MAINNET` | Ethereum | 1 |
+| `BSC_MAINNET` | BNB Chain | 56 |
+| `BASE_MAINNET` | Base | 8453 |
+| `SEPOLIA_TESTNET` | Sepolia | 11155111 |
+| `BSC_TESTNET` | BSC Testnet | 97 |
+
+Also available: `MAINNET_CHAINS` and `TESTNET_CHAINS` arrays.
 
 ## Entry Points
 
