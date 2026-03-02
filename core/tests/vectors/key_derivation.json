@@ -1,0 +1,44 @@
+[
+  {
+    "name": "basic_seed",
+    "seed": "test-seed-phrase-1234567890",
+    "expected_sk": "0x00d5a1320ff22782a8eafa7d0efdd16413515f55139f7cd7a03c17bca3270bb5",
+    "expected_pk_x": "0x1e6731eff27e9670eddb1c7dbfba41374c326e6e9c300651ea5b790d4b54f830",
+    "expected_pk_y": "0x24688aa3fbb63442bf0e71bafeff5619c900cd8a417b3d793f26cd7df1932b79",
+    "expected_address": "0x792b93f17dcd263f793d7b418acd00c91956fffeba710ebf4234b6fba38a68a4"
+  },
+  {
+    "name": "with_nonce",
+    "seed": "test-seed-phrase-1234567890",
+    "nonce": "account-0",
+    "expected_sk": "0x033454acd4edce2f5f69ae6b35012d849251d634b8c288c9a85eadaf3601d0b6",
+    "expected_pk_x": "0x1f0343f5154cd8c5b73febc0b0af0f05986700c128c456400897ac8eeda442c1",
+    "expected_pk_y": "0x055c9b097717a652ced34705207fd6bd209f525a652171fc0f3c245845fe9fa2",
+    "expected_address": "0xa29ffe4558243c0ffc7121655a529f20bdd67f200547d3ce52a61777099b5c85"
+  },
+  {
+    "name": "another_seed",
+    "seed": "my-secret-ocash-seed-phrase",
+    "expected_sk": "0x05d21cfb111854e054c8cdc412a79ee1c224b1963c8c9227e217fcac67405e09",
+    "expected_pk_x": "0x2637311c29252ac5b2a7b5fba96182b53064c5c73872afb782112d9339e3ca9b",
+    "expected_pk_y": "0x2499b0120d0e7486314a5b8f68d11ab811fcb15d0fd6fa3ce8ac734482bae273",
+    "expected_address": "0x73e2ba824473ace83cfad60f5db1fc11b81ad1688f5b4a3186740e0d12b099a4"
+  },
+  {
+    "name": "nonce_1",
+    "seed": "my-secret-ocash-seed-phrase",
+    "nonce": "1",
+    "expected_sk": "0x05f3e1a31eaa1b5d71b732f8f90b55811d6e7281fe7eab872d0e3e86d39de507",
+    "expected_pk_x": "0x2091a59382986ac09513f0956e57d7e6ecd3326eac45fe7e7f53d2ae02b9decb",
+    "expected_pk_y": "0x1d963cda7c6d09ed6a88d4d49e50c2a62ada93ba07d115c8905c3a6b5edc6d2b",
+    "expected_address": "0x2b6ddc5e6b3a5c90c815d107ba93da2aa6c2509ed4d4886aed096d7cda3c969d"
+  },
+  {
+    "name": "unicode_seed",
+    "seed": "this-is-a-unicode-seed-你好世界",
+    "expected_sk": "0x0147b7bf75bad725f1b84cfb507631045a921ed0fa899bc2c89b7fdf3b06d8bb",
+    "expected_pk_x": "0x29890bd3fcadf82c3a1fa145d38561f8d7a3dcc1d3f6e58f8d53974689159cad",
+    "expected_pk_y": "0x2b03a4e7c6f275f27a576bfb1ff93a6b0e502f893a202ab37442c9c0900d50ea",
+    "expected_address": "0xea500d90c0c94274b32a203a892f500e6b3af91ffb6b577af275f2c6e7a403ab"
+  }
+]
