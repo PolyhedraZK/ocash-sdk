@@ -117,27 +117,29 @@ export const BASE_MAINNET: ChainConfigInput = {
 
 /**
  * OCash testnet deployment — Sepolia (Chain ID 11155111).
+ * Pools are loaded dynamically from contract.
  */
 export const SEPOLIA_TESTNET: ChainConfigInput = {
   chainId: 11155111,
   rpcUrl: 'https://sepolia.drpc.org',
-  entryUrl: 'https://testnet-api.o.cash',
-  ocashContractAddress: '0x428c850be686E933DD641eE43574BA35f550c94c',
+  entryUrl: 'https://api.2.o.cash',
+  ocashContractAddress: '0x103B9fa1355709832DEB7ff3760017f3cc49A000',
   relayerUrl: 'https://relayer.sepolia.2.o.cash',
-  merkleProofUrl: 'https://testnet-freezer-sepolia.o.cash',
+  merkleProofUrl: 'https://freezer.sepolia.2.o.cash',
   tokens: [],
 };
 
 /**
  * OCash testnet deployment — BSC Testnet (Chain ID 97).
+ * Pools are loaded dynamically from contract.
  */
 export const BSC_TESTNET: ChainConfigInput = {
   chainId: 97,
   rpcUrl: 'https://data-seed-prebsc-1-s1.bnbchain.org:8545',
-  entryUrl: 'https://testnet-api.o.cash',
-  ocashContractAddress: '0x428c850be686E933DD641eE43574BA35f550c94c',
+  entryUrl: 'https://api.2.o.cash',
+  ocashContractAddress: '0x103B9fa1355709832DEB7ff3760017f3cc49A000',
   relayerUrl: 'https://relayer.bsctestnet.2.o.cash',
-  merkleProofUrl: 'https://testnet-freezer-bsctestnet.o.cash',
+  merkleProofUrl: 'https://freezer.bsctestnet.2.o.cash',
   tokens: [],
 };
 
