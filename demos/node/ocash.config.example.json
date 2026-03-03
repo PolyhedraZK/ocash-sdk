@@ -14,7 +14,6 @@
     }
   ],
   "assetsOverride": {
-    "wasm_exec.js": "https://testnet-app.o.cash/wasm_exec.js",
     "app.wasm": [
       "https://testnet-app.o.cash/wasm/app_wasm_6_11328f2b/00",
       "https://testnet-app.o.cash/wasm/app_wasm_6_11328f2b/01",

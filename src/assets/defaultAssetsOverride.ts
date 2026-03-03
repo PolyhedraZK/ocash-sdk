@@ -5,7 +5,6 @@ import type { AssetsOverride } from '../types';
  * Assets can be sharded across multiple URLs for large files.
  */
 export const defaultAssetsOverrideTestnet: AssetsOverride = {
-  'wasm_exec.js': 'https://testnet-app.o.cash/wasm_exec.js',
   'app.wasm': [
     'https://testnet-app.o.cash/wasm/app_wasm_6_11328f2b/00',
     'https://testnet-app.o.cash/wasm/app_wasm_6_11328f2b/01',
@@ -42,7 +41,6 @@ export const defaultAssetsOverrideTestnet: AssetsOverride = {
  * Assets can be sharded across multiple URLs for large files.
  */
 export const defaultAssetsOverrideMainnet: AssetsOverride = {
-  'wasm_exec.js': 'https://app.o.cash/wasm_exec.js',
   'app.wasm': [
     'https://app.o.cash/wasm/app_wasm_6_11328f2b/00',
     'https://app.o.cash/wasm/app_wasm_6_11328f2b/01',

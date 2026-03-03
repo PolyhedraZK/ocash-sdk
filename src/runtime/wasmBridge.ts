@@ -5,6 +5,7 @@ import { toCommitmentData } from '../crypto/records';
 import { CacheController } from './cache';
 import { SdkError } from '../errors';
 import { bytesToHex } from '@noble/hashes/utils';
+import { installBundledGoRuntime } from './wasmExecBundled';
 
 export interface WasmBridgeConfig {
   /** Optional asset map used to override default runtime assets. */
@@ -45,7 +46,6 @@ export class UniversalWasmBridge implements ProofBridge {
   private withdrawReady = false;
   private readonly cache: CacheController;
   private readonly runtime: 'browser' | 'node' | 'hybrid';
-  private readonly textDecoder = new TextDecoder();
 
   /**
    * Create a WASM bridge that can run in browser, node, or hybrid environments.
@@ -197,102 +197,15 @@ export class UniversalWasmBridge implements ProofBridge {
   }
 
   /**
-   * Load a text asset (wasm_exec.js) with caching for URL sources.
-   * Local files are read directly without caching.
-   */
-  private async fetchText(filename: string): Promise<string> {
-    const override = this.config.assetsOverride?.[filename];
-    if (!override) {
-      throw new SdkError('ASSETS', `Missing assetsOverride for ${filename}`, { filename });
-    }
-    if (typeof override !== 'string') {
-      throw new SdkError('ASSETS', `Asset ${filename} must be provided as a single URL or file path`, { filename });
-    }
-    const source = await this.resolveAssetSource(override);
-    if (source.kind === 'file') {
-      try {
-        const fs = await import('node:fs/promises');
-        const text = await fs.readFile(source.filePath, 'utf8');
-        return text;
-      } catch (error) {
-        throw new SdkError('ASSETS', `Failed to read local text asset: ${filename}`, { filename, filePath: source.filePath }, error);
-      }
-    }
-    const cacheKey = `text/${filename}/${this.cacheKey(source.url)}`;
-    const cached = await this.cache.load(cacheKey);
-    if (cached) {
-      const text = this.textDecoder.decode(cached);
-      return text;
-    }
-
-    const response = await fetch(source.url);
-    if (!response.ok) {
-      throw new SdkError('ASSETS', `Failed to load resource: ${source.url} (${response.status})`, { url: source.url, status: response.status });
-    }
-    const buffer = await response.arrayBuffer();
-    const text = this.textDecoder.decode(buffer);
-    await this.cache.save(cacheKey, buffer);
-    return text;
-  }
-
-  private async resolveTextAssetSource(filename: string): Promise<AssetSource> {
-    const override = this.config.assetsOverride?.[filename];
-    if (!override) {
-      throw new SdkError('ASSETS', `Missing assetsOverride for ${filename}`, { filename });
-    }
-    if (typeof override !== 'string') {
-      throw new SdkError('ASSETS', `Asset ${filename} must be provided as a single URL or file path`, { filename });
-    }
-    return this.resolveAssetSource(override);
-  }
-
-  private async loadScriptTag(url: string): Promise<boolean> {
-    const doc = (globalThis as any).document as Document | undefined;
-    if (!doc?.createElement || !doc.head?.appendChild) return false;
-    await new Promise<void>((resolve, reject) => {
-      const el = doc.createElement('script');
-      el.type = 'text/javascript';
-      el.async = true;
-      el.src = url;
-      el.onload = () => {
-        el.remove();
-        resolve();
-      };
-      el.onerror = () => {
-        el.remove();
-        reject(new Error(`Failed to load script: ${url}`));
-      };
-      doc.head.appendChild(el);
-    });
-    return true;
-  }
-
-  private async loadImportScripts(url: string): Promise<boolean> {
-    const importScriptsFn = (globalThis as any).importScripts as ((...urls: string[]) => void) | undefined;
-    if (typeof importScriptsFn !== 'function') return false;
-    importScriptsFn(url);
-    return true;
-  }
-
-  /**
-   * Ensure the Go WASM runtime is loaded on globalThis by evaluating wasm_exec.js.
+   * Ensure the bundled Go WASM runtime has registered `globalThis.Go`.
    */
   private async ensureGoRuntime() {
     if (typeof getGlobal('Go') === 'function') return;
-    const source = await this.resolveTextAssetSource('wasm_exec.js');
-    if (source.kind === 'url') {
-      try {
-        const loaded = (await this.loadScriptTag(source.url)) || (await this.loadImportScripts(source.url));
-        if (loaded && typeof getGlobal('Go') === 'function') return;
-      } catch {
-        // Fall back to eval-based loader for environments that block script tag/importScripts paths.
-      }
+    try {
+      installBundledGoRuntime();
+    } catch (error) {
+      throw new SdkError('ASSETS', 'Bundled Go runtime is unavailable', undefined, error);
     }
-    const scriptText = await this.fetchText('wasm_exec.js');
-    // eslint-disable-next-line no-new-func
-    const initializer = new Function(scriptText + '\nreturn Go;');
-    const GoClass = initializer.call(globalThis);
-    (globalThis as any).Go = GoClass;
   }
 
   /**
@@ -304,7 +217,7 @@ export class UniversalWasmBridge implements ProofBridge {
     await this.ensureGoRuntime();
     const GoClass = getGlobal<any>('Go');
     if (typeof GoClass !== 'function') {
-      throw new SdkError('ASSETS', 'Go runtime not available after loading wasm_exec.js');
+      throw new SdkError('ASSETS', 'Go runtime not available after loading bundled runtime');
     }
     const wasmBytes = await this.fetchBinary('app.wasm');
     this.goInstance = new GoClass();

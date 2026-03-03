@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSelector } from 'react-redux';
 import type { AnyAction } from 'redux';
 import type { ThunkDispatch } from 'redux-thunk';
 import { type Hex } from '@metamask/utils';
@@ -21,6 +22,7 @@ import {
   getOcashChainConfig,
   getOcashTokenConfig,
 } from '../../constants/ocash';
+import { getSelectedMultichainNetworkConfiguration } from '../../selectors';
 
 export type OcashOperationType = 'deposit' | 'withdraw' | 'transfer';
 
@@ -62,6 +64,15 @@ type OcashSdkContext = {
   readyPromise?: Promise<void>;
   unlockedSeed?: string;
   syncPromise?: Promise<void>;
+};
+
+type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error';
+
+type OcashSyncState = {
+  chainId?: string;
+  status: SyncStatus;
+  progress: number;
+  error?: string;
 };
 
 const SDK_CONTEXTS = new Map<string, OcashSdkContext>();
@@ -149,8 +160,8 @@ function getContext(account: string, chainId: string): OcashSdkContext | null {
     runtime: 'browser',
     chains: [chainConfig],
     storage: new IndexedDbStore({
-      dbName: 'ocash-sdk-metamask',
-      storeName: `ocash_${chain.chainIdDecimal}`,
+      dbName: `ocash-sdk-metamask-${chain.chainIdDecimal}`,
+      storeName: 'ocash_store',
     }),
   });
 
@@ -219,13 +230,50 @@ async function resolveUnlockedSeed(
   return seed;
 }
 
-async function syncWallet(ctx: OcashSdkContext) {
+async function syncWallet(
+  ctx: OcashSdkContext,
+  options?: {
+    onStart?: () => void;
+    onProgress?: (progress: number) => void;
+    onDone?: () => void;
+    onError?: (error: unknown) => void;
+  },
+) {
   if (!ctx.syncPromise) {
+    const handleStart = (event: any) => {
+      if (event?.payload?.chainId === ctx.chainConfig.chainId) {
+        options?.onStart?.();
+      }
+    };
+    const handleProgress = (event: any) => {
+      if (event?.payload?.chainId !== ctx.chainConfig.chainId) return;
+      const downloaded = Number(event?.payload?.downloaded ?? 0);
+      const total = Number(event?.payload?.total ?? 0);
+      if (Number.isFinite(downloaded) && Number.isFinite(total) && total > 0) {
+        const value = Math.max(0, Math.min(99, Math.round((downloaded / total) * 100)));
+        options?.onProgress?.(value);
+      }
+    };
+    const handleDone = (event: any) => {
+      if (event?.payload?.chainId === ctx.chainConfig.chainId) {
+        options?.onDone?.();
+      }
+    };
     ctx.syncPromise = ctx.sdk.sync
       .syncOnce({ chainIds: [ctx.chainConfig.chainId], continueOnError: true })
+      .catch((error) => {
+        options?.onError?.(error);
+        throw error;
+      })
       .finally(() => {
+        ctx.sdk.core.off('sync:start', handleStart);
+        ctx.sdk.core.off('sync:progress', handleProgress);
+        ctx.sdk.core.off('sync:done', handleDone);
         ctx.syncPromise = undefined;
       });
+    ctx.sdk.core.on('sync:start', handleStart);
+    ctx.sdk.core.on('sync:progress', handleProgress);
+    ctx.sdk.core.on('sync:done', handleDone);
   }
   await ctx.syncPromise;
 }
@@ -234,19 +282,36 @@ function isAddress(input: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/u.test(input);
 }
 
-export function useOcashLedger(account?: string) {
+export function useOcashLedger(account?: string, chainId?: string) {
+  const selectedChainId = useSelector(getSelectedMultichainNetworkConfiguration)?.chainId;
   const [balances, setBalances] = useState<Record<string, bigint>>({});
   const [operations, setOperations] = useState<StoredOperation[]>([]);
   const [ocashUnlocked, setOcashUnlocked] = useState(false);
+  const [syncState, setSyncState] = useState<OcashSyncState>({
+    status: 'idle',
+    progress: 0,
+  });
+
+  const targetChainId = useMemo(() => {
+    const raw = chainId ?? selectedChainId;
+    if (!raw) return undefined;
+    return normalizeChainId(raw);
+  }, [chainId, selectedChainId]);
 
   const refresh = useCallback(async () => {
     if (!account) {
       setBalances({});
       setOperations([]);
+      setSyncState({ status: 'idle', progress: 0 });
+      return;
+    }
+    if (!targetChainId) {
+      setBalances({});
+      setOperations([]);
+      setSyncState({ status: 'idle', progress: 0 });
       return;
     }
 
-    const allSupportedChains = ['0x1', '0x38', '0x2105', '0xaa36a7', '0x61'];
     const nextBalances: Record<string, bigint> = {};
     const nextOperations: StoredOperation[] = [];
     const unlocked = await isOcashUnlocked().catch(() => false);
@@ -255,46 +320,66 @@ export function useOcashLedger(account?: string) {
       ACCOUNT_SEED_CACHE.clear();
     }
 
-    await Promise.all(
-      allSupportedChains.map(async (chainId) => {
-        const ctx = getContext(account, chainId);
-        if (!ctx) {
-          return;
-        }
+    const ctx = getContext(account, targetChainId);
+    if (!ctx) {
+      setBalances({});
+      setOperations([]);
+      setSyncState({
+        chainId: targetChainId,
+        status: 'error',
+        progress: 0,
+        error: '当前网络不支持 OCash SDK。',
+      });
+      return;
+    }
 
-        try {
-          await ensureUnlocked(ctx);
-          await syncWallet(ctx);
-          const chain = getOcashChainConfig(chainId);
-          if (!chain) {
-            return;
-          }
+    try {
+      await ensureUnlocked(ctx);
+      await syncWallet(ctx, {
+        onStart: () => {
+          setSyncState({ chainId: targetChainId, status: 'syncing', progress: 0 });
+        },
+        onProgress: (progress) => {
+          setSyncState({ chainId: targetChainId, status: 'syncing', progress });
+        },
+        onDone: () => {
+          setSyncState({ chainId: targetChainId, status: 'synced', progress: 100 });
+        },
+        onError: (error) => {
+          setSyncState({
+            chainId: targetChainId,
+            status: 'error',
+            progress: 0,
+            error: error instanceof Error ? error.message : '同步失败',
+          });
+        },
+      });
+      const chain = getOcashChainConfig(targetChainId);
+      if (chain) {
+        await Promise.all(
+          chain.tokens.map(async (token) => {
+            const balance = await ctx.sdk.wallet.getBalance({
+              chainId: chain.chainIdDecimal,
+              assetId: token.id,
+            });
+            const key = `${targetChainId}:${normalizeAddress(token.wrappedErc20)}`;
+            nextBalances[key] = balance;
+          }),
+        );
 
-          await Promise.all(
-            chain.tokens.map(async (token) => {
-              const balance = await ctx.sdk.wallet.getBalance({
-                chainId: chain.chainIdDecimal,
-                assetId: token.id,
-              });
-              const key = `${chainId}:${normalizeAddress(token.wrappedErc20)}`;
-              nextBalances[key] = balance;
-            }),
-          );
-
-          const storedOps = ctx.sdk.storage
-            .getAdapter()
-            .listOperations({ chainId: chain.chainIdDecimal, sort: 'desc', limit: 50 });
-          nextOperations.push(...storedOps);
-        } catch {
-          // Ignore per-chain load errors so UI can still render partial results.
-        }
-      }),
-    );
+        const storedOps = ctx.sdk.storage
+          .getAdapter()
+          .listOperations({ chainId: chain.chainIdDecimal, sort: 'desc', limit: 50 });
+        nextOperations.push(...storedOps);
+      }
+    } catch {
+      // Ignore load errors so UI can still render partial results.
+    }
 
     nextOperations.sort((a, b) => b.createdAt - a.createdAt);
     setBalances(nextBalances);
     setOperations(nextOperations);
-  }, [account]);
+  }, [account, targetChainId]);
 
   useEffect(() => {
     void refresh();
@@ -543,5 +628,6 @@ export function useOcashLedger(account?: string) {
     unlockWallet,
     refresh,
     hasUnlockedSeed,
+    syncState,
   };
 }

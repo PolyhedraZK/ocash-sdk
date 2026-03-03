@@ -11,7 +11,7 @@ type FakeDbState = Map<
 >;
 
 function createFakeIndexedDb() {
-  const storesByDbName = new Map<string, FakeDbState>();
+  const storesByDbName = new Map<string, { version: number; stores: FakeDbState }>();
 
   if (!(globalThis as any).IDBKeyRange) {
     (globalThis as any).IDBKeyRange = { only: (key: unknown) => ({ __only: key }) };
@@ -115,14 +115,31 @@ function createFakeIndexedDb() {
     };
   };
 
-  const open = (name: string) => {
+  const open = (name: string, version?: number) => {
     const req: any = { result: null, error: null, onsuccess: null, onerror: null, onupgradeneeded: null };
     queueMicrotask(() => {
       try {
-        const stores = storesByDbName.get(name) ?? new Map<string, { keyPath: string | string[]; data: Map<string, any>; indexes: Map<string, { keyPath: string | string[] }> }>();
-        storesByDbName.set(name, stores);
+        let shouldUpgrade = false;
+        let entry = storesByDbName.get(name);
+        if (!entry) {
+          const initialVersion = version ?? 1;
+          entry = {
+            version: initialVersion,
+            stores: new Map<string, { keyPath: string | string[]; data: Map<string, any>; indexes: Map<string, { keyPath: string | string[] }> }>(),
+          };
+          storesByDbName.set(name, entry);
+          shouldUpgrade = true;
+        } else if (version != null && version < entry.version) {
+          throw new Error('VersionError');
+        } else if (version != null && version > entry.version) {
+          entry.version = version;
+          shouldUpgrade = true;
+        }
+
+        const stores = entry.stores;
 
         const db: any = {
+          version: entry.version,
           objectStoreNames: {
             contains: (storeName: string) => stores.has(storeName),
           },
@@ -132,8 +149,9 @@ function createFakeIndexedDb() {
             return makeObjectStore(meta as any, req.transaction);
           },
           transaction: (storeName: string, _mode: 'readonly' | 'readwrite') => {
+            if (!stores.has(storeName)) throw new Error(`object store ${storeName} not found`);
             const tx: any = { oncomplete: null, onerror: null, error: null };
-            const meta = ensureStore(stores, storeName, 'id');
+            const meta = stores.get(storeName)!;
             tx.objectStore = () => makeObjectStore(meta as any, tx);
             return tx;
           },
@@ -141,13 +159,16 @@ function createFakeIndexedDb() {
         };
 
         req.result = db;
-        req.transaction = {
-          objectStore: (storeName: string) => {
-            const meta = ensureStore(stores, storeName, 'id');
-            return makeObjectStore(meta as any, req.transaction);
-          },
-        };
-        req.onupgradeneeded?.();
+        req.transaction = shouldUpgrade
+          ? {
+              objectStore: (storeName: string) => {
+                const meta = stores.get(storeName);
+                if (!meta) throw new Error(`object store ${storeName} not found`);
+                return makeObjectStore(meta as any, req.transaction);
+              },
+            }
+          : null;
+        if (shouldUpgrade) req.onupgradeneeded?.();
         req.onsuccess?.();
       } catch (e) {
         req.error = e;
@@ -161,7 +182,7 @@ function createFakeIndexedDb() {
   const factory: any = { open };
   factory.__debug = {
     getBucket(dbName: string, storeName: string) {
-      return storesByDbName.get(dbName)?.get(storeName)?.data;
+      return storesByDbName.get(dbName)?.stores.get(storeName)?.data;
     },
   };
   return factory as IDBFactory;
@@ -218,5 +239,20 @@ describe('IndexedDbStore', () => {
       { cid: 0, commitment: '0x01' },
       { cid: 1, commitment: '0x02' },
     ]);
+  });
+
+  it('creates missing object stores when reusing dbName with a new storeName', async () => {
+    const indexedDb = createFakeIndexedDb();
+
+    const store1 = new IndexedDbStore({ dbName: 'db_shared', storeName: 's1', indexedDb });
+    await store1.init({ walletId: 'wallet_1' });
+    await store1.setSyncCursor(1, { memo: 2, nullifier: 3, merkle: 4 });
+    await store1.close();
+
+    const store2 = new IndexedDbStore({ dbName: 'db_shared', storeName: 's2', indexedDb });
+    await store2.init({ walletId: 'wallet_2' });
+    await expect(store2.getSyncCursor(1)).resolves.toBeUndefined();
+    await store2.setSyncCursor(1, { memo: 9, nullifier: 9, merkle: 9 });
+    await expect(store2.getSyncCursor(1)).resolves.toEqual({ memo: 9, nullifier: 9, merkle: 9 });
   });
 });

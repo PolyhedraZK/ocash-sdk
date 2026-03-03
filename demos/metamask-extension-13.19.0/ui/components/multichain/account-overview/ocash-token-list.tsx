@@ -20,7 +20,10 @@ export const OcashTokenList = ({ chainId }: OcashTokenListProps) => {
   const chainConfig = getOcashChainConfig(chainId);
   const { privacyMode = false } = useSelector(getPreferences);
   const selectedAccount = useSelector(getSelectedInternalAccount);
-  const { getBalanceDisplay } = useOcashLedger(selectedAccount?.address);
+  const { getBalanceDisplay, syncState } = useOcashLedger(
+    selectedAccount?.address,
+    chainConfig?.chainId,
+  );
 
   if (!chainConfig) {
     return null;
@@ -58,6 +61,34 @@ export const OcashTokenList = ({ chainId }: OcashTokenListProps) => {
 
   return (
     <div className="token-list-non-virtualized">
+      <div className="mx-4 mt-3 rounded-lg border border-muted bg-muted p-3">
+        <div className="text-xs text-muted">
+          OCash 同步（当前链）
+        </div>
+        <div className="mt-1 text-sm">
+          {syncState.status === 'syncing'
+            ? `同步中 ${syncState.progress}%`
+            : syncState.status === 'synced'
+              ? '已同步 100%'
+              : syncState.status === 'error'
+                ? `同步失败：${syncState.error ?? '未知错误'}`
+                : '等待同步'}
+        </div>
+        <div
+          className="mt-2 h-1.5 w-full rounded"
+          style={{ background: 'var(--color-background-default)' }}
+        >
+          <div
+            className="h-full rounded"
+            style={{
+              width: `${syncState.progress}%`,
+              background: 'var(--color-primary-default)',
+              transition: 'width 0.2s ease',
+            }}
+          />
+        </div>
+      </div>
+
       {tokens.length === 0 ? (
         <div className="mx-4 mt-3 rounded-lg border border-muted bg-muted p-3 text-muted text-sm">
           当前网络暂无 OCash 资产配置。

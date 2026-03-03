@@ -114,9 +114,9 @@ export class IndexedDbStore implements StorageAdapter {
     const name = this.options.dbName ?? 'ocash_sdk_v2';
     const defs = this.storeDefs();
 
-    const open = () =>
+    const open = (version?: number) =>
       new Promise<IDBDatabase>((resolve, reject) => {
-        const req = factory.open(name, IndexedDbStore.DB_VERSION);
+        const req = version == null ? factory.open(name) : factory.open(name, version);
         req.onerror = () => reject(req.error ?? new Error('indexedDB open failed'));
         req.onupgradeneeded = () => {
           const db = req.result;
@@ -139,7 +139,13 @@ export class IndexedDbStore implements StorageAdapter {
         req.onsuccess = () => resolve(req.result);
       });
 
-    const db = await open();
+    let db = await open(IndexedDbStore.DB_VERSION);
+    const missing = defs.some((def) => !db.objectStoreNames.contains(def.name));
+    if (missing) {
+      const currentVersion = Number.isFinite((db as { version?: number }).version) ? (db as { version: number }).version : IndexedDbStore.DB_VERSION;
+      db.close();
+      db = await open(currentVersion + 1);
+    }
     this.db = db;
     return db;
   }
