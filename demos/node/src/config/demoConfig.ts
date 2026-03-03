@@ -1,4 +1,4 @@
-import { defaultAssetsOverrideTestnet, SEPOLIA_TESTNET, type AssetsOverride, type ChainConfigInput } from '@ocash/sdk';
+import { defaultAssetsOverrideMainnet, ETH_MAINNET, type AssetsOverride, type ChainConfigInput } from '@ocash/sdk';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,7 +19,7 @@ const defaultConfig: DemoConfig = {
   seed: 'demo-seed-please-replace',
   storageDir: path.join(demoRoot, '.ocash-demo'),
   cacheDir: path.join(demoRoot, '.ocash-demo/cache'),
-  chains: [SEPOLIA_TESTNET],
+  chains: [ETH_MAINNET],
 };
 
 const isHexPrivKey = (value: unknown): value is `0x${string}` => typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value);
@@ -37,12 +37,12 @@ export async function loadDemoConfig(options?: { configPath?: string | boolean }
   const config: DemoConfig = {
     ...defaultConfig,
     ...fromFile,
-    assetsOverride: fromFile?.assetsOverride ?? defaultAssetsOverrideTestnet,
+    assetsOverride: fromFile?.assetsOverride ?? defaultAssetsOverrideMainnet,
     signerPrivateKey: isHexPrivKey(fromFile?.signerPrivateKey) ? fromFile.signerPrivateKey : undefined,
   };
 
   if (!config.assetsOverride) {
-    config.assetsOverride = defaultAssetsOverrideTestnet;
+    config.assetsOverride = defaultAssetsOverrideMainnet;
   }
   return config;
 }

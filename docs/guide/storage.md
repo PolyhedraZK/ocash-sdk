@@ -57,7 +57,7 @@ Files are stored as `{baseDir}/{walletId}.store.json`.
 Wraps any key-value client (Redis, SQLite, custom):
 
 ```ts
-import { KeyValueStore, RedisStore, SqliteStore } from '@ocash/sdk';
+import { KeyValueStore, RedisStore, SqliteStore } from '@ocash/sdk/node';
 
 // Redis
 const redisStore = new RedisStore({ url: 'redis://localhost:6379' });

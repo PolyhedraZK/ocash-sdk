@@ -17,11 +17,11 @@ yarn add @ocash/sdk
 
 SDK 提供三个入口点，适用于不同环境：
 
-| 导入路径             | 环境    | 存储适配器            |
-| -------------------- | ------- | --------------------- |
-| `@ocash/sdk`         | 通用    | `MemoryStore`（默认） |
-| `@ocash/sdk/browser` | 浏览器  | `IndexedDbStore`      |
-| `@ocash/sdk/node`    | Node.js | `FileStore`           |
+| 导入路径             | 环境    | 额外导出                                                   |
+| -------------------- | ------- | ---------------------------------------------------------- |
+| `@ocash/sdk`         | 通用    | `MemoryStore`（默认）                                      |
+| `@ocash/sdk/browser` | 浏览器  | `IndexedDbStore`                                           |
+| `@ocash/sdk/node`    | Node.js | `FileStore`、`KeyValueStore`、`RedisStore`、`SqliteStore`  |
 
 ```ts
 // 通用（任何环境）

@@ -17,11 +17,11 @@ yarn add @ocash/sdk
 
 The SDK provides three entry points for different environments:
 
-| Import               | Environment | Storage Adapter         |
-| -------------------- | ----------- | ----------------------- |
-| `@ocash/sdk`         | Universal   | `MemoryStore` (default) |
-| `@ocash/sdk/browser` | Browser     | `IndexedDbStore`        |
-| `@ocash/sdk/node`    | Node.js     | `FileStore`             |
+| Import               | Environment | Extras                                                  |
+| -------------------- | ----------- | ------------------------------------------------------- |
+| `@ocash/sdk`         | Universal   | `MemoryStore` (default)                                 |
+| `@ocash/sdk/browser` | Browser     | `IndexedDbStore`                                        |
+| `@ocash/sdk/node`    | Node.js     | `FileStore`, `KeyValueStore`, `RedisStore`, `SqliteStore` |
 
 ```ts
 // Universal (works everywhere)

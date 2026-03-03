@@ -1,0 +1,201 @@
+:root {
+  --bg: #0e0e10;
+  --surface: #1a1a1e;
+  --border: #2a2a2e;
+  --text: #e4e4e7;
+  --text-muted: #8b8b8e;
+  --accent: #6366f1;
+  --accent-hover: #818cf8;
+  --error: #ef4444;
+  --success: #22c55e;
+  --warn: #eab308;
+  --radius: 8px;
+  --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.app {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+.app > h1 {
+  font-size: 1.4rem;
+  margin-bottom: 20px;
+  font-weight: 600;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.card h2 {
+  font-size: 1rem;
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  word-break: break-all;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.row + .row {
+  margin-top: 8px;
+}
+
+label {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+input[type='text'] {
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  outline: none;
+}
+
+input[type='text']:focus {
+  border-color: var(--accent);
+}
+
+button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+button:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+button.secondary {
+  background: var(--border);
+  color: var(--text);
+}
+
+button.secondary:hover:not(:disabled) {
+  background: #3a3a3e;
+}
+
+.status {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 8px;
+}
+
+.status.error {
+  color: var(--error);
+}
+
+.status.success {
+  color: var(--success);
+}
+
+.fee-table {
+  width: 100%;
+  font-size: 0.8rem;
+  margin-top: 8px;
+  border-collapse: collapse;
+}
+
+.fee-table td {
+  padding: 2px 0;
+}
+
+.fee-table td:first-child {
+  color: var(--text-muted);
+  padding-right: 12px;
+  white-space: nowrap;
+}
+
+.fee-table td:last-child {
+  font-family: var(--font-mono);
+  text-align: right;
+}
+
+.event-log {
+  max-height: 300px;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.6;
+}
+
+.event-log .entry {
+  padding: 2px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.event-log .time {
+  color: var(--text-muted);
+  margin-right: 6px;
+}
+
+.event-log .label {
+  color: var(--accent);
+  margin-right: 6px;
+}
+
+.event-log .entry.error .label {
+  color: var(--error);
+}
+
+.event-log .entry.warn .label {
+  color: var(--warn);
+}
+
+.balance-value {
+  font-family: var(--font-mono);
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+.balance-symbol {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-left: 6px;
+}

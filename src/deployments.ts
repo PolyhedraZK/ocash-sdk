@@ -7,7 +7,7 @@ import type { ChainConfigInput } from './types';
 export const ETH_MAINNET: ChainConfigInput = {
   chainId: 1,
   rpcUrl: 'https://ethereum.publicnode.com',
-  entryUrl: 'https://api.o.cash',
+  entryUrl: 'https://api.2.o.cash',
   ocashContractAddress: '0x428c850be686E933DD641eE43574BA35f550c94c',
   relayerUrl: 'https://relayer.eth.o.cash',
   merkleProofUrl: 'https://freezer.eth.o.cash',
@@ -58,7 +58,7 @@ export const ETH_MAINNET: ChainConfigInput = {
 export const BSC_MAINNET: ChainConfigInput = {
   chainId: 56,
   rpcUrl: 'https://bsc-dataseed.binance.org',
-  entryUrl: 'https://api.o.cash',
+  entryUrl: 'https://api.2.o.cash',
   ocashContractAddress: '0x428c850be686E933DD641eE43574BA35f550c94c',
   relayerUrl: 'https://relayer.bsc.o.cash',
   merkleProofUrl: 'https://freezer.bsc.o.cash',

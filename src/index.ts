@@ -50,9 +50,6 @@ export { calcTransferProofBinding, calcWithdrawProofBinding } from './utils/ocas
 export { App_ABI } from './abi/app';
 export { MemoryStore } from './store/memoryStore';
 export { ETH_MAINNET, BSC_MAINNET, BASE_MAINNET, SEPOLIA_TESTNET, BSC_TESTNET, MAINNET_CHAINS, TESTNET_CHAINS } from './deployments';
-export { KeyValueStore, type KeyValueStoreOptions, type KeyValueClient } from './store/keyValueStore';
-export { RedisStore, type RedisStoreOptions } from './store/redisStore';
-export { SqliteStore, type SqliteStoreOptions } from './store/sqliteStore';
 export {
   type StoredOperation,
   type OperationStatus,

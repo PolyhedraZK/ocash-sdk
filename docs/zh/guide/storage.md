@@ -52,7 +52,7 @@ const sdk = createSdk({
 ### KeyValueStore / RedisStore / SqliteStore
 
 ```ts
-import { RedisStore, SqliteStore } from '@ocash/sdk';
+import { RedisStore, SqliteStore } from '@ocash/sdk/node';
 
 const redisStore = new RedisStore({ url: 'redis://localhost:6379' });
 const sqliteStore = new SqliteStore({ filename: './data.db' });

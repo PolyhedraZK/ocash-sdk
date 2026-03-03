@@ -80,7 +80,7 @@ new FileStore(options: {
 ### KeyValueStore / RedisStore / SqliteStore
 
 ```ts
-import { KeyValueStore, RedisStore, SqliteStore } from '@ocash/sdk';
+import { KeyValueStore, RedisStore, SqliteStore } from '@ocash/sdk/node';
 
 new RedisStore(options: { url: string; ... })
 new SqliteStore(options: { filename: string; ... })
