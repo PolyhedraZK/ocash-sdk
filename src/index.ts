@@ -49,7 +49,7 @@ export { BABYJUBJUB_SCALAR_FIELD } from './crypto/babyJubjub';
 export { calcTransferProofBinding, calcWithdrawProofBinding } from './utils/ocashBindings';
 export { App_ABI } from './abi/app';
 export { MemoryStore } from './store/memoryStore';
-export { ETH_MAINNET, BSC_MAINNET, BASE_MAINNET, SEPOLIA_TESTNET, BSC_TESTNET, MAINNET_CHAINS, TESTNET_CHAINS } from './deployments';
+export { ETH_MAINNET, BSC_MAINNET, BASE_MAINNET, SEPOLIA_TESTNET, BSC_TESTNET, ETH_DEV, BSC_DEV, BASE_DEV, SEPOLIA_DEV, BSC_TESTNET_DEV } from './deployments';
 export { KeyValueStore, type KeyValueStoreOptions, type KeyValueClient } from './store/keyValueStore';
 export { RedisStore, type RedisStoreOptions } from './store/redisStore';
 export { SqliteStore, type SqliteStoreOptions } from './store/sqliteStore';
