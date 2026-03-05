@@ -69,7 +69,7 @@ Notes:
 export async function runCli(argv: string[]) {
   const { positionals, flags } = parseArgs(argv);
   const command = positionals[0];
-  if (!command || flags.help) {
+  if (!command || command === 'help' || command === '--help' || flags.help) {
     process.stdout.write(helpText.trimStart());
     process.stdout.write('\n');
     return;

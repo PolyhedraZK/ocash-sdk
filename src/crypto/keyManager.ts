@@ -11,7 +11,7 @@ const HKDF_INFO = 'OCash.KeyGen';
  * Derive a 32-byte seed from a human string using HKDF-SHA256.
  */
 const deriveSeed = (seed: string, nonce?: string): `0x${string}` => {
-  if (seed.length < 16) throw new Error('Seed must be at least 16 characters');
+  if (seed.length < 16) throw new Error('Seed must be at least 16 characters. Any passphrase, hex string, or random bytes will work — it is run through HKDF-SHA256 internally.');
   const ikm = utf8ToBytes(seed);
   const info = utf8ToBytes(nonce ? `${HKDF_INFO}:${nonce}` : HKDF_INFO);
   const okm = hkdf(sha256, ikm, undefined, info, 32);
