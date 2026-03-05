@@ -67,9 +67,9 @@ export const OcashTokenList = ({ chainId }: OcashTokenListProps) => {
         </div>
         <div className="mt-1 text-sm">
           {syncState.status === 'syncing'
-            ? `同步中 ${syncState.progress}%`
+            ? `同步中：${syncState.syncedCommitments}/${syncState.totalCommitments ?? '?'} commitments`
             : syncState.status === 'synced'
-              ? '已同步 100%'
+              ? `已同步：${syncState.syncedCommitments}/${syncState.totalCommitments ?? '?'} commitments`
               : syncState.status === 'error'
                 ? `同步失败：${syncState.error ?? '未知错误'}`
                 : '等待同步'}
@@ -81,11 +81,32 @@ export const OcashTokenList = ({ chainId }: OcashTokenListProps) => {
           <div
             className="h-full rounded"
             style={{
-              width: `${syncState.progress}%`,
+              width: `${
+                syncState.totalCommitments && syncState.totalCommitments > 0
+                  ? Math.max(
+                      0,
+                      Math.min(
+                        100,
+                        Math.round(
+                          (syncState.syncedCommitments / syncState.totalCommitments) * 100,
+                        ),
+                      ),
+                    )
+                  : 0
+              }%`,
               background: 'var(--color-primary-default)',
               transition: 'width 0.2s ease',
             }}
           />
+        </div>
+
+        <div className="mt-3 text-xs text-muted">
+          <div>chainId: {chainConfig.chainId}</div>
+          <div>rpcUrl: {chainConfig.rpcUrl ?? '-'}</div>
+          <div>entryUrl: {chainConfig.entryUrl ?? '-'}</div>
+          <div>merkleProofUrl: {chainConfig.merkleProofUrl ?? '-'}</div>
+          <div>relayerUrl: {chainConfig.relayerUrl ?? '-'}</div>
+          <div>ocashContractAddress: {chainConfig.ocashContractAddress ?? '-'}</div>
         </div>
       </div>
 

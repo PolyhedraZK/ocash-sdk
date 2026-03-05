@@ -64,7 +64,7 @@ export const OcashActivityList = ({
   emptyText,
 }: OcashActivityListProps) => {
   const selectedAccount = useSelector(getSelectedInternalAccount);
-  const { operations } = useOcashLedger(selectedAccount?.address);
+  const { operations } = useOcashLedger(selectedAccount?.address, chainId);
 
   const filtered = useMemo(
     () =>

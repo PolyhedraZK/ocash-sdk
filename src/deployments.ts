@@ -122,10 +122,10 @@ export const BASE_MAINNET: ChainConfigInput = {
 export const SEPOLIA_TESTNET: ChainConfigInput = {
   chainId: 11155111,
   rpcUrl: 'https://sepolia.drpc.org',
-  entryUrl: 'https://api.2.o.cash',
-  ocashContractAddress: '0x103B9fa1355709832DEB7ff3760017f3cc49A000',
-  relayerUrl: 'https://relayer.sepolia.2.o.cash',
-  merkleProofUrl: 'https://freezer.sepolia.2.o.cash',
+  entryUrl: 'https://batrider.api.o.cash',
+  ocashContractAddress: '0x6e867888d731c2b02f1466a9916656e4ae0f7e43',
+  relayerUrl: 'https://batrider.relayer.sepolia.o.cash',
+  merkleProofUrl: 'https://batrider.freezer.sepolia.o.cash',
   tokens: [
     {
       id: '17595164354743444723297698020223780983460773731069812515171506209398782871945',
@@ -149,7 +149,7 @@ export const SEPOLIA_TESTNET: ChainConfigInput = {
 export const BSC_TESTNET: ChainConfigInput = {
   chainId: 97,
   rpcUrl: 'https://data-seed-prebsc-1-s1.bnbchain.org:8545',
-  entryUrl: 'https://api.2.o.cash',
+  entryUrl: 'https://batrider.api.o.cash',
   ocashContractAddress: '0x103B9fa1355709832DEB7ff3760017f3cc49A000',
   relayerUrl: 'https://relayer.bsctestnet.2.o.cash',
   merkleProofUrl: 'https://freezer.bsctestnet.2.o.cash',

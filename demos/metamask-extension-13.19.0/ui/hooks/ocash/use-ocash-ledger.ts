@@ -71,9 +71,30 @@ type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error';
 type OcashSyncState = {
   chainId?: string;
   status: SyncStatus;
-  progress: number;
+  syncedCommitments: number;
+  totalCommitments?: number;
   error?: string;
 };
+
+function formatSyncError(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error ?? '同步失败');
+  const httpMatch = raw.match(/HTTP\s+(\d{3})/i);
+  const statusCode = httpMatch?.[1];
+  const urlMatch = raw.match(/https?:\/\/[^\s<>"']+/i);
+  const url = urlMatch?.[0];
+
+  if (statusCode) {
+    return url
+      ? `EntryService 请求失败（HTTP ${statusCode}）：${url}`
+      : `EntryService 请求失败（HTTP ${statusCode}）`;
+  }
+
+  const compact = raw
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return compact || '同步失败';
+}
 
 const SDK_CONTEXTS = new Map<string, OcashSdkContext>();
 const ACCOUNT_SEED_CACHE = new Map<string, string>();
@@ -234,7 +255,10 @@ async function syncWallet(
   ctx: OcashSdkContext,
   options?: {
     onStart?: () => void;
-    onProgress?: (progress: number) => void;
+    onProgress?: (progress: {
+      syncedCommitments: number;
+      totalCommitments?: number;
+    }) => void;
     onDone?: () => void;
     onError?: (error: unknown) => void;
   },
@@ -247,15 +271,27 @@ async function syncWallet(
     };
     const handleProgress = (event: any) => {
       if (event?.payload?.chainId !== ctx.chainConfig.chainId) return;
+      if (event?.payload?.resource !== 'memo') return;
       const downloaded = Number(event?.payload?.downloaded ?? 0);
       const total = Number(event?.payload?.total ?? 0);
-      if (Number.isFinite(downloaded) && Number.isFinite(total) && total > 0) {
-        const value = Math.max(0, Math.min(99, Math.round((downloaded / total) * 100)));
-        options?.onProgress?.(value);
+      if (Number.isFinite(downloaded)) {
+        options?.onProgress?.({
+          syncedCommitments: Math.max(0, Math.floor(downloaded)),
+          totalCommitments:
+            Number.isFinite(total) && total > 0 ? Math.max(0, Math.floor(total)) : undefined,
+        });
       }
     };
     const handleDone = (event: any) => {
       if (event?.payload?.chainId === ctx.chainConfig.chainId) {
+        const status = ctx.sdk.sync.getStatus()[ctx.chainConfig.chainId];
+        const downloaded = Number(status?.memo?.downloaded ?? 0);
+        const total = Number(status?.memo?.total ?? NaN);
+        options?.onProgress?.({
+          syncedCommitments: Number.isFinite(downloaded) ? Math.max(0, Math.floor(downloaded)) : 0,
+          totalCommitments:
+            Number.isFinite(total) && total >= 0 ? Math.floor(total) : undefined,
+        });
         options?.onDone?.();
       }
     };
@@ -289,7 +325,7 @@ export function useOcashLedger(account?: string, chainId?: string) {
   const [ocashUnlocked, setOcashUnlocked] = useState(false);
   const [syncState, setSyncState] = useState<OcashSyncState>({
     status: 'idle',
-    progress: 0,
+    syncedCommitments: 0,
   });
 
   const targetChainId = useMemo(() => {
@@ -302,13 +338,13 @@ export function useOcashLedger(account?: string, chainId?: string) {
     if (!account) {
       setBalances({});
       setOperations([]);
-      setSyncState({ status: 'idle', progress: 0 });
+      setSyncState({ status: 'idle', syncedCommitments: 0 });
       return;
     }
     if (!targetChainId) {
       setBalances({});
       setOperations([]);
-      setSyncState({ status: 'idle', progress: 0 });
+      setSyncState({ status: 'idle', syncedCommitments: 0 });
       return;
     }
 
@@ -327,7 +363,7 @@ export function useOcashLedger(account?: string, chainId?: string) {
       setSyncState({
         chainId: targetChainId,
         status: 'error',
-        progress: 0,
+        syncedCommitments: 0,
         error: '当前网络不支持 OCash SDK。',
       });
       return;
@@ -337,22 +373,48 @@ export function useOcashLedger(account?: string, chainId?: string) {
       await ensureUnlocked(ctx);
       await syncWallet(ctx, {
         onStart: () => {
-          setSyncState({ chainId: targetChainId, status: 'syncing', progress: 0 });
+          setSyncState((prev) => ({
+            chainId: targetChainId,
+            status: 'syncing',
+            syncedCommitments: prev.chainId === targetChainId ? prev.syncedCommitments : 0,
+            totalCommitments: prev.chainId === targetChainId ? prev.totalCommitments : undefined,
+          }));
         },
         onProgress: (progress) => {
-          setSyncState({ chainId: targetChainId, status: 'syncing', progress });
+          setSyncState((prev) => ({
+            chainId: targetChainId,
+            status: 'syncing',
+            syncedCommitments: progress.syncedCommitments,
+            totalCommitments: progress.totalCommitments ?? prev.totalCommitments,
+          }));
         },
         onDone: () => {
-          setSyncState({ chainId: targetChainId, status: 'synced', progress: 100 });
+          setSyncState((prev) => ({
+            chainId: targetChainId,
+            status: 'synced',
+            syncedCommitments: prev.syncedCommitments,
+            totalCommitments: prev.totalCommitments,
+          }));
         },
         onError: (error) => {
           setSyncState({
             chainId: targetChainId,
             status: 'error',
-            progress: 0,
-            error: error instanceof Error ? error.message : '同步失败',
+            syncedCommitments: 0,
+            error: formatSyncError(error),
           });
         },
+      });
+      const status = ctx.sdk.sync.getStatus()[ctx.chainConfig.chainId];
+      const downloaded = Number(status?.memo?.downloaded ?? 0);
+      const total = Number(status?.memo?.total ?? NaN);
+      setSyncState({
+        chainId: targetChainId,
+        status: status?.memo?.status === 'error' ? 'error' : 'synced',
+        syncedCommitments: Number.isFinite(downloaded) ? Math.max(0, Math.floor(downloaded)) : 0,
+        totalCommitments:
+          Number.isFinite(total) && total >= 0 ? Math.floor(total) : undefined,
+        error: status?.memo?.errorMessage ? formatSyncError(status.memo.errorMessage) : undefined,
       });
       const chain = getOcashChainConfig(targetChainId);
       if (chain) {
@@ -372,8 +434,13 @@ export function useOcashLedger(account?: string, chainId?: string) {
           .listOperations({ chainId: chain.chainIdDecimal, sort: 'desc', limit: 50 });
         nextOperations.push(...storedOps);
       }
-    } catch {
-      // Ignore load errors so UI can still render partial results.
+    } catch (error) {
+      setSyncState({
+        chainId: targetChainId,
+        status: 'error',
+        syncedCommitments: 0,
+        error: formatSyncError(error),
+      });
     }
 
     nextOperations.sort((a, b) => b.createdAt - a.createdAt);
@@ -384,6 +451,14 @@ export function useOcashLedger(account?: string, chainId?: string) {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (!account || !targetChainId) return undefined;
+    const timer = setInterval(() => {
+      void refresh();
+    }, 10_000);
+    return () => clearInterval(timer);
+  }, [account, targetChainId, refresh]);
 
   const getBalanceUnits = useCallback(
     (chainId: string, assetAddress: string) => {
@@ -491,6 +566,13 @@ export function useOcashLedger(account?: string, chainId?: string) {
           });
 
           await refresh();
+          // Deposit is submitted via MetaMask confirmation flow; chain inclusion is async.
+          // Retry sync a few times so balance catches up after confirmation.
+          for (const delayMs of [5_000, 12_000, 24_000]) {
+            setTimeout(() => {
+              void refresh();
+            }, delayMs);
+          }
           return { ok: true, operation };
         }
 

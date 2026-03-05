@@ -19,6 +19,7 @@ const OcashAsset = ({ chainId, token }: OcashAssetProps) => {
   const selectedAccount = useSelector(getSelectedInternalAccount);
   const { getBalanceDisplay, getBalanceUnits } = useOcashLedger(
     selectedAccount?.address,
+    chainId,
   );
   const balanceDisplay = getBalanceDisplay(
     chainId,

@@ -224,7 +224,7 @@ export const OcashAssetButtons = ({
   const selectedAccount = useSelector(getSelectedInternalAccount);
   const selectedAddress = selectedAccount?.address;
   const { submitOperation, getReceiveAddress, unlockWallet, hasUnlockedSeed } =
-    useOcashLedger(selectedAddress);
+    useOcashLedger(selectedAddress, chainId);
   const [showUnlockModal, setShowUnlockModal] = useState(false);
   const [unlockPassword, setUnlockPassword] = useState('');
   const [ocashReceiveAddress, setOcashReceiveAddress] = useState<string | null>(
