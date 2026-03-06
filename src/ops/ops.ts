@@ -500,7 +500,7 @@ export class Ops implements OpsApi {
           array_hash_index: arrayHashIndex,
           relayer: typedPlan.relayer,
           recipient: input.recipient,
-          withdraw_amount: burnAmount,
+          withdraw_amount: BigInt(typedPlan.requestedAmount),
           relayer_fee: relayerFee,
           gas_drop_value: gasDropValue,
           extra_data: extraData,
