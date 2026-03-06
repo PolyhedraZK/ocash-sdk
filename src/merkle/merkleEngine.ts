@@ -286,11 +286,21 @@ export class MerkleEngine implements MerkleApi {
           const subtree = MerkleEngine.buildSubtree(batch, baseIndex);
           const merged = await this.mergeSubtreeToMainTree({ chainId, subtreeRoot: subtree.subtreeRoot, newTotalElements: baseIndex + SUBTREE_SIZE });
 
-          const nodes = [...subtree.nodesToStore, ...merged.nodesToStore].map((n) => ({ ...n, chainId }));
-          await this.storage?.upsertMerkleNodes?.(chainId, nodes);
-
           state.mergedElements += SUBTREE_SIZE;
           state.root = merged.finalRoot;
+
+          // Store checkpoint root keyed by merged element count so getProofByCids can
+          // recover the committed root when the local tree has merged ahead of the contract.
+          const checkpointNode: MerkleNodeRecord = {
+            chainId,
+            id: `checkpoint-${state.mergedElements}`,
+            level: -1,
+            position: 0,
+            hash: state.root,
+          };
+          const nodes = [...subtree.nodesToStore, ...merged.nodesToStore, checkpointNode].map((n) => ({ ...n, chainId }));
+          await this.storage?.upsertMerkleNodes?.(chainId, nodes);
+
           await this.storage?.setMerkleTree?.(chainId, {
             chainId,
             root: state.root,
@@ -373,9 +383,17 @@ export class MerkleEngine implements MerkleApi {
               }
               proof.push({ leaf_index: cid, path });
             }
+            // When the local tree has merged more batches than the contract has committed,
+            // tree.root represents a future root that doesn't yet exist on-chain. Use the
+            // checkpoint root stored at contractTreeElements instead.
+            let effectiveRoot = tree.root;
+            if (tree.totalElements > contractTreeElements && contractTreeElements > 0) {
+              const checkpoint = await this.storage!.getMerkleNode!(input.chainId, `checkpoint-${contractTreeElements}`);
+              if (checkpoint) effectiveRoot = checkpoint.hash;
+            }
             return {
               proof,
-              merkle_root: MerkleEngine.normalizeHex32(tree.root, 'merkleTree.root'),
+              merkle_root: MerkleEngine.normalizeHex32(effectiveRoot, 'merkleTree.root'),
               latest_cid: totalElements > 0n ? Number(totalElements - 1n) : -1,
             };
           } catch (error) {
