@@ -97,11 +97,13 @@ const AssetPage = ({
   optionsButton,
   actionButtons,
   activityContent,
+  tokenDetailsExtraContent,
 }: {
   asset: Asset;
   optionsButton: React.ReactNode;
   actionButtons?: React.ReactNode;
   activityContent?: React.ReactNode;
+  tokenDetailsExtraContent?: React.ReactNode;
 }) => {
   const t = useI18nContext();
   const navigate = useNavigate();
@@ -531,6 +533,7 @@ const AssetPage = ({
                       {t('editInPortfolio')}
                     </ButtonLink>,
                   )}
+                {tokenDetailsExtraContent}
               </Box>
             </Box>
           )}

@@ -182,7 +182,7 @@ function ActionModal({
                   setRecipient(e.target.value)
                 }
                 type={TextFieldType.Text}
-                placeholder="Recipient address"
+                placeholder="OCash recipient (0x + 64 hex)"
               />
             ) : null}
           </Box>

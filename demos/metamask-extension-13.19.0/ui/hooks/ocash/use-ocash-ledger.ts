@@ -76,6 +76,14 @@ type OcashSyncState = {
   error?: string;
 };
 
+type OcashUnspentUtxo = {
+  amount: bigint;
+  commitment: Hex;
+  nullifier: Hex;
+  mkIndex: number;
+  createdAt?: number;
+};
+
 function formatSyncError(error: unknown): string {
   const raw = error instanceof Error ? error.message : String(error ?? '同步失败');
   const httpMatch = raw.match(/HTTP\s+(\d{3})/i);
@@ -318,9 +326,17 @@ function isAddress(input: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/u.test(input);
 }
 
+function isOcashAddress(input: string): boolean {
+  // OCash receiving address is a compressed BabyJubjub pubkey (32 bytes hex).
+  return /^0x[a-fA-F0-9]{64}$/u.test(input);
+}
+
 export function useOcashLedger(account?: string, chainId?: string) {
   const selectedChainId = useSelector(getSelectedMultichainNetworkConfiguration)?.chainId;
   const [balances, setBalances] = useState<Record<string, bigint>>({});
+  const [unspentUtxos, setUnspentUtxos] = useState<
+    Record<string, OcashUnspentUtxo[]>
+  >({});
   const [operations, setOperations] = useState<StoredOperation[]>([]);
   const [ocashUnlocked, setOcashUnlocked] = useState(false);
   const [syncState, setSyncState] = useState<OcashSyncState>({
@@ -337,18 +353,21 @@ export function useOcashLedger(account?: string, chainId?: string) {
   const refresh = useCallback(async () => {
     if (!account) {
       setBalances({});
+      setUnspentUtxos({});
       setOperations([]);
       setSyncState({ status: 'idle', syncedCommitments: 0 });
       return;
     }
     if (!targetChainId) {
       setBalances({});
+      setUnspentUtxos({});
       setOperations([]);
       setSyncState({ status: 'idle', syncedCommitments: 0 });
       return;
     }
 
     const nextBalances: Record<string, bigint> = {};
+    const nextUnspentUtxos: Record<string, OcashUnspentUtxo[]> = {};
     const nextOperations: StoredOperation[] = [];
     const unlocked = await isOcashUnlocked().catch(() => false);
     setOcashUnlocked(unlocked);
@@ -359,6 +378,7 @@ export function useOcashLedger(account?: string, chainId?: string) {
     const ctx = getContext(account, targetChainId);
     if (!ctx) {
       setBalances({});
+      setUnspentUtxos({});
       setOperations([]);
       setSyncState({
         chainId: targetChainId,
@@ -420,12 +440,25 @@ export function useOcashLedger(account?: string, chainId?: string) {
       if (chain) {
         await Promise.all(
           chain.tokens.map(async (token) => {
+            const utxos = await ctx.sdk.wallet.getUtxos({
+              chainId: chain.chainIdDecimal,
+              assetId: token.id,
+              includeSpent: false,
+              includeFrozen: false,
+            });
             const balance = await ctx.sdk.wallet.getBalance({
               chainId: chain.chainIdDecimal,
               assetId: token.id,
             });
             const key = `${targetChainId}:${normalizeAddress(token.wrappedErc20)}`;
             nextBalances[key] = balance;
+            nextUnspentUtxos[key] = utxos.rows.map((row) => ({
+              amount: row.amount,
+              commitment: row.commitment,
+              nullifier: row.nullifier,
+              mkIndex: row.mkIndex,
+              createdAt: row.createdAt,
+            }));
           }),
         );
 
@@ -445,6 +478,7 @@ export function useOcashLedger(account?: string, chainId?: string) {
 
     nextOperations.sort((a, b) => b.createdAt - a.createdAt);
     setBalances(nextBalances);
+    setUnspentUtxos(nextUnspentUtxos);
     setOperations(nextOperations);
   }, [account, targetChainId]);
 
@@ -472,6 +506,14 @@ export function useOcashLedger(account?: string, chainId?: string) {
     (chainId: string, assetAddress: string, decimals: number) =>
       formatUnits(getBalanceUnits(chainId, assetAddress), decimals),
     [getBalanceUnits],
+  );
+
+  const getUnspentUtxos = useCallback(
+    (chainId: string, assetAddress: string) => {
+      const key = `${normalizeChainId(chainId)}:${normalizeAddress(assetAddress)}`;
+      return unspentUtxos[key] ?? [];
+    },
+    [unspentUtxos],
   );
 
   const submitOperation = useCallback(
@@ -578,8 +620,8 @@ export function useOcashLedger(account?: string, chainId?: string) {
 
         const ownerKeyPair = ctx.sdk.keys.deriveKeyPair(seed);
         if (input.kind === 'transfer') {
-          if (!input.recipient || !isAddress(input.recipient)) {
-            return { ok: false, error: '请输入有效收款地址。' };
+          if (!input.recipient || !isOcashAddress(input.recipient)) {
+            return { ok: false, error: '请输入有效 OCash 收款地址（0x 开头 64 位十六进制）。' };
           }
 
           const prepared = await ctx.sdk.ops.prepareTransfer({
@@ -704,6 +746,7 @@ export function useOcashLedger(account?: string, chainId?: string) {
   return {
     getBalanceUnits,
     getBalanceDisplay,
+    getUnspentUtxos,
     operations,
     submitOperation,
     getReceiveAddress,
