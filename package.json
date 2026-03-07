@@ -1,6 +1,6 @@
 {
   "name": "@ocash/sdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "OCash ZKP SDK for browser, hybrid and Node runtimes",
   "license": "MIT",
   "repository": {
