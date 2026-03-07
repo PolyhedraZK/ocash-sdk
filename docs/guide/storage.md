@@ -54,22 +54,31 @@ Files are stored as `{baseDir}/{walletId}.store.json`.
 
 ### KeyValueStore
 
-Wraps any key-value client (Redis, SQLite, custom):
+Wraps any key-value client (Redis, custom):
 
 ```ts
-import { KeyValueStore, RedisStore, SqliteStore } from '@ocash/sdk';
+import { KeyValueStore, RedisStore } from '@ocash/sdk';
 
 // Redis
 const redisStore = new RedisStore({ url: 'redis://localhost:6379' });
-
-// SQLite
-const sqliteStore = new SqliteStore({ filename: './data.db' });
 
 // Generic KV
 const kvStore = new KeyValueStore({
   client: myKvClient, // implements get/set/del
 });
 ```
+
+### SqliteStore (Node.js)
+
+SQLite-backed storage. Import from `@ocash/sdk/node`:
+
+```ts
+import { SqliteStore } from '@ocash/sdk/node';
+
+const sqliteStore = new SqliteStore({ filename: './data.db' });
+```
+
+Requires Node.js 22.5+ (built-in `node:sqlite`) or optional peer `better-sqlite3`.
 
 ## StorageAdapter Interface
 

@@ -108,4 +108,4 @@ The SDK defines a `StorageAdapter` interface with required and optional methods:
 
 **Optional**: Merkle tree state, merkle nodes, entry memos/nullifiers, operation history
 
-Built-in adapters: `MemoryStore`, `FileStore` (Node), `IndexedDbStore` (Browser), `KeyValueStore`, `RedisStore`, `SqliteStore`
+Built-in adapters: `MemoryStore`, `KeyValueStore`, `RedisStore` (universal), `IndexedDbStore` (browser), `FileStore`, `SqliteStore` (Node.js)
