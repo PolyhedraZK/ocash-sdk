@@ -305,7 +305,7 @@ export class Ops implements OpsApi {
   /**
    * Prepare a transfer. If planner returns a merge plan, returns merge info.
    */
-  async prepareTransfer(input: { chainId: number; assetId: string; amount: bigint; to: Hex; ownerKeyPair: UserKeyPair; publicClient: PublicClient; relayerUrl?: string; autoMerge?: boolean }) {
+  async prepareTransfer(input: { chainId: number; assetId: string; amount: bigint; to: Hex; ownerKeyPair: UserKeyPair; publicClient: PublicClient; relayerUrl?: string; autoMerge?: boolean; payIncludesFee?: boolean }) {
     const scope = 'ops:prepareTransfer';
     this.debug(scope, 'start', { chainId: input.chainId, assetId: input.assetId, to: input.to });
     const chain = this.assets.getChain(input.chainId);
@@ -325,6 +325,7 @@ export class Ops implements OpsApi {
           to: input.to,
           relayerUrl,
           autoMerge: input.autoMerge,
+          payIncludesFee: input.payIncludesFee,
         }),
       ),
     );
@@ -499,7 +500,7 @@ export class Ops implements OpsApi {
           array_hash_index: arrayHashIndex,
           relayer: typedPlan.relayer,
           recipient: input.recipient,
-          withdraw_amount: burnAmount,
+          withdraw_amount: BigInt(typedPlan.requestedAmount),
           relayer_fee: relayerFee,
           gas_drop_value: gasDropValue,
           extra_data: extraData,

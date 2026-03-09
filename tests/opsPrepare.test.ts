@@ -378,7 +378,10 @@ describe('Ops.prepareTransfer / Ops.prepareWithdraw', () => {
 
     expect(planner.plan).toHaveBeenCalled();
     expect(merkle.getProofByCids).toHaveBeenCalledWith({ chainId, cids: [10], totalElements: 5n });
-    expect(zkp.proveWithdraw).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ recipient, withdraw_amount: burnAmount }));
+    // withdraw_amount in the proof context must be the net recipient amount (requestedAmount),
+    // NOT burnAmount. The contract computes amountWithFee = inp.amount + protocolFee + relayerFee,
+    // which equals burnAmount only when inp.amount = requestedAmount (net).
+    expect(zkp.proveWithdraw).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ recipient, withdraw_amount: plan.requestedAmount }));
 
     expect(res.meta.arrayHashIndex).toBe(4);
     expect(res.meta.merkleRootIndex).toBe(1);
@@ -388,7 +391,7 @@ describe('Ops.prepareTransfer / Ops.prepareWithdraw', () => {
     expect(res.witness.asset_policy.viewer_pk).toMatchObject({ EncryptionKey: { Key: { X: 1n, Y: 2n } } });
     expect(res.witness.asset_policy.freezer_pk).toMatchObject({ Point: { X: 3n, Y: 4n } });
     expect(res.request.path).toBe('/api/v1/burn');
-    expect((res.request.body as any).burn_amount).toBe(burnAmount.toString());
+    expect((res.request.body as any).burn_amount).toBe(plan.requestedAmount.toString());
     expect((res.request.body as any).gas_drop_value).toBe(gasDropValue.toString());
     expect((res.request.body as any).relayer_fee).toBe(relayerFee.toString());
   });

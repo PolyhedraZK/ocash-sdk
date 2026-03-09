@@ -77,12 +77,19 @@ new FileStore(options: {
 })
 ```
 
-### KeyValueStore / RedisStore / SqliteStore
+### KeyValueStore / RedisStore
 
 ```ts
-import { KeyValueStore, RedisStore, SqliteStore } from '@ocash/sdk';
+import { KeyValueStore, RedisStore } from '@ocash/sdk';
 
 new RedisStore(options: { url: string; ... })
-new SqliteStore(options: { filename: string; ... })
 new KeyValueStore(options: { client: KeyValueClient; ... })
+```
+
+### SqliteStore
+
+```ts
+import { SqliteStore } from '@ocash/sdk/node';
+
+new SqliteStore(options: { filename: string; ... })
 ```

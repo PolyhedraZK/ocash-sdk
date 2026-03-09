@@ -246,9 +246,9 @@ The SDK uses `StorageAdapter` to track UTXOs, sync cursors, and operation histor
 Built-in implementations:
 
 - `MemoryStore` from `@ocash/sdk`
-- `KeyValueStore` / `RedisStore` / `SqliteStore` from `@ocash/sdk`
+- `KeyValueStore` / `RedisStore` from `@ocash/sdk`
 - `IndexedDbStore` from `@ocash/sdk/browser`
-- `FileStore` from `@ocash/sdk/node`
+- `FileStore` / `SqliteStore` from `@ocash/sdk/node`
 
 Example:
 

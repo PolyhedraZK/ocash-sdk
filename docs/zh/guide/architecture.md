@@ -71,4 +71,4 @@ SDK 定义了 `StorageAdapter` 接口，包含必需和可选方法：
 
 **可选**: Merkle 树状态、Merkle 节点、entry memo/nullifier、操作记录
 
-内置适配器：`MemoryStore`、`FileStore`（Node）、`IndexedDbStore`（浏览器）、`KeyValueStore`、`RedisStore`、`SqliteStore`
+内置适配器：`MemoryStore`、`KeyValueStore`、`RedisStore`（通用），`IndexedDbStore`（浏览器），`FileStore`、`SqliteStore`（Node.js）

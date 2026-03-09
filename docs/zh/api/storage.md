@@ -25,4 +25,4 @@ interface StorageAdapter {
 | `FileStore` | Node.js | `@ocash/sdk/node` |
 | `KeyValueStore` | 通用 | `@ocash/sdk` |
 | `RedisStore` | 通用 | `@ocash/sdk` |
-| `SqliteStore` | 通用 | `@ocash/sdk` |
+| `SqliteStore` | Node.js | `@ocash/sdk/node` |

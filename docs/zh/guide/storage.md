@@ -49,14 +49,26 @@ const sdk = createSdk({
 });
 ```
 
-### KeyValueStore / RedisStore / SqliteStore
+### KeyValueStore / RedisStore
 
 ```ts
-import { RedisStore, SqliteStore } from '@ocash/sdk';
+import { KeyValueStore, RedisStore } from '@ocash/sdk';
 
 const redisStore = new RedisStore({ url: 'redis://localhost:6379' });
+const kvStore = new KeyValueStore({ client: myKvClient });
+```
+
+### SqliteStore（Node.js）
+
+SQLite 存储，从 `@ocash/sdk/node` 导入：
+
+```ts
+import { SqliteStore } from '@ocash/sdk/node';
+
 const sqliteStore = new SqliteStore({ filename: './data.db' });
 ```
+
+需要 Node.js 22.5+（内置 `node:sqlite`）或可选对等依赖 `better-sqlite3`。
 
 ## 自定义适配器
 
