@@ -1,6 +1,6 @@
 {
   "name": "@ocash/sdk",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "OCash ZKP SDK for browser, hybrid and Node runtimes",
   "license": "MIT",
   "repository": {
@@ -44,9 +44,18 @@
       "default": "./dist/node.js"
     }
   },
+  "browser": {
+    "./dist/index.cjs": "./dist/browser.cjs",
+    "./dist/index.js": "./dist/browser.js",
+    "better-sqlite3": false,
+    "node:sqlite": false,
+    "node:fs/promises": false,
+    "node:path": false
+  },
   "files": [
     "dist",
-    "assets"
+    "assets",
+    "browser.js"
   ],
   "scripts": {
     "clean": "rimraf dist",
