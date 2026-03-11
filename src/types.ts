@@ -105,6 +105,13 @@ export interface OCashSdkConfig {
      * Merkle depth used by the on-chain tree (defaults to 32).
      */
     treeDepth?: number;
+    /**
+     * Optional callback to read `merkleRoots(rootIndex)` from the on-chain contract.
+     * When provided, each batch merge is verified against the contract root.
+     * Return null if the contract hasn't committed this index yet (treated as "skip").
+     * A zero root (0x000...0) is also treated as "not yet committed".
+     */
+    readContractRoot?: (chainId: number, rootIndex: number) => Promise<Hex | null>;
   };
   sync?: {
     pageSize?: number;
@@ -493,19 +500,27 @@ export type ListUtxosResult = {
   rows: UtxoRecord[];
 };
 
-/** Persisted merkle tree state metadata. */
-export type MerkleTreeState = {
-  /** Chain id (scoped). */
+/** ChairmanMerkle tree (persistent segment tree) node. */
+export type ChairmanMerkleNodeRecord = {
   chainId: number;
-  /** Current tree root (for the merged/main tree). */
-  root: Hex;
-  /**
-   * Total elements that have been merged into the main tree.
-   * This matches `totalElementsInTree(contract.totalElements, tempArraySize)`.
-   */
-  totalElements: number;
-  /** Last updated timestamp (ms). */
-  lastUpdated: number;
+  /** Unique node ID. Main tree: `cm-{version}-{level}`, subtree internal: `st-{level}-{position}` */
+  id: string;
+  hash: Hex;
+  /** Left child node ID (null for leaf/subtree nodes). */
+  leftId: string | null;
+  /** Right child node ID (null for leaf/subtree nodes). */
+  rightId: string | null;
+};
+
+/** ChairmanMerkle tree version — maps a mergedElements count to a persistent root. */
+export type ChairmanMerkleVersionRecord = {
+  chainId: number;
+  /** Version = mergedElements count (0, 32, 64, …). */
+  version: number;
+  /** Root node ID for this version. */
+  rootId: string;
+  /** Root hash (cached for quick lookup without traversal). */
+  rootHash: Hex;
 };
 
 /** Persisted merkle leaf record. */
@@ -515,19 +530,6 @@ export type MerkleLeafRecord = {
   commitment: Hex;
 };
 
-/** Persisted merkle node record. */
-export type MerkleNodeRecord = {
-  chainId: number;
-  /**
-   * Node id.
-   * - Normal node: `${level}-${position}`
-   * - Frontier node: `frontier-${level}`
-   */
-  id: string;
-  level: number;
-  position: number;
-  hash: Hex;
-};
 
 /** Storage adapter interface for persistence. */
 export interface StorageAdapter {
@@ -593,11 +595,20 @@ export interface StorageAdapter {
   getMerkleLeaf?(chainId: number, cid: number): Promise<MerkleLeafRecord | undefined>;
 
   /**
-   * Optional Merkle DB: node lookup by id (fast path for proof generation and incremental updates).
+   * ChairmanMerkle tree (persistent segment tree) node storage.
+   * Used for both main-tree versioned nodes and subtree internal nodes.
    */
-  getMerkleNode?(chainId: number, id: string): Promise<MerkleNodeRecord | undefined>;
-  upsertMerkleNodes?(chainId: number, nodes: MerkleNodeRecord[]): Promise<void>;
-  clearMerkleNodes?(chainId: number): Promise<void>;
+  getChairmanMerkleNode?(chainId: number, id: string): Promise<ChairmanMerkleNodeRecord | undefined>;
+  putChairmanMerkleNodes?(chainId: number, nodes: ChairmanMerkleNodeRecord[]): Promise<void>;
+
+  /**
+   * ChairmanMerkle tree version storage.
+   * Each version maps a mergedElements count to a persistent root.
+   */
+  getChairmanMerkleVersion?(chainId: number, version: number): Promise<ChairmanMerkleVersionRecord | undefined>;
+  getLatestChairmanMerkleVersion?(chainId: number): Promise<ChairmanMerkleVersionRecord | undefined>;
+  putChairmanMerkleVersion?(chainId: number, record: ChairmanMerkleVersionRecord): Promise<void>;
+  clearChairmanMerkleTree?(chainId: number): Promise<void>;
 
   /**
    * Optional entry memo persistence (raw EntryService payloads).
@@ -615,13 +626,6 @@ export interface StorageAdapter {
   listEntryNullifiers?(query: ListEntryNullifiersQuery): Promise<ListEntryNullifiersResult>;
   clearEntryNullifiers?(chainId: number): Promise<void> | void;
 
-  /**
-   * Optional merkle tree state persistence (merged/main-tree only).
-   * This mirrors the client/app `MerkleDexie.trees` metadata.
-   */
-  getMerkleTree?(chainId: number): Promise<MerkleTreeState | undefined>;
-  setMerkleTree?(chainId: number, tree: MerkleTreeState): Promise<void>;
-  clearMerkleTree?(chainId: number): Promise<void>;
 }
 
 /** WASM & circuit initialization. Call `ready()` before any proof operations. */

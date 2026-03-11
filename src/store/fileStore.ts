@@ -1,12 +1,12 @@
 import type {
+  ChairmanMerkleNodeRecord,
+  ChairmanMerkleVersionRecord,
   EntryMemoRecord,
   EntryNullifierRecord,
   Hex,
   ListEntryMemosQuery,
   ListEntryNullifiersQuery,
   ListUtxosQuery,
-  MerkleNodeRecord,
-  MerkleTreeState,
   StorageAdapter,
   SyncCursor,
   UtxoRecord,
@@ -36,8 +36,9 @@ export class FileStore implements StorageAdapter {
   private readonly cursors = new Map<number, SyncCursor>();
   private readonly utxos = new Map<string, UtxoRecord>();
   private operations: Array<StoredOperation> = [];
-  private merkleTrees: Record<string, MerkleTreeState> = {};
-  private merkleNodes: Record<string, Record<string, MerkleNodeRecord>> = {};
+  private chairmanMerkleLatestVersions: Record<string, ChairmanMerkleVersionRecord> = {};
+  private chairmanMerkleVersions: Record<string, Record<number, ChairmanMerkleVersionRecord>> = {};
+  private chairmanMerkleNodes: Record<string, Record<string, ChairmanMerkleNodeRecord>> = {};
   private entryMemos: Record<string, EntryMemoRecord[]> = {};
   private entryNullifiers: Record<string, EntryNullifierRecord[]> = {};
   private saveChain: Promise<void> = Promise.resolve();
@@ -158,8 +159,9 @@ export class FileStore implements StorageAdapter {
     this.utxos.clear();
     this.operations = [];
     this.merkleNextCid.clear();
-    this.merkleTrees = {};
-    this.merkleNodes = {};
+    this.chairmanMerkleLatestVersions = {};
+    this.chairmanMerkleVersions = {};
+    this.chairmanMerkleNodes = {};
     this.entryMemos = {};
     this.entryNullifiers = {};
     try {
@@ -178,14 +180,26 @@ export class FileStore implements StorageAdapter {
     try {
       const raw = await readFile(this.sharedFilePath(), 'utf8');
       const parsed = JSON.parse(raw) as Partial<PersistedSharedState>;
-      const merkleTreesRaw = parsed.merkleTrees;
-      if (merkleTreesRaw && typeof merkleTreesRaw === 'object') {
-        this.merkleTrees = merkleTreesRaw;
+      const chairmanMerkleVersionsRaw = parsed.chairmanMerkleVersions;
+      if (chairmanMerkleVersionsRaw && typeof chairmanMerkleVersionsRaw === 'object') {
+        this.chairmanMerkleVersions = chairmanMerkleVersionsRaw;
+        // Rebuild latest version cache from persisted versions
+        for (const [chainKey, versions] of Object.entries(chairmanMerkleVersionsRaw)) {
+          let latest: ChairmanMerkleVersionRecord | undefined;
+          for (const record of Object.values(versions)) {
+            if (!latest || record.version > latest.version) {
+              latest = record;
+            }
+          }
+          if (latest) {
+            this.chairmanMerkleLatestVersions[chainKey] = latest;
+          }
+        }
       }
 
-      const merkleNodesRaw = parsed.merkleNodes;
-      if (merkleNodesRaw && typeof merkleNodesRaw === 'object') {
-        this.merkleNodes = merkleNodesRaw;
+      const chairmanMerkleNodesRaw = parsed.chairmanMerkleNodes;
+      if (chairmanMerkleNodesRaw && typeof chairmanMerkleNodesRaw === 'object') {
+        this.chairmanMerkleNodes = chairmanMerkleNodesRaw;
       }
 
       const entryMemosRaw = parsed.entryMemos;
@@ -235,8 +249,8 @@ export class FileStore implements StorageAdapter {
       .then(async () => {
         await mkdir(this.options.baseDir, { recursive: true });
         const sharedState: PersistedSharedState = {
-          merkleTrees: this.merkleTrees,
-          merkleNodes: this.merkleNodes,
+          chairmanMerkleVersions: this.chairmanMerkleVersions,
+          chairmanMerkleNodes: this.chairmanMerkleNodes,
           entryMemos: this.entryMemos,
           entryNullifiers: this.entryNullifiers,
         };
@@ -250,61 +264,77 @@ export class FileStore implements StorageAdapter {
   }
 
   /**
-   * Get persisted merkle tree metadata for a chain.
+   * Get a chairmanMerkle tree node by id.
    */
-  async getMerkleTree(chainId: number): Promise<MerkleTreeState | undefined> {
-    const row = this.merkleTrees[String(chainId)];
-    if (!row) return undefined;
-    const totalElements = Number(row.totalElements);
-    const lastUpdated = Number(row.lastUpdated);
-    const root = row.root;
-    if (typeof root !== 'string' || !root.startsWith('0x')) return undefined;
-    if (!Number.isFinite(totalElements) || totalElements < 0) return undefined;
-    return { chainId, root, totalElements: Math.floor(totalElements), lastUpdated: Number.isFinite(lastUpdated) ? Math.floor(lastUpdated) : 0 };
+  async getChairmanMerkleNode(chainId: number, id: string): Promise<ChairmanMerkleNodeRecord | undefined> {
+    return this.chairmanMerkleNodes[String(chainId)]?.[id];
   }
 
   /**
-   * Persist merkle tree metadata for a chain.
+   * Put chairmanMerkle tree nodes for a chain and persist.
    */
-  async setMerkleTree(chainId: number, tree: MerkleTreeState): Promise<void> {
-    this.merkleTrees[String(chainId)] = { ...tree, chainId };
-    await this.saveShared();
-  }
-
-  /**
-   * Clear merkle tree metadata for a chain.
-   */
-  async clearMerkleTree(chainId: number): Promise<void> {
-    delete this.merkleTrees[String(chainId)];
-    await this.saveShared();
-  }
-
-  /**
-   * Get a merkle node by id.
-   */
-  async getMerkleNode(chainId: number, id: string): Promise<MerkleNodeRecord | undefined> {
-    return this.merkleNodes[String(chainId)]?.[id];
-  }
-
-  /**
-   * Upsert merkle nodes for a chain and persist.
-   */
-  async upsertMerkleNodes(chainId: number, nodes: MerkleNodeRecord[]): Promise<void> {
+  async putChairmanMerkleNodes(chainId: number, nodes: ChairmanMerkleNodeRecord[]): Promise<void> {
     if (!nodes.length) return;
     const key = String(chainId);
-    const existing = this.merkleNodes[key] ?? {};
+    const existing = this.chairmanMerkleNodes[key] ?? {};
     for (const node of nodes) {
       existing[node.id] = { ...node, chainId };
     }
-    this.merkleNodes[key] = existing;
+    this.chairmanMerkleNodes[key] = existing;
     await this.saveShared();
   }
 
   /**
-   * Clear merkle nodes for a chain.
+   * Get a specific chairmanMerkle tree version for a chain.
    */
-  async clearMerkleNodes(chainId: number): Promise<void> {
-    delete this.merkleNodes[String(chainId)];
+  async getChairmanMerkleVersion(chainId: number, version: number): Promise<ChairmanMerkleVersionRecord | undefined> {
+    return this.chairmanMerkleVersions[String(chainId)]?.[version];
+  }
+
+  /**
+   * Get the latest (highest version number) chairmanMerkle tree version for a chain.
+   */
+  async getLatestChairmanMerkleVersion(chainId: number): Promise<ChairmanMerkleVersionRecord | undefined> {
+    const cached = this.chairmanMerkleLatestVersions[String(chainId)];
+    if (cached) return { ...cached };
+    // Fallback: scan all versions for this chain
+    const versions = this.chairmanMerkleVersions[String(chainId)];
+    if (!versions) return undefined;
+    let latest: ChairmanMerkleVersionRecord | undefined;
+    for (const record of Object.values(versions)) {
+      if (!latest || record.version > latest.version) {
+        latest = record;
+      }
+    }
+    if (latest) {
+      this.chairmanMerkleLatestVersions[String(chainId)] = latest;
+    }
+    return latest ? { ...latest } : undefined;
+  }
+
+  /**
+   * Persist a chairmanMerkle tree version for a chain and track latest.
+   */
+  async putChairmanMerkleVersion(chainId: number, record: ChairmanMerkleVersionRecord): Promise<void> {
+    const key = String(chainId);
+    const existing = this.chairmanMerkleVersions[key] ?? {};
+    existing[record.version] = { ...record, chainId };
+    this.chairmanMerkleVersions[key] = existing;
+    // Update latest cache
+    const currentLatest = this.chairmanMerkleLatestVersions[key];
+    if (!currentLatest || record.version >= currentLatest.version) {
+      this.chairmanMerkleLatestVersions[key] = { ...record, chainId };
+    }
+    await this.saveShared();
+  }
+
+  /**
+   * Clear chairmanMerkle tree nodes and versions for a chain.
+   */
+  async clearChairmanMerkleTree(chainId: number): Promise<void> {
+    delete this.chairmanMerkleNodes[String(chainId)];
+    delete this.chairmanMerkleVersions[String(chainId)];
+    delete this.chairmanMerkleLatestVersions[String(chainId)];
     await this.saveShared();
   }
 

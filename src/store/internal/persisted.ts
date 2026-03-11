@@ -1,4 +1,4 @@
-import type { EntryMemoRecord, EntryNullifierRecord, Hex, MerkleNodeRecord, MerkleTreeState } from '../../types';
+import type { ChairmanMerkleNodeRecord, ChairmanMerkleVersionRecord, EntryMemoRecord, EntryNullifierRecord, Hex } from '../../types';
 import type { PersistedWalletState } from './persistedWalletState';
 import type { StoredOperation } from './operationTypes';
 
@@ -28,13 +28,13 @@ export type PersistedSharedState = {
   entryNullifiers?: Record<string, EntryNullifierRecord[]>;
 
   /**
-   * Optional merkle tree metadata cache, keyed by chainId.
+   * Optional chairmanMerkle tree version cache, keyed by chainId -> version.
    */
-  merkleTrees?: Record<string, MerkleTreeState>;
+  chairmanMerkleVersions?: Record<string, Record<number, ChairmanMerkleVersionRecord>>;
 
   /**
-   * Optional merkle nodes cache, keyed by chainId -> nodeId.
+   * Optional chairmanMerkle tree node cache, keyed by chainId -> nodeId.
    * Used for fast local proof generation.
    */
-  merkleNodes?: Record<string, Record<string, MerkleNodeRecord>>;
+  chairmanMerkleNodes?: Record<string, Record<string, ChairmanMerkleNodeRecord>>;
 };

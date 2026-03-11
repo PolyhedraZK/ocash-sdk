@@ -6,8 +6,8 @@ import type {
   ListEntryNullifiersQuery,
   ListUtxosQuery,
   MerkleLeafRecord,
-  MerkleNodeRecord,
-  MerkleTreeState,
+  ChairmanMerkleNodeRecord,
+  ChairmanMerkleVersionRecord,
   StorageAdapter,
   SyncCursor,
   UtxoRecord,
@@ -269,21 +269,21 @@ export class SqliteStore implements StorageAdapter {
         PRIMARY KEY (chain_id, cid)
       );
 
-      CREATE TABLE IF NOT EXISTS merkle_nodes (
+      CREATE TABLE IF NOT EXISTS chairman_merkle_nodes (
         chain_id INTEGER NOT NULL,
         id TEXT NOT NULL,
-        level INTEGER NOT NULL,
-        position INTEGER NOT NULL,
         hash TEXT NOT NULL,
+        left_id TEXT,
+        right_id TEXT,
         PRIMARY KEY (chain_id, id)
       );
-      CREATE INDEX IF NOT EXISTS idx_merkle_nodes_chain_level_pos ON merkle_nodes(chain_id, level, position);
 
-      CREATE TABLE IF NOT EXISTS merkle_trees (
-        chain_id INTEGER PRIMARY KEY,
-        root TEXT NOT NULL,
-        total_elements INTEGER NOT NULL,
-        last_updated INTEGER NOT NULL
+      CREATE TABLE IF NOT EXISTS chairman_merkle_versions (
+        chain_id INTEGER NOT NULL,
+        version INTEGER NOT NULL,
+        root_id TEXT NOT NULL,
+        root_hash TEXT NOT NULL,
+        PRIMARY KEY (chain_id, version)
       );
 
       CREATE TABLE IF NOT EXISTS entry_memos (
@@ -554,30 +554,30 @@ export class SqliteStore implements StorageAdapter {
     this.run(`DELETE FROM merkle_leaves WHERE chain_id = ?`, [chainId]);
   }
 
-  async getMerkleNode(chainId: number, id: string): Promise<MerkleNodeRecord | undefined> {
-    const row = this.row<{ id: string; level: number; position: number; hash: Hex }>(
-      `SELECT id, level, position, hash FROM merkle_nodes WHERE chain_id = ? AND id = ?`,
+  async getChairmanMerkleNode(chainId: number, id: string): Promise<ChairmanMerkleNodeRecord | undefined> {
+    const row = this.row<{ id: string; hash: Hex; left_id: string | null; right_id: string | null }>(
+      `SELECT id, hash, left_id, right_id FROM chairman_merkle_nodes WHERE chain_id = ? AND id = ?`,
       [chainId, id],
     );
     if (!row) return undefined;
-    return { chainId, id: row.id, level: row.level, position: row.position, hash: row.hash };
+    return { chainId, id: row.id, hash: row.hash, leftId: row.left_id, rightId: row.right_id };
   }
 
-  async upsertMerkleNodes(chainId: number, nodes: MerkleNodeRecord[]): Promise<void> {
+  async putChairmanMerkleNodes(chainId: number, nodes: ChairmanMerkleNodeRecord[]): Promise<void> {
     if (!nodes.length) return;
     const db = this.ensureDb();
     const stmt = db.prepare(
-      `INSERT INTO merkle_nodes (chain_id, id, level, position, hash)
+      `INSERT INTO chairman_merkle_nodes (chain_id, id, hash, left_id, right_id)
        VALUES (?, ?, ?, ?, ?)
        ON CONFLICT(chain_id, id) DO UPDATE SET
-         level = excluded.level,
-         position = excluded.position,
-         hash = excluded.hash`,
+         hash = excluded.hash,
+         left_id = excluded.left_id,
+         right_id = excluded.right_id`,
     );
     db.exec('BEGIN IMMEDIATE');
     try {
       for (const node of nodes) {
-        stmt.run(chainId, node.id, node.level, node.position, node.hash);
+        stmt.run(chainId, node.id, node.hash, node.leftId ?? null, node.rightId ?? null);
       }
       db.exec('COMMIT');
     } catch (error) {
@@ -586,47 +586,38 @@ export class SqliteStore implements StorageAdapter {
     }
   }
 
-  async clearMerkleNodes(chainId: number): Promise<void> {
-    this.run(`DELETE FROM merkle_nodes WHERE chain_id = ?`, [chainId]);
+  async getChairmanMerkleVersion(chainId: number, version: number): Promise<ChairmanMerkleVersionRecord | undefined> {
+    const row = this.row<{ version: number; root_id: string; root_hash: Hex }>(
+      `SELECT version, root_id, root_hash FROM chairman_merkle_versions WHERE chain_id = ? AND version = ?`,
+      [chainId, version],
+    );
+    if (!row) return undefined;
+    return { chainId, version: row.version, rootId: row.root_id, rootHash: row.root_hash };
   }
 
-  async getMerkleTree(chainId: number): Promise<MerkleTreeState | undefined> {
-    const row = this.row<{ root: unknown; total_elements: number; last_updated: number }>(
-      `SELECT root, total_elements, last_updated FROM merkle_trees WHERE chain_id = ?`,
+  async getLatestChairmanMerkleVersion(chainId: number): Promise<ChairmanMerkleVersionRecord | undefined> {
+    const row = this.row<{ version: number; root_id: string; root_hash: Hex }>(
+      `SELECT version, root_id, root_hash FROM chairman_merkle_versions WHERE chain_id = ? ORDER BY version DESC LIMIT 1`,
       [chainId],
     );
     if (!row) return undefined;
-
-    const root = toHexOrNull(row.root);
-    if (!root) return undefined;
-
-    const totalElements = Number(row.total_elements);
-    if (!Number.isFinite(totalElements) || totalElements < 0) return undefined;
-
-    const lastUpdated = Number(row.last_updated);
-
-    return {
-      chainId,
-      root,
-      totalElements: Math.floor(totalElements),
-      lastUpdated: Number.isFinite(lastUpdated) ? Math.floor(lastUpdated) : 0,
-    };
+    return { chainId, version: row.version, rootId: row.root_id, rootHash: row.root_hash };
   }
 
-  async setMerkleTree(chainId: number, tree: MerkleTreeState): Promise<void> {
+  async putChairmanMerkleVersion(chainId: number, record: ChairmanMerkleVersionRecord): Promise<void> {
     this.run(
-      `INSERT INTO merkle_trees (chain_id, root, total_elements, last_updated)
+      `INSERT INTO chairman_merkle_versions (chain_id, version, root_id, root_hash)
        VALUES (?, ?, ?, ?)
-       ON CONFLICT(chain_id) DO UPDATE SET
-         root = excluded.root,
-         total_elements = excluded.total_elements,
-         last_updated = excluded.last_updated`,
-      [chainId, tree.root, tree.totalElements, tree.lastUpdated],
+       ON CONFLICT(chain_id, version) DO UPDATE SET
+         root_id = excluded.root_id,
+         root_hash = excluded.root_hash`,
+      [chainId, record.version, record.rootId, record.rootHash],
     );
   }
 
-  async clearMerkleTree(chainId: number): Promise<void> {
-    this.run(`DELETE FROM merkle_trees WHERE chain_id = ?`, [chainId]);
+  async clearChairmanMerkleTree(chainId: number): Promise<void> {
+    this.run(`DELETE FROM chairman_merkle_nodes WHERE chain_id = ?`, [chainId]);
+    this.run(`DELETE FROM chairman_merkle_versions WHERE chain_id = ?`, [chainId]);
   }
 
   async upsertEntryMemos(memos: EntryMemoRecord[]): Promise<void> {

@@ -1,12 +1,12 @@
 import type {
+  ChairmanMerkleNodeRecord,
+  ChairmanMerkleVersionRecord,
   EntryMemoRecord,
   EntryNullifierRecord,
   Hex,
   ListEntryMemosQuery,
   ListEntryNullifiersQuery,
   ListUtxosQuery,
-  MerkleNodeRecord,
-  MerkleTreeState,
   StorageAdapter,
   SyncCursor,
   UtxoRecord,
@@ -43,11 +43,11 @@ type StoreDef = {
  * IndexedDB-backed StorageAdapter for browser environments.
  */
 export class IndexedDbStore implements StorageAdapter {
-  private static readonly DB_VERSION = 2;
+  private static readonly DB_VERSION = 3;
   private walletId: string | undefined;
   private readonly cursors = new Map<number, SyncCursor>();
   private operations: Array<StoredOperation> = [];
-  private merkleTrees: Record<string, MerkleTreeState> = {};
+  private chairmanMerkleLatestVersions: Record<string, ChairmanMerkleVersionRecord> = {};
   private db: IDBDatabase | null = null;
   private readonly maxOperations: number;
 
@@ -102,8 +102,8 @@ export class IndexedDbStore implements StorageAdapter {
       { name: `${base}:entryMemos`, keyPath: ['chainId', 'cid'], indexes: [{ name: 'chainId', keyPath: 'chainId' }] },
       { name: `${base}:entryNullifiers`, keyPath: ['chainId', 'nid'], indexes: [{ name: 'chainId', keyPath: 'chainId' }] },
       { name: `${base}:merkleLeaves`, keyPath: ['chainId', 'cid'], indexes: [{ name: 'chainId', keyPath: 'chainId' }] },
-      { name: `${base}:merkleTrees`, keyPath: 'chainId' },
-      { name: `${base}:merkleNodes`, keyPath: ['chainId', 'id'], indexes: [{ name: 'chainId', keyPath: 'chainId' }] },
+      { name: `${base}:chairmanMerkleNodes`, keyPath: ['chainId', 'id'], indexes: [{ name: 'chainId', keyPath: 'chainId' }] },
+      { name: `${base}:chairmanMerkleVersions`, keyPath: ['chainId', 'version'], indexes: [{ name: 'chainId', keyPath: 'chainId' }] },
     ];
   }
 
@@ -120,6 +120,13 @@ export class IndexedDbStore implements StorageAdapter {
         req.onerror = () => reject(req.error ?? new Error('indexedDB open failed'));
         req.onupgradeneeded = () => {
           const db = req.result;
+          const defNames = new Set(defs.map((d) => d.name));
+          // Remove obsolete object stores (e.g. merkleTrees, merkleNodes from v2).
+          for (const storeName of Array.from(db.objectStoreNames)) {
+            if (!defNames.has(storeName)) {
+              db.deleteObjectStore(storeName);
+            }
+          }
           for (const def of defs) {
             let store: IDBObjectStore | null = null;
             if (!db.objectStoreNames.contains(def.name)) {
@@ -153,8 +160,8 @@ export class IndexedDbStore implements StorageAdapter {
       entryMemos: `${base}:entryMemos`,
       entryNullifiers: `${base}:entryNullifiers`,
       merkleLeaves: `${base}:merkleLeaves`,
-      merkleTrees: `${base}:merkleTrees`,
-      merkleNodes: `${base}:merkleNodes`,
+      chairmanMerkleNodes: `${base}:chairmanMerkleNodes`,
+      chairmanMerkleVersions: `${base}:chairmanMerkleVersions`,
     };
   }
 
@@ -301,7 +308,7 @@ export class IndexedDbStore implements StorageAdapter {
     // Reset local state first; if the remote has no/invalid state for this wallet, we should not leak old data.
     this.cursors.clear();
     this.operations = [];
-    this.merkleTrees = {};
+    this.chairmanMerkleLatestVersions = {};
 
     const cursorRows = await this.getAllByIndex<CursorRow>(stores.cursors, 'walletId', walletKey);
     for (const row of cursorRows) {
@@ -316,69 +323,88 @@ export class IndexedDbStore implements StorageAdapter {
       })
       .sort((a, b) => b.createdAt - a.createdAt);
 
-    const treeRows = await this.getAll<MerkleTreeState>(stores.merkleTrees);
-    for (const row of treeRows) {
-      this.merkleTrees[String(row.chainId)] = { ...row };
+    // Load latest chairmanMerkle version per chain into in-memory cache.
+    const allVersionRows = await this.getAll<ChairmanMerkleVersionRecord>(stores.chairmanMerkleVersions);
+    for (const row of allVersionRows) {
+      const key = String(row.chainId);
+      const existing = this.chairmanMerkleLatestVersions[key];
+      if (!existing || row.version > existing.version) {
+        this.chairmanMerkleLatestVersions[key] = { ...row };
+      }
     }
 
     this.pruneOperations();
   }
 
   /**
-   * Get a merkle node by id.
+   * Get a chairmanMerkle node by id.
    */
-  async getMerkleNode(chainId: number, id: string): Promise<MerkleNodeRecord | undefined> {
-    const node = await this.getByKey<MerkleNodeRecord>(this.storeNames().merkleNodes, [chainId, id]);
+  async getChairmanMerkleNode(chainId: number, id: string): Promise<ChairmanMerkleNodeRecord | undefined> {
+    const node = await this.getByKey<ChairmanMerkleNodeRecord>(this.storeNames().chairmanMerkleNodes, [chainId, id]);
     if (!node) return undefined;
     const hash = node.hash;
     if (typeof hash !== 'string' || !hash.startsWith('0x')) return undefined;
+    if (typeof node.leftId !== 'string' && node.leftId !== null) return undefined;
+    if (typeof node.rightId !== 'string' && node.rightId !== null) return undefined;
     return { ...node, chainId };
   }
 
   /**
-   * Upsert merkle nodes and persist.
+   * Put chairmanMerkle nodes and persist.
    */
-  async upsertMerkleNodes(chainId: number, nodes: MerkleNodeRecord[]): Promise<void> {
+  async putChairmanMerkleNodes(chainId: number, nodes: ChairmanMerkleNodeRecord[]): Promise<void> {
     if (!nodes.length) return;
     const rows = nodes.map((node) => ({ ...node, chainId }));
-    await this.putMany(this.storeNames().merkleNodes, rows);
+    await this.putMany(this.storeNames().chairmanMerkleNodes, rows);
   }
 
   /**
-   * Clear merkle nodes for a chain.
+   * Get a chairmanMerkle version record by chainId and version.
    */
-  async clearMerkleNodes(chainId: number): Promise<void> {
-    await this.deleteAllByIndex(this.storeNames().merkleNodes, 'chainId', chainId);
+  async getChairmanMerkleVersion(chainId: number, version: number): Promise<ChairmanMerkleVersionRecord | undefined> {
+    return this.getByKey<ChairmanMerkleVersionRecord>(this.storeNames().chairmanMerkleVersions, [chainId, version]);
   }
 
   /**
-   * Get persisted merkle tree metadata for a chain.
+   * Get the latest chairmanMerkle version for a chain from in-memory cache,
+   * falling back to loading from the store if not cached.
    */
-  async getMerkleTree(chainId: number): Promise<MerkleTreeState | undefined> {
-    const row = this.merkleTrees[String(chainId)];
-    if (!row) return undefined;
-    const totalElements = Number(row.totalElements);
-    const lastUpdated = Number(row.lastUpdated);
-    const root = row.root;
-    if (typeof root !== 'string' || !root.startsWith('0x')) return undefined;
-    if (!Number.isFinite(totalElements) || totalElements < 0) return undefined;
-    return { chainId, root, totalElements: Math.floor(totalElements), lastUpdated: Number.isFinite(lastUpdated) ? Math.floor(lastUpdated) : 0 };
+  async getLatestChairmanMerkleVersion(chainId: number): Promise<ChairmanMerkleVersionRecord | undefined> {
+    const cached = this.chairmanMerkleLatestVersions[String(chainId)];
+    if (cached) return { ...cached };
+    // Fallback: scan store for this chain and find max version.
+    const rows = await this.getAllByIndex<ChairmanMerkleVersionRecord>(this.storeNames().chairmanMerkleVersions, 'chainId', chainId);
+    if (!rows.length) return undefined;
+    let best = rows[0]!;
+    for (const row of rows) {
+      if (row.version > best.version) best = row;
+    }
+    this.chairmanMerkleLatestVersions[String(chainId)] = { ...best };
+    return { ...best };
   }
 
   /**
-   * Persist merkle tree metadata for a chain.
+   * Persist a chairmanMerkle version record and update the in-memory cache
+   * if this is the latest version for the chain.
    */
-  async setMerkleTree(chainId: number, tree: MerkleTreeState): Promise<void> {
-    this.merkleTrees[String(chainId)] = { ...tree, chainId };
-    await this.putMany(this.storeNames().merkleTrees, [{ ...tree, chainId }]);
+  async putChairmanMerkleVersion(chainId: number, record: ChairmanMerkleVersionRecord): Promise<void> {
+    await this.putMany(this.storeNames().chairmanMerkleVersions, [{ ...record, chainId }]);
+    const key = String(chainId);
+    const existing = this.chairmanMerkleLatestVersions[key];
+    if (!existing || record.version >= existing.version) {
+      this.chairmanMerkleLatestVersions[key] = { ...record, chainId };
+    }
   }
 
   /**
-   * Clear merkle tree metadata for a chain.
+   * Clear both chairmanMerkle nodes and versions for a chain and reset the cache.
    */
-  async clearMerkleTree(chainId: number): Promise<void> {
-    delete this.merkleTrees[String(chainId)];
-    await this.deleteByKeys(this.storeNames().merkleTrees, [chainId]);
+  async clearChairmanMerkleTree(chainId: number): Promise<void> {
+    delete this.chairmanMerkleLatestVersions[String(chainId)];
+    await Promise.all([
+      this.deleteAllByIndex(this.storeNames().chairmanMerkleNodes, 'chainId', chainId),
+      this.deleteAllByIndex(this.storeNames().chairmanMerkleVersions, 'chainId', chainId),
+    ]);
   }
 
   /**

@@ -1,12 +1,12 @@
 import type {
+  ChairmanMerkleNodeRecord,
+  ChairmanMerkleVersionRecord,
   EntryMemoRecord,
   EntryNullifierRecord,
   Hex,
   ListEntryMemosQuery,
   ListEntryNullifiersQuery,
   ListUtxosQuery,
-  MerkleNodeRecord,
-  MerkleTreeState,
   StorageAdapter,
   SyncCursor,
   UtxoRecord,
@@ -40,14 +40,15 @@ export class KeyValueStore implements StorageAdapter {
   private readonly operationCache = new Map<string, StoredOperation | undefined>();
 
   private merkleLeafCids: Record<string, Set<number>> = {};
-  private merkleTrees: Record<string, MerkleTreeState> = {};
-  private merkleNodeIds: Record<string, Set<string>> = {};
+  private chairmanMerkleLatestVersions: Record<string, ChairmanMerkleVersionRecord> = {};
+  private chairmanMerkleNodeIds: Record<string, Set<string>> = {};
+  private chairmanMerkleVersionNums: Record<string, Set<number>> = {};
   private entryMemoCids: Record<string, Set<number>> = {};
   private entryNullifierNids: Record<string, Set<number>> = {};
 
   private readonly loadedMerkleLeaves = new Set<number>();
-  private readonly loadedMerkleTrees = new Set<number>();
-  private readonly loadedMerkleNodes = new Set<number>();
+  private readonly loadedChairmanMerkleVersions = new Set<number>();
+  private readonly loadedChairmanMerkleNodes = new Set<number>();
   private readonly loadedEntryMemos = new Set<number>();
   private readonly loadedEntryNullifiers = new Set<number>();
 
@@ -94,15 +95,11 @@ export class KeyValueStore implements StorageAdapter {
     return `${this.walletBaseKey()}:operation:${id}`;
   }
 
-  private sharedChainKey(part: 'merkleTrees', chainId: number) {
-    return `${this.keyPrefix()}:shared:${part}:${chainId}`;
-  }
-
-  private sharedChainMetaKey(part: 'merkleLeaves' | 'merkleNodes' | 'entryMemos' | 'entryNullifiers', chainId: number) {
+  private sharedChainMetaKey(part: 'merkleLeaves' | 'chairmanMerkleNodes' | 'chairmanMerkleVersions' | 'entryMemos' | 'entryNullifiers', chainId: number) {
     return `${this.keyPrefix()}:shared:${part}:${chainId}:meta`;
   }
 
-  private sharedRecordKey(part: 'merkleLeaves' | 'merkleNodes' | 'entryMemos' | 'entryNullifiers', chainId: number, id: number | string) {
+  private sharedRecordKey(part: 'merkleLeaves' | 'chairmanMerkleNodes' | 'chairmanMerkleVersions' | 'entryMemos' | 'entryNullifiers', chainId: number, id: number | string) {
     return `${this.keyPrefix()}:shared:${part}:${chainId}:${id}`;
   }
 
@@ -158,14 +155,15 @@ export class KeyValueStore implements StorageAdapter {
     this.walletMetaLoaded = false;
 
     this.merkleLeafCids = {};
-    this.merkleTrees = {};
-    this.merkleNodeIds = {};
+    this.chairmanMerkleLatestVersions = {};
+    this.chairmanMerkleNodeIds = {};
+    this.chairmanMerkleVersionNums = {};
     this.entryMemoCids = {};
     this.entryNullifierNids = {};
 
     this.loadedMerkleLeaves.clear();
-    this.loadedMerkleTrees.clear();
-    this.loadedMerkleNodes.clear();
+    this.loadedChairmanMerkleVersions.clear();
+    this.loadedChairmanMerkleNodes.clear();
     this.loadedEntryMemos.clear();
     this.loadedEntryNullifiers.clear();
   }
@@ -273,21 +271,20 @@ export class KeyValueStore implements StorageAdapter {
     this.loadedMerkleLeaves.add(chainId);
   }
 
-  private async ensureMerkleTreeLoaded(chainId: number) {
-    if (this.loadedMerkleTrees.has(chainId)) return;
+  private async ensureChairmanMerkleVersionsLoaded(chainId: number) {
+    if (this.loadedChairmanMerkleVersions.has(chainId)) return;
     const key = String(chainId);
-    const raw = await this.options.client.get(this.sharedChainKey('merkleTrees', chainId));
-    const row = this.parseJson<MerkleTreeState | null>(raw, null);
-    if (row && typeof row === 'object') this.merkleTrees[key] = row;
-    this.loadedMerkleTrees.add(chainId);
+    const numsRaw = await this.options.client.get(this.sharedChainMetaKey('chairmanMerkleVersions', chainId));
+    this.chairmanMerkleVersionNums[key] = new Set(this.parseNumberIndex(numsRaw));
+    this.loadedChairmanMerkleVersions.add(chainId);
   }
 
-  private async ensureMerkleNodesLoaded(chainId: number) {
-    if (this.loadedMerkleNodes.has(chainId)) return;
+  private async ensureChairmanMerkleNodesLoaded(chainId: number) {
+    if (this.loadedChairmanMerkleNodes.has(chainId)) return;
     const key = String(chainId);
-    const idsRaw = await this.options.client.get(this.sharedChainMetaKey('merkleNodes', chainId));
-    this.merkleNodeIds[key] = new Set(this.parseStringIndex(idsRaw));
-    this.loadedMerkleNodes.add(chainId);
+    const idsRaw = await this.options.client.get(this.sharedChainMetaKey('chairmanMerkleNodes', chainId));
+    this.chairmanMerkleNodeIds[key] = new Set(this.parseStringIndex(idsRaw));
+    this.loadedChairmanMerkleNodes.add(chainId);
   }
 
   private async ensureEntryMemosLoaded(chainId: number) {
@@ -306,70 +303,95 @@ export class KeyValueStore implements StorageAdapter {
     this.loadedEntryNullifiers.add(chainId);
   }
 
-  async getMerkleNode(chainId: number, id: string): Promise<MerkleNodeRecord | undefined> {
-    await this.ensureMerkleNodesLoaded(chainId);
-    if (!this.merkleNodeIds[String(chainId)]?.has(id)) return undefined;
-    const raw = await this.options.client.get(this.sharedRecordKey('merkleNodes', chainId, id));
-    const node = this.parseJson<MerkleNodeRecord | null>(raw, null);
+  async getChairmanMerkleNode(chainId: number, id: string): Promise<ChairmanMerkleNodeRecord | undefined> {
+    await this.ensureChairmanMerkleNodesLoaded(chainId);
+    if (!this.chairmanMerkleNodeIds[String(chainId)]?.has(id)) return undefined;
+    const raw = await this.options.client.get(this.sharedRecordKey('chairmanMerkleNodes', chainId, id));
+    const node = this.parseJson<ChairmanMerkleNodeRecord | null>(raw, null);
     if (!node) return undefined;
     const hash = node.hash;
     if (typeof hash !== 'string' || !hash.startsWith('0x')) return undefined;
     return { ...node, chainId };
   }
 
-  async upsertMerkleNodes(chainId: number, nodes: MerkleNodeRecord[]): Promise<void> {
+  async putChairmanMerkleNodes(chainId: number, nodes: ChairmanMerkleNodeRecord[]): Promise<void> {
     if (!nodes.length) return;
-    await this.ensureMerkleNodesLoaded(chainId);
+    await this.ensureChairmanMerkleNodesLoaded(chainId);
     const key = String(chainId);
-    const ids = this.merkleNodeIds[key] ?? new Set<string>();
+    const ids = this.chairmanMerkleNodeIds[key] ?? new Set<string>();
     const beforeSize = ids.size;
     for (const node of nodes) {
       ids.add(node.id);
     }
-    this.merkleNodeIds[key] = ids;
+    this.chairmanMerkleNodeIds[key] = ids;
 
     await this.enqueueWrite(async () => {
-      await Promise.all(nodes.map((node) => this.writeJson(this.sharedRecordKey('merkleNodes', chainId, node.id), { ...node, chainId })));
+      await Promise.all(nodes.map((node) => this.writeJson(this.sharedRecordKey('chairmanMerkleNodes', chainId, node.id), { ...node, chainId })));
       if (ids.size !== beforeSize) {
-        await this.writeJson(this.sharedChainMetaKey('merkleNodes', chainId), Array.from(ids));
+        await this.writeJson(this.sharedChainMetaKey('chairmanMerkleNodes', chainId), Array.from(ids));
       }
     });
   }
 
-  async clearMerkleNodes(chainId: number): Promise<void> {
-    await this.ensureMerkleNodesLoaded(chainId);
-    const ids = Array.from(this.merkleNodeIds[String(chainId)] ?? []);
-    delete this.merkleNodeIds[String(chainId)];
+  async getChairmanMerkleVersion(chainId: number, version: number): Promise<ChairmanMerkleVersionRecord | undefined> {
+    await this.ensureChairmanMerkleVersionsLoaded(chainId);
+    if (!this.chairmanMerkleVersionNums[String(chainId)]?.has(version)) return undefined;
+    const raw = await this.options.client.get(this.sharedRecordKey('chairmanMerkleVersions', chainId, version));
+    const record = this.parseJson<ChairmanMerkleVersionRecord | null>(raw, null);
+    if (!record) return undefined;
+    if (typeof record.rootHash !== 'string' || !record.rootHash.startsWith('0x')) return undefined;
+    if (typeof record.rootId !== 'string') return undefined;
+    const v = Number(record.version);
+    if (!Number.isFinite(v) || v < 0) return undefined;
+    return { chainId, version: Math.floor(v), rootId: record.rootId, rootHash: record.rootHash };
+  }
+
+  async getLatestChairmanMerkleVersion(chainId: number): Promise<ChairmanMerkleVersionRecord | undefined> {
+    await this.ensureChairmanMerkleVersionsLoaded(chainId);
+    const nums = this.chairmanMerkleVersionNums[String(chainId)];
+    if (!nums || nums.size === 0) return undefined;
+    const maxVersion = Math.max(...nums);
+    return this.getChairmanMerkleVersion(chainId, maxVersion);
+  }
+
+  async putChairmanMerkleVersion(chainId: number, record: ChairmanMerkleVersionRecord): Promise<void> {
+    await this.ensureChairmanMerkleVersionsLoaded(chainId);
+    const key = String(chainId);
+    const nums = this.chairmanMerkleVersionNums[key] ?? new Set<number>();
+    const beforeSize = nums.size;
+    nums.add(record.version);
+    this.chairmanMerkleVersionNums[key] = nums;
+    // Update latest version cache
+    const current = this.chairmanMerkleLatestVersions[key];
+    if (!current || record.version >= current.version) {
+      this.chairmanMerkleLatestVersions[key] = { ...record, chainId };
+    }
+    const row = { ...record, chainId };
     await this.enqueueWrite(async () => {
-      await Promise.all(ids.map((id) => this.deleteOrReset(this.sharedRecordKey('merkleNodes', chainId, id), null)));
-      await this.deleteOrReset(this.sharedChainMetaKey('merkleNodes', chainId), []);
+      await this.writeJson(this.sharedRecordKey('chairmanMerkleVersions', chainId, record.version), row);
+      if (nums.size !== beforeSize) {
+        await this.writeJson(this.sharedChainMetaKey('chairmanMerkleVersions', chainId), Array.from(nums).sort((a, b) => a - b));
+      }
     });
   }
 
-  async getMerkleTree(chainId: number): Promise<MerkleTreeState | undefined> {
-    await this.ensureMerkleTreeLoaded(chainId);
-    const row = this.merkleTrees[String(chainId)];
-    if (!row) return undefined;
-    const totalElements = Number(row.totalElements);
-    const lastUpdated = Number(row.lastUpdated);
-    const root = row.root;
-    if (typeof root !== 'string' || !root.startsWith('0x')) return undefined;
-    if (!Number.isFinite(totalElements) || totalElements < 0) return undefined;
-    return { chainId, root, totalElements: Math.floor(totalElements), lastUpdated: Number.isFinite(lastUpdated) ? Math.floor(lastUpdated) : 0 };
-  }
-
-  async setMerkleTree(chainId: number, tree: MerkleTreeState): Promise<void> {
-    await this.ensureMerkleTreeLoaded(chainId);
-    const row = { ...tree, chainId };
-    this.merkleTrees[String(chainId)] = row;
-    await this.enqueueWrite(() => this.writeJson(this.sharedChainKey('merkleTrees', chainId), row));
-  }
-
-  async clearMerkleTree(chainId: number): Promise<void> {
-    await this.ensureMerkleTreeLoaded(chainId);
-    delete this.merkleTrees[String(chainId)];
+  async clearChairmanMerkleTree(chainId: number): Promise<void> {
+    await this.ensureChairmanMerkleNodesLoaded(chainId);
+    await this.ensureChairmanMerkleVersionsLoaded(chainId);
+    const nodeIds = Array.from(this.chairmanMerkleNodeIds[String(chainId)] ?? []);
+    const versionNums = Array.from(this.chairmanMerkleVersionNums[String(chainId)] ?? []);
+    delete this.chairmanMerkleNodeIds[String(chainId)];
+    delete this.chairmanMerkleVersionNums[String(chainId)];
+    delete this.chairmanMerkleLatestVersions[String(chainId)];
     await this.enqueueWrite(async () => {
-      await this.deleteOrReset(this.sharedChainKey('merkleTrees', chainId), null);
+      await Promise.all([
+        ...nodeIds.map((id) => this.deleteOrReset(this.sharedRecordKey('chairmanMerkleNodes', chainId, id), null)),
+        ...versionNums.map((v) => this.deleteOrReset(this.sharedRecordKey('chairmanMerkleVersions', chainId, v), null)),
+      ]);
+      await Promise.all([
+        this.deleteOrReset(this.sharedChainMetaKey('chairmanMerkleNodes', chainId), []),
+        this.deleteOrReset(this.sharedChainMetaKey('chairmanMerkleVersions', chainId), []),
+      ]);
     });
   }
 

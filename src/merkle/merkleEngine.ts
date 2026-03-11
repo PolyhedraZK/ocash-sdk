@@ -1,4 +1,4 @@
-import type { MerkleApi, ProofBridge, RemoteMerkleProofResponse, Hex, AccMemberWitness, InputSecret, MerkleNodeRecord, StorageAdapter, UserKeyPair } from '../types';
+import type { MerkleApi, ProofBridge, RemoteMerkleProofResponse, Hex, AccMemberWitness, InputSecret, ChairmanMerkleNodeRecord, ChairmanMerkleVersionRecord, StorageAdapter, UserKeyPair } from '../types';
 import { SdkError } from '../errors';
 import { MerkleClient } from './merkleClient';
 import { getZeroHash, TREE_DEPTH_DEFAULT } from './zeroHashes';
@@ -23,7 +23,10 @@ const toDecString = (value: string | bigint) => {
 
 /**
  * Merkle engine supports remote, local, and hybrid proof generation.
- * Local mode relies on contiguous memo ingestion to build tree state.
+ *
+ * Local mode uses a **chairmanMerkle tree** (persistent segment tree) so that every
+ * batch-merge produces a new root while sharing unchanged subtrees.
+ * Rollback to any previous version is O(1) — just switch the root pointer.
  */
 export class MerkleEngine implements MerkleApi {
   private readonly mode: 'remote' | 'local' | 'hybrid';
@@ -32,15 +35,22 @@ export class MerkleEngine implements MerkleApi {
   private readonly chainStateByChain = new Map<number, { mergedElements: number; root: Hex }>();
   private readonly hydratedChains = new Set<number>();
   private readonly hydrateInFlight = new Map<number, Promise<void>>();
+  /**
+   * Optional callback to read `merkleRoots(rootIndex)` from the on-chain contract.
+   * Returns the root hash, or null if the contract hasn't committed this index yet.
+   * When provided, each batch merge is verified against the contract root.
+   */
+  private readonly readContractRoot?: (chainId: number, rootIndex: number) => Promise<Hex | null>;
 
   constructor(
     private readonly getChain: (chainId: number) => { merkleProofUrl?: string },
     private readonly bridge: ProofBridge,
-    options?: { mode?: 'remote' | 'local' | 'hybrid'; treeDepth?: number },
+    options?: { mode?: 'remote' | 'local' | 'hybrid'; treeDepth?: number; readContractRoot?: (chainId: number, rootIndex: number) => Promise<Hex | null> },
     private readonly storage?: StorageAdapter,
   ) {
     this.mode = options?.mode ?? 'hybrid';
     this.treeDepth = Math.max(1, Math.floor(options?.treeDepth ?? TREE_DEPTH_DEFAULT));
+    this.readContractRoot = options?.readContractRoot;
   }
 
   /**
@@ -51,9 +61,6 @@ export class MerkleEngine implements MerkleApi {
     return Math.floor((totalElements - 1) / tempArraySize);
   }
 
-  /**
-   * Get or initialize the pending leaf buffer for a chain.
-   */
   private ensurePendingLeaves(chainId: number) {
     let pending = this.pendingLeavesByChain.get(chainId);
     if (!pending) {
@@ -63,9 +70,6 @@ export class MerkleEngine implements MerkleApi {
     return pending;
   }
 
-  /**
-   * Get or initialize chain-level merkle state.
-   */
   private ensureChainState(chainId: number) {
     let state = this.chainStateByChain.get(chainId);
     if (!state) {
@@ -75,25 +79,47 @@ export class MerkleEngine implements MerkleApi {
     return state;
   }
 
-  /**
-   * Poseidon2 merkle hash for a left/right pair.
-   */
+  // ── Hashing ──
+
   private static hashPair(left: Hex, right: Hex): Hex {
     return Poseidon2.hashToHex(BigInt(left), BigInt(right), Poseidon2Domain.Merkle);
   }
 
+  static normalizeHex32(value: unknown, name: string): Hex {
+    try {
+      const bi = BigInt(value as any);
+      if (bi < 0n) throw new Error('negative');
+      const hex = bi.toString(16).padStart(64, '0');
+      if (hex.length > 64) throw new Error('too_large');
+      return `0x${hex}` as Hex;
+    } catch (error) {
+      throw new SdkError('MERKLE', `Invalid ${name}`, { value }, error);
+    }
+  }
+
+  // ── Static helpers ──
+
+  static totalElementsInTree(totalElements: bigint, tempArraySize: number = TEMP_ARRAY_SIZE_DEFAULT): number {
+    if (tempArraySize <= 0) throw new SdkError('MERKLE', 'tempArraySize must be greater than zero', { tempArraySize });
+    if (totalElements <= 0n) return 0;
+    const size = BigInt(tempArraySize);
+    return Number(((totalElements - 1n) / size) * size);
+  }
+
+  // ── Subtree (levels 0-5, 32 leaves → 1 root) ──
+
   /**
    * Build a fixed-depth subtree from 32 contiguous leaves.
-   * Returns the subtree root and all intermediate nodes for storage.
+   * Returns the subtree root hash and all intermediate nodes for storage.
    */
-  private static buildSubtree(leafCommitments: Hex[], baseIndex: number): { subtreeRoot: Hex; nodesToStore: MerkleNodeRecord[] } {
+  private static buildSubtree(leafCommitments: Hex[], baseIndex: number): { subtreeRoot: Hex; nodesToStore: ChairmanMerkleNodeRecord[] } {
     if (leafCommitments.length !== SUBTREE_SIZE) {
       throw new SdkError('MERKLE', 'Subtree must have exactly 32 leaf nodes', { got: leafCommitments.length });
     }
     if (baseIndex % SUBTREE_SIZE !== 0) {
       throw new SdkError('MERKLE', 'Subtree baseIndex must be aligned to 32', { baseIndex });
     }
-    const nodesToStore: MerkleNodeRecord[] = [];
+    const nodesToStore: ChairmanMerkleNodeRecord[] = [];
     let currentLevel = [...leafCommitments];
     for (let level = 1; level <= SUBTREE_DEPTH; level++) {
       const next: Hex[] = [];
@@ -105,10 +131,10 @@ export class MerkleEngine implements MerkleApi {
         const position = basePos + i;
         nodesToStore.push({
           chainId: 0,
-          id: `${level}-${position}`,
-          level,
-          position,
+          id: `st-${level}-${position}`,
           hash: next[i]!,
+          leftId: null,
+          rightId: null,
         });
       }
       currentLevel = next;
@@ -116,68 +142,88 @@ export class MerkleEngine implements MerkleApi {
     return { subtreeRoot: currentLevel[0]!, nodesToStore };
   }
 
-  /**
-   * Fetch a node hash from storage if available.
-   */
-  private async getNodeHash(chainId: number, id: string): Promise<Hex | undefined> {
-    const node = await this.storage?.getMerkleNode?.(chainId, id);
-    return node?.hash;
-  }
+  // ── ChairmanMerkle tree (persistent segment tree, levels 5-32) ──
 
   /**
-   * Merge a completed subtree root into the main tree, updating frontier nodes.
+   * Insert a subtree root into the persistent main tree.
+   *
+   * Top-down recursive: descends from root (level treeDepth) to the target
+   * leaf position (level SUBTREE_DEPTH).  At each level only the node on the
+   * update path is newly created; the sibling is shared from the previous
+   * version's tree.
+   *
+   * @returns new root node ID/hash and all newly created nodes.
    */
-  private async mergeSubtreeToMainTree(input: { chainId: number; subtreeRoot: Hex; newTotalElements: number }): Promise<{ finalRoot: Hex; nodesToStore: MerkleNodeRecord[] }> {
-    let currentValue = input.subtreeRoot;
-    let frontierUpdated = false;
-    const nodesToStore: MerkleNodeRecord[] = [];
+  private async insertSubtreeRoot(
+    chainId: number,
+    prevRootId: string | null,
+    subtreeRootHash: Hex,
+    batchIndex: number,
+    version: number,
+  ): Promise<{ rootId: string; rootHash: Hex; nodes: ChairmanMerkleNodeRecord[] }> {
+    const MAIN_DEPTH = this.treeDepth - SUBTREE_DEPTH;
+    const nodes: ChairmanMerkleNodeRecord[] = [];
 
-    for (let level = SUBTREE_DEPTH; level < this.treeDepth; level++) {
-      const nodeIndex = (input.newTotalElements - 1) >> level;
+    const descend = async (nodeId: string | null, depth: number): Promise<{ id: string; hash: Hex }> => {
+      const originalLevel = this.treeDepth - depth;
 
-      if ((nodeIndex & 1) === 0) {
-        if (!frontierUpdated) {
-          nodesToStore.push({
-            chainId: input.chainId,
-            id: `frontier-${level}`,
-            level,
-            position: nodeIndex,
-            hash: currentValue,
-          });
-          frontierUpdated = true;
-        }
-        currentValue = MerkleEngine.hashPair(currentValue, getZeroHash(level));
-      } else {
-        const leftHash = (await this.getNodeHash(input.chainId, `frontier-${level}`)) ?? getZeroHash(level);
-        currentValue = MerkleEngine.hashPair(leftHash, currentValue);
+      // Leaf level of the main tree (level 5): wrap the subtree root
+      if (depth === MAIN_DEPTH) {
+        const newId = `cm-${version}-${originalLevel}`;
+        nodes.push({ chainId, id: newId, hash: subtreeRootHash, leftId: null, rightId: null });
+        return { id: newId, hash: subtreeRootHash };
       }
 
-      const nextLevel = level + 1;
-      nodesToStore.push({
-        chainId: input.chainId,
-        id: `${nextLevel}-${nodeIndex >> 1}`,
-        level: nextLevel,
-        position: nodeIndex >> 1,
-        hash: currentValue,
-      });
-    }
+      // Load previous version's children
+      let prevLeftId: string | null = null;
+      let prevRightId: string | null = null;
+      if (nodeId) {
+        const prevNode = await this.storage?.getChairmanMerkleNode?.(chainId, nodeId);
+        if (prevNode) {
+          prevLeftId = prevNode.leftId;
+          prevRightId = prevNode.rightId;
+        }
+      }
 
-    return { finalRoot: currentValue, nodesToStore };
+      const childLevel = originalLevel - 1;
+      const remainingDepth = MAIN_DEPTH - depth - 1;
+      const goRight = ((batchIndex >> remainingDepth) & 1) === 1;
+
+      let leftResult: { id: string | null; hash: Hex };
+      let rightResult: { id: string | null; hash: Hex };
+
+      if (goRight) {
+        // Left child: shared from previous version
+        const leftHash = prevLeftId
+          ? (await this.storage?.getChairmanMerkleNode?.(chainId, prevLeftId))?.hash ?? getZeroHash(childLevel)
+          : getZeroHash(childLevel);
+        leftResult = { id: prevLeftId, hash: leftHash };
+        // Right child: recurse
+        const right = await descend(prevRightId, depth + 1);
+        rightResult = { id: right.id, hash: right.hash };
+      } else {
+        // Left child: recurse
+        const left = await descend(prevLeftId, depth + 1);
+        leftResult = { id: left.id, hash: left.hash };
+        // Right child: shared from previous version
+        const rightHash = prevRightId
+          ? (await this.storage?.getChairmanMerkleNode?.(chainId, prevRightId))?.hash ?? getZeroHash(childLevel)
+          : getZeroHash(childLevel);
+        rightResult = { id: prevRightId, hash: rightHash };
+      }
+
+      const hash = MerkleEngine.hashPair(leftResult.hash, rightResult.hash);
+      const newId = `cm-${version}-${originalLevel}`;
+      nodes.push({ chainId, id: newId, hash, leftId: leftResult.id, rightId: rightResult.id });
+      return { id: newId, hash };
+    };
+
+    const root = await descend(prevRootId, 0);
+    return { rootId: root.id, rootHash: root.hash, nodes };
   }
 
-  /**
-   * Convert on-chain totalElements to the count of fully merged elements.
-   */
-  private static totalElementsInTree(totalElements: bigint, tempArraySize: number = TEMP_ARRAY_SIZE_DEFAULT): number {
-    if (tempArraySize <= 0) throw new SdkError('MERKLE', 'tempArraySize must be greater than zero', { tempArraySize });
-    if (totalElements <= 0n) return 0;
-    const size = BigInt(tempArraySize);
-    return Number(((totalElements - 1n) / size) * size);
-  }
+  // ── Hydration ──
 
-  /**
-   * Hydrate local merkle state from storage on first use.
-   */
   private async hydrateFromStorage(chainId: number) {
     if (this.mode === 'remote') return;
     if (this.hydratedChains.has(chainId)) return;
@@ -187,35 +233,23 @@ export class MerkleEngine implements MerkleApi {
     const task = (async () => {
       try {
         const state = this.ensureChainState(chainId);
-        const leaves = await this.storage?.getMerkleLeaves?.(chainId);
-        if (!leaves || leaves.length === 0) return;
-        const sorted = [...leaves]
-          .map((l) => ({
-            cid: l.cid,
-            commitment: MerkleEngine.normalizeHex32(l.commitment, 'memo.commitment'),
-          }))
-          .sort((a, b) => a.cid - b.cid);
-        for (let i = 0; i < sorted.length; i++) {
-          if (sorted[i]!.cid !== i) throw new Error(`Non-contiguous persisted merkle leaves: expected cid=${i}, got cid=${sorted[i]!.cid}`);
-        }
-
-        const totalElements = BigInt(sorted.length);
-        const mergedElements = MerkleEngine.totalElementsInTree(totalElements);
-
         const pending = this.ensurePendingLeaves(chainId);
-        pending.length = 0;
-        state.mergedElements = mergedElements;
 
-        if (sorted.length > mergedElements) {
-          pending.push(...sorted.slice(mergedElements).map((l) => l.commitment));
+        // Load latest chairmanMerkle tree version
+        const latest = await this.storage?.getLatestChairmanMerkleVersion?.(chainId);
+        if (latest) {
+          state.mergedElements = latest.version;
+          state.root = MerkleEngine.normalizeHex32(latest.rootHash, 'chairmanMerkleVersion.rootHash');
         }
 
-        const storedTree = await this.storage?.getMerkleTree?.(chainId);
-        if (storedTree?.root) {
-          state.root = MerkleEngine.normalizeHex32(storedTree.root, 'merkleTree.root');
-        } else {
-          const rootNode = await this.storage?.getMerkleNode?.(chainId, `${this.treeDepth}-0`);
-          state.root = rootNode?.hash ?? getZeroHash(this.treeDepth);
+        // Set up pending leaves (leaves beyond mergedElements that haven't formed a full batch)
+        const leaves = await this.storage?.getMerkleLeaves?.(chainId);
+        if (leaves && leaves.length > state.mergedElements) {
+          const sorted = [...leaves]
+            .sort((a, b) => a.cid - b.cid)
+            .slice(state.mergedElements);
+          pending.length = 0;
+          pending.push(...sorted.map((l) => MerkleEngine.normalizeHex32(l.commitment, 'leaf.commitment')));
         }
       } catch (error) {
         if (this.mode === 'hybrid') return;
@@ -230,27 +264,8 @@ export class MerkleEngine implements MerkleApi {
     return task;
   }
 
-  /**
-   * Normalize unknown values to a 32-byte hex string.
-   */
-  private static normalizeHex32(value: unknown, name: string): Hex {
-    try {
-      const bi = BigInt(value as any);
-      if (bi < 0n) throw new Error('negative');
-      const hex = bi.toString(16).padStart(64, '0');
-      if (hex.length > 64) throw new Error('too_large');
-      return `0x${hex}` as Hex;
-    } catch (error) {
-      throw new SdkError('MERKLE', `Invalid ${name}`, { value }, error);
-    }
-  }
+  // ── Ingestion ──
 
-  /**
-   * Feed contiguous (cid-ordered) memo leaves into the local merkle tree.
-   *
-   * This mirrors the client/app behavior: only after we have a full consecutive batch of 32 leaves
-   * do we merge them into the main tree. Leaves that are still in the buffer do not get local proofs.
-   */
   async ingestEntryMemos(chainId: number, memos: Array<{ cid: number | null; commitment: Hex | string | bigint }>) {
     if (this.mode === 'remote') return;
     await this.hydrateFromStorage(chainId);
@@ -268,12 +283,16 @@ export class MerkleEngine implements MerkleApi {
 
     const sorted = [...leaves].sort((a, b) => a.index - b.index);
     const persistLeaves = sorted.map((l) => ({ cid: l.index, commitment: l.commitment }));
-    void this.storage?.appendMerkleLeaves?.(chainId, persistLeaves).catch(() => undefined);
+    try {
+      await this.storage?.appendMerkleLeaves?.(chainId, persistLeaves);
+    } catch {
+      // Storage failure is non-fatal in hybrid mode
+    }
 
     try {
       let expected = state.mergedElements + pending.length;
       for (const leaf of sorted) {
-        if (leaf.index < expected) continue; // already ingested/persisted
+        if (leaf.index < expected) continue;
         if (leaf.index !== expected) {
           throw new Error(`Non-contiguous merkle leaves: expected index=${expected}, got index=${leaf.index}`);
         }
@@ -282,31 +301,57 @@ export class MerkleEngine implements MerkleApi {
 
         while (pending.length >= SUBTREE_SIZE) {
           const batch = pending.splice(0, SUBTREE_SIZE);
-          const baseIndex = state.mergedElements;
-          const subtree = MerkleEngine.buildSubtree(batch, baseIndex);
-          const merged = await this.mergeSubtreeToMainTree({ chainId, subtreeRoot: subtree.subtreeRoot, newTotalElements: baseIndex + SUBTREE_SIZE });
+          const batchIndex = state.mergedElements / SUBTREE_SIZE;
 
-          state.mergedElements += SUBTREE_SIZE;
-          state.root = merged.finalRoot;
+          // Build subtree (levels 0-5)
+          const subtree = MerkleEngine.buildSubtree(batch, state.mergedElements);
+          const subtreeNodes: ChairmanMerkleNodeRecord[] = subtree.nodesToStore.map((n) => ({ ...n, chainId }));
 
-          // Store checkpoint root keyed by merged element count so getProofByCids can
-          // recover the committed root when the local tree has merged ahead of the contract.
-          const checkpointNode: MerkleNodeRecord = {
+          // Get previous version root
+          const prevVersion = await this.storage?.getLatestChairmanMerkleVersion?.(chainId);
+          const prevRootId = prevVersion?.rootId ?? null;
+
+          // Insert subtree root into chairmanMerkle tree (levels 5-32)
+          const newVersion = state.mergedElements + SUBTREE_SIZE;
+          const result = await this.insertSubtreeRoot(chainId, prevRootId, subtree.subtreeRoot, batchIndex, newVersion);
+
+          // Verify against on-chain root before persisting (fail-fast).
+          // rootIndex = newVersion / 32, matching contract's _currentMerkleRootIndex.
+          if (this.readContractRoot) {
+            const rootIndex = newVersion / SUBTREE_SIZE;
+            const onChainRoot = await this.readContractRoot(chainId, rootIndex).catch(() => null);
+            if (onChainRoot !== null) {
+              const onChainNorm = MerkleEngine.normalizeHex32(onChainRoot, 'onChainRoot');
+              const isZero = BigInt(onChainNorm) === 0n;
+              if (!isZero && onChainNorm !== result.rootHash) {
+                // Mismatch: rollback to previous batch boundary (state.mergedElements).
+                // Resets tree + sync cursor; next sync re-ingests from there.
+                // If that position is also wrong, the next merge will detect it and step back again.
+                const target = state.mergedElements; // previous batch end, not yet updated
+                await this._rollback(chainId, target);
+                throw new SdkError('MERKLE', 'Local merkle root mismatch with on-chain root — rolled back', {
+                  chainId,
+                  rootIndex,
+                  localRoot: result.rootHash,
+                  onChainRoot: onChainNorm,
+                  version: newVersion,
+                  rollbackTarget: target,
+                });
+              }
+            }
+          }
+
+          // Persist all nodes + new version
+          await this.storage?.putChairmanMerkleNodes?.(chainId, [...subtreeNodes, ...result.nodes]);
+          await this.storage?.putChairmanMerkleVersion?.(chainId, {
             chainId,
-            id: `checkpoint-${state.mergedElements}`,
-            level: -1,
-            position: 0,
-            hash: state.root,
-          };
-          const nodes = [...subtree.nodesToStore, ...merged.nodesToStore, checkpointNode].map((n) => ({ ...n, chainId }));
-          await this.storage?.upsertMerkleNodes?.(chainId, nodes);
-
-          await this.storage?.setMerkleTree?.(chainId, {
-            chainId,
-            root: state.root,
-            totalElements: state.mergedElements,
-            lastUpdated: Date.now(),
+            version: newVersion,
+            rootId: result.rootId,
+            rootHash: result.rootHash,
           });
+
+          state.mergedElements = newVersion;
+          state.root = result.rootHash;
         }
       }
       this.hydratedChains.add(chainId);
@@ -318,16 +363,79 @@ export class MerkleEngine implements MerkleApi {
     }
   }
 
+  // ── Rollback (tree O(1) + sync cursor reset) ──
+
   /**
-   * Convenience wrapper to request a single proof.
+   * Public rollback: step back one batch (32 elements) from the current position.
+   * Upper-layer code calls this on any error to reset and retry.
+   *
+   * What gets rolled back:
+   * - ChairmanMerkle tree version pointer (O(1) — old nodes still in storage)
+   * - Pending leaves buffer (cleared)
+   * - Sync cursor: memo + merkle fields (nullifier left unchanged — independent)
+   *
+   * @returns true if rollback succeeded, false if already at 0 or target version doesn't exist.
    */
+  async rollback(chainId: number): Promise<boolean> {
+    const state = this.ensureChainState(chainId);
+    const target = Math.max(0, state.mergedElements - SUBTREE_SIZE);
+    return this._rollback(chainId, target);
+  }
+
+  /**
+   * Internal rollback to an exact batch boundary.
+   *
+   * @param targetMergedElements Must be a non-negative multiple of 32.
+   *   Pass 0 to reset to the empty tree.
+   * @returns true if rollback succeeded, false if the target version doesn't exist.
+   */
+  private async _rollback(chainId: number, targetMergedElements: number): Promise<boolean> {
+    if (targetMergedElements < 0 || targetMergedElements % SUBTREE_SIZE !== 0) {
+      throw new SdkError('MERKLE', '_rollback target must be a non-negative multiple of 32', { targetMergedElements });
+    }
+
+    const state = this.ensureChainState(chainId);
+    const pending = this.ensurePendingLeaves(chainId);
+
+    if (targetMergedElements === 0) {
+      state.mergedElements = 0;
+      state.root = getZeroHash(this.treeDepth);
+      pending.length = 0;
+      await this.resetSyncCursor(chainId, 0);
+      return true;
+    }
+
+    const version = await this.storage?.getChairmanMerkleVersion?.(chainId, targetMergedElements);
+    if (!version) return false;
+
+    state.mergedElements = targetMergedElements;
+    state.root = MerkleEngine.normalizeHex32(version.rootHash, 'version.rootHash');
+    pending.length = 0;
+    this.hydratedChains.add(chainId);
+    await this.resetSyncCursor(chainId, targetMergedElements);
+    return true;
+  }
+
+  /**
+   * Reset the sync cursor's memo field to `targetMemo` (and derive merkle cursor),
+   * but only if the current cursor is ahead of the target.
+   * Nullifier cursor is left unchanged — nullifiers are independent of tree state.
+   */
+  private async resetSyncCursor(chainId: number, targetMemo: number): Promise<void> {
+    if (!this.storage?.getSyncCursor || !this.storage?.setSyncCursor) return;
+    const cursor = await this.storage.getSyncCursor(chainId);
+    if (!cursor || cursor.memo <= targetMemo) return;
+    cursor.memo = targetMemo;
+    cursor.merkle = this.currentMerkleRootIndex(targetMemo);
+    await this.storage.setSyncCursor(chainId, cursor);
+  }
+
+  // ── Proof generation ──
+
   async getProofByCid(input: { chainId: number; cid: number; totalElements: bigint }): Promise<RemoteMerkleProofResponse> {
     return this.getProofByCids({ chainId: input.chainId, cids: [input.cid], totalElements: input.totalElements });
   }
 
-  /**
-   * Get merkle proofs for a set of cids using local/hybrid/remote logic.
-   */
   async getProofByCids(input: { chainId: number; cids: number[]; totalElements: bigint }): Promise<RemoteMerkleProofResponse> {
     const cids = [...input.cids];
     if (cids.length === 0) throw new SdkError('MERKLE', 'No cids provided', { chainId: input.chainId });
@@ -345,20 +453,23 @@ export class MerkleEngine implements MerkleApi {
 
     const canUseLocal = this.mode !== 'remote';
     if (canUseLocal) {
-      const tree = await this.storage?.getMerkleTree?.(input.chainId);
-      const hasDb = typeof this.storage?.getMerkleLeaf === 'function' && typeof this.storage?.getMerkleNode === 'function' && typeof tree?.totalElements === 'number' && typeof tree?.root === 'string';
+      // Find the version matching contractTreeElements
+      const version = contractTreeElements > 0
+        ? await this.storage?.getChairmanMerkleVersion?.(input.chainId, contractTreeElements)
+        : undefined;
+      const hasDb = typeof this.storage?.getMerkleLeaf === 'function'
+        && typeof this.storage?.getChairmanMerkleNode === 'function'
+        && (contractTreeElements === 0 || !!version);
 
-      if (hasDb && tree) {
-        if (tree.totalElements < contractTreeElements) {
+      if (hasDb) {
+        const state = this.ensureChainState(input.chainId);
+        if (contractTreeElements > 0 && state.mergedElements < contractTreeElements) {
           if (this.mode === 'local') {
             throw new SdkError('MERKLE', 'Local merkle db is behind contract', {
-              chainId: input.chainId,
-              cids,
-              localTotalElements: tree.totalElements,
-              contractTreeElements,
+              chainId: input.chainId, cids, localMergedElements: state.mergedElements, contractTreeElements,
             });
           }
-          // hybrid fallback: remote proof service will be authoritative.
+          // hybrid fallback
         } else {
           try {
             const proof = [];
@@ -367,52 +478,33 @@ export class MerkleEngine implements MerkleApi {
                 proof.push({ leaf_index: cid, path: new Array(this.treeDepth + 1).fill('0') });
                 continue;
               }
-              const leaf = await this.storage!.getMerkleLeaf!(input.chainId, cid);
-              if (!leaf) throw new Error(`missing_leaf:${cid}`);
-              const path: Hex[] = [leaf.commitment];
-              for (let level = 1; level <= this.treeDepth; level++) {
-                const siblingIndex = (cid >> (level - 1)) ^ 1;
-                if (level === 1) {
-                  const siblingLeaf = await this.storage!.getMerkleLeaf!(input.chainId, siblingIndex);
-                  path.push(siblingLeaf?.commitment ?? getZeroHash(0));
-                  continue;
-                }
-                const targetLevel = level - 1;
-                const siblingNode = await this.storage!.getMerkleNode!(input.chainId, `${targetLevel}-${siblingIndex}`);
-                path.push(siblingNode?.hash ?? getZeroHash(targetLevel));
-              }
+              const path = await this.buildLocalProofPath(input.chainId, cid, version!);
               proof.push({ leaf_index: cid, path });
             }
-            // When the local tree has merged more batches than the contract has committed,
-            // tree.root represents a future root that doesn't yet exist on-chain. Use the
-            // checkpoint root stored at contractTreeElements instead.
-            let effectiveRoot = tree.root;
-            if (tree.totalElements > contractTreeElements && contractTreeElements > 0) {
-              const checkpoint = await this.storage!.getMerkleNode!(input.chainId, `checkpoint-${contractTreeElements}`);
-              if (checkpoint) effectiveRoot = checkpoint.hash;
-            }
+
+            const effectiveRoot = contractTreeElements > 0
+              ? MerkleEngine.normalizeHex32(version!.rootHash, 'version.rootHash')
+              : getZeroHash(this.treeDepth);
+
             return {
               proof,
-              merkle_root: MerkleEngine.normalizeHex32(effectiveRoot, 'merkleTree.root'),
+              merkle_root: effectiveRoot,
               latest_cid: totalElements > 0n ? Number(totalElements - 1n) : -1,
             };
           } catch (error) {
             if (this.mode === 'local') {
               throw new SdkError('MERKLE', 'Local merkle proof build failed', { chainId: input.chainId, cids }, error);
             }
-            // hybrid fallback: ignore and try remote proof server
+            // hybrid fallback
           }
         }
       } else if (this.mode === 'local' && needsTreeProof.length) {
-        throw new SdkError('MERKLE', 'Local merkle db unavailable', { chainId: input.chainId, cids, reason: 'missing_adapter_merkle_db' });
+        throw new SdkError('MERKLE', 'Local merkle db unavailable', { chainId: input.chainId, cids, reason: 'missing_adapter_or_version' });
       }
     }
 
-    // Remote fallback: only fetch proofs for leaves that are already merged into the main tree.
-    // Leaves still sitting in the on-chain buffer do not have Merkle proofs yet.
+    // Remote fallback
     if (needsTreeProof.length === 0) {
-      // We still need a stable root for witness generation.
-      // If nothing has been merged into the tree yet, the root is the depth-level zero hash.
       const root = contractTreeElements === 0 ? getZeroHash(this.treeDepth) : await this.fetchRemoteRootOnly(input.chainId);
       return {
         proof: cids.map((cid) => ({ leaf_index: cid, path: new Array(this.treeDepth + 1).fill('0') })),
@@ -436,16 +528,83 @@ export class MerkleEngine implements MerkleApi {
   }
 
   /**
-   * Fetch a remote merkle root (used when no proofs are needed).
+   * Build a local proof path by traversing the chairmanMerkle tree.
+   *
+   * Levels 0-4: sibling hashes from subtree internal nodes (st-{level}-{pos}).
+   * Levels 5-31: sibling hashes from chairmanMerkle tree traversal (top-down from version root).
    */
+  private async buildLocalProofPath(chainId: number, cid: number, version: ChairmanMerkleVersionRecord): Promise<Hex[]> {
+    const leaf = await this.storage!.getMerkleLeaf!(chainId, cid);
+    if (!leaf) throw new Error(`missing_leaf:${cid}`);
+    const path: Hex[] = [leaf.commitment];
+
+    // Levels 0-4: subtree internal siblings
+    for (let level = 1; level <= SUBTREE_DEPTH; level++) {
+      const siblingPos = (cid >> (level - 1)) ^ 1;
+      if (level === 1) {
+        const siblingLeaf = await this.storage!.getMerkleLeaf!(chainId, siblingPos);
+        path.push(siblingLeaf?.commitment ?? getZeroHash(0));
+      } else {
+        const targetLevel = level - 1;
+        const node = await this.storage!.getChairmanMerkleNode!(chainId, `st-${targetLevel}-${siblingPos}`);
+        path.push(node?.hash ?? getZeroHash(targetLevel));
+      }
+    }
+
+    // Levels 5-31: traverse chairmanMerkle tree from root to target batch
+    const batchIndex = cid >> SUBTREE_DEPTH;
+    const MAIN_DEPTH = this.treeDepth - SUBTREE_DEPTH;
+
+    // Collect siblings top-down: depth 0 = root (level 32), depth MAIN_DEPTH-1 = just above leaf
+    const mainSiblings: Hex[] = [];
+    let nodeId: string | null = version.rootId;
+
+    for (let depth = 0; depth < MAIN_DEPTH; depth++) {
+      const childLevel = this.treeDepth - depth - 1;
+
+      if (!nodeId) {
+        mainSiblings.push(getZeroHash(childLevel));
+        continue;
+      }
+
+      const node = await this.storage!.getChairmanMerkleNode!(chainId, nodeId);
+      if (!node) {
+        mainSiblings.push(getZeroHash(childLevel));
+        nodeId = null;
+        continue;
+      }
+
+      const remainingDepth = MAIN_DEPTH - depth - 1;
+      const goRight = ((batchIndex >> remainingDepth) & 1) === 1;
+
+      if (goRight) {
+        const leftNode = node.leftId ? await this.storage!.getChairmanMerkleNode!(chainId, node.leftId) : null;
+        mainSiblings.push(leftNode?.hash ?? getZeroHash(childLevel));
+        nodeId = node.rightId;
+      } else {
+        const rightNode = node.rightId ? await this.storage!.getChairmanMerkleNode!(chainId, node.rightId) : null;
+        mainSiblings.push(rightNode?.hash ?? getZeroHash(childLevel));
+        nodeId = node.leftId;
+      }
+    }
+
+    // mainSiblings[0] = sibling at level 31 → goes to path[32]
+    // mainSiblings[MAIN_DEPTH-1] = sibling at level 5 → goes to path[6]
+    // Reverse so path ordering is ascending by level
+    for (let i = mainSiblings.length - 1; i >= 0; i--) {
+      path.push(mainSiblings[i]!);
+    }
+
+    return path;
+  }
+
+  // ── Remote helpers ──
+
   private async fetchRemoteRootOnly(chainId: number): Promise<Hex> {
     const remote = await this.fetchRemoteProofFromService({ chainId, cids: [0] });
     return MerkleEngine.normalizeHex32(remote.merkle_root, 'remote.merkle_root');
   }
 
-  /**
-   * Fetch proofs from the remote merkle service.
-   */
   private async fetchRemoteProofFromService(input: { chainId: number; cids: number[] }): Promise<RemoteMerkleProofResponse> {
     const chain = this.getChain(input.chainId);
     if (!chain.merkleProofUrl) {
@@ -455,9 +614,8 @@ export class MerkleEngine implements MerkleApi {
     return client.getProofByCids(input.cids);
   }
 
-  /**
-   * Build membership witnesses for provided UTXOs from a remote proof response.
-   */
+  // ── Witness builders (unchanged) ──
+
   buildAccMemberWitnesses(input: { remote: RemoteMerkleProofResponse; utxos: Array<{ commitment: Hex; mkIndex: number }>; arrayHash: bigint; totalElements: bigint }): AccMemberWitness[] {
     return input.utxos.map((utxo, idx) => {
       const remoteProof = input.remote.proof[idx];
@@ -472,9 +630,6 @@ export class MerkleEngine implements MerkleApi {
     });
   }
 
-  /**
-   * Convert UTXOs into circuit input secrets, decrypting memos and padding if needed.
-   */
   async buildInputSecretsFromUtxos(input: {
     remote: RemoteMerkleProofResponse;
     utxos: Array<{ commitment: Hex; memo?: Hex; mkIndex: number }>;

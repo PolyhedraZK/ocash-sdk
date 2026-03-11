@@ -1,12 +1,12 @@
 import type {
+  ChairmanMerkleNodeRecord,
+  ChairmanMerkleVersionRecord,
   EntryMemoRecord,
   EntryNullifierRecord,
   ListEntryMemosQuery,
   ListEntryNullifiersQuery,
   ListUtxosQuery,
   MerkleLeafRecord,
-  MerkleNodeRecord,
-  MerkleTreeState,
   StorageAdapter,
   SyncCursor,
   UtxoRecord,
@@ -29,8 +29,8 @@ export class MemoryStore implements StorageAdapter {
   private readonly utxos = new Map<string, UtxoRecord>();
   private operations: Array<StoredOperation> = [];
   private readonly merkleLeavesByChain = new Map<number, Array<{ cid: number; commitment: Hex }>>();
-  private readonly merkleTreesByChain = new Map<number, MerkleTreeState>();
-  private readonly merkleNodesByChain = new Map<number, Map<string, MerkleNodeRecord>>();
+  private readonly chairmanMerkleVersionsByChain = new Map<number, Map<number, ChairmanMerkleVersionRecord>>();
+  private readonly chairmanMerkleNodesByChain = new Map<number, Map<string, ChairmanMerkleNodeRecord>>();
   private readonly entryMemosByChain = new Map<number, Map<number, EntryMemoRecord>>();
   private readonly entryNullifiersByChain = new Map<number, Map<number, EntryNullifierRecord>>();
   private readonly maxOperations: number;
@@ -53,8 +53,8 @@ export class MemoryStore implements StorageAdapter {
       this.utxos.clear();
       this.operations = [];
       this.merkleLeavesByChain.clear();
-      this.merkleTreesByChain.clear();
-      this.merkleNodesByChain.clear();
+      this.chairmanMerkleVersionsByChain.clear();
+      this.chairmanMerkleNodesByChain.clear();
       this.entryMemosByChain.clear();
       this.entryNullifiersByChain.clear();
     }
@@ -185,21 +185,21 @@ export class MemoryStore implements StorageAdapter {
   }
 
   /**
-   * Get a merkle node by id.
+   * Get a chairmanMerkle tree node by id.
    */
-  async getMerkleNode(chainId: number, id: string): Promise<MerkleNodeRecord | undefined> {
-    return this.merkleNodesByChain.get(chainId)?.get(id);
+  async getChairmanMerkleNode(chainId: number, id: string): Promise<ChairmanMerkleNodeRecord | undefined> {
+    return this.chairmanMerkleNodesByChain.get(chainId)?.get(id);
   }
 
   /**
-   * Upsert merkle nodes for a chain.
+   * Put chairmanMerkle tree nodes for a chain.
    */
-  async upsertMerkleNodes(chainId: number, nodes: MerkleNodeRecord[]): Promise<void> {
+  async putChairmanMerkleNodes(chainId: number, nodes: ChairmanMerkleNodeRecord[]): Promise<void> {
     if (!nodes.length) return;
-    let map = this.merkleNodesByChain.get(chainId);
+    let map = this.chairmanMerkleNodesByChain.get(chainId);
     if (!map) {
       map = new Map();
-      this.merkleNodesByChain.set(chainId, map);
+      this.chairmanMerkleNodesByChain.set(chainId, map);
     }
     for (const node of nodes) {
       map.set(node.id, { ...node, chainId });
@@ -207,32 +207,47 @@ export class MemoryStore implements StorageAdapter {
   }
 
   /**
-   * Clear merkle nodes for a chain.
+   * Get a chairmanMerkle version record by chain and version number.
    */
-  async clearMerkleNodes(chainId: number): Promise<void> {
-    this.merkleNodesByChain.delete(chainId);
+  async getChairmanMerkleVersion(chainId: number, version: number): Promise<ChairmanMerkleVersionRecord | undefined> {
+    const byVersion = this.chairmanMerkleVersionsByChain.get(chainId);
+    const record = byVersion?.get(version);
+    return record ? { ...record } : undefined;
   }
 
   /**
-   * Get persisted merkle tree state.
+   * Get the latest chairmanMerkle version record (highest version number) for a chain.
    */
-  async getMerkleTree(chainId: number): Promise<MerkleTreeState | undefined> {
-    const tree = this.merkleTreesByChain.get(chainId);
-    return tree ? { ...tree } : undefined;
+  async getLatestChairmanMerkleVersion(chainId: number): Promise<ChairmanMerkleVersionRecord | undefined> {
+    const byVersion = this.chairmanMerkleVersionsByChain.get(chainId);
+    if (!byVersion || byVersion.size === 0) return undefined;
+    let latest: ChairmanMerkleVersionRecord | undefined;
+    for (const record of byVersion.values()) {
+      if (!latest || record.version > latest.version) {
+        latest = record;
+      }
+    }
+    return latest ? { ...latest } : undefined;
   }
 
   /**
-   * Persist merkle tree state.
+   * Persist a chairmanMerkle version record.
    */
-  async setMerkleTree(chainId: number, tree: MerkleTreeState): Promise<void> {
-    this.merkleTreesByChain.set(chainId, { ...tree, chainId });
+  async putChairmanMerkleVersion(chainId: number, record: ChairmanMerkleVersionRecord): Promise<void> {
+    let byVersion = this.chairmanMerkleVersionsByChain.get(chainId);
+    if (!byVersion) {
+      byVersion = new Map();
+      this.chairmanMerkleVersionsByChain.set(chainId, byVersion);
+    }
+    byVersion.set(record.version, { ...record, chainId });
   }
 
   /**
-   * Clear merkle tree state.
+   * Clear all chairmanMerkle tree state (both nodes and versions) for a chain.
    */
-  async clearMerkleTree(chainId: number): Promise<void> {
-    this.merkleTreesByChain.delete(chainId);
+  async clearChairmanMerkleTree(chainId: number): Promise<void> {
+    this.chairmanMerkleNodesByChain.delete(chainId);
+    this.chairmanMerkleVersionsByChain.delete(chainId);
   }
 
   /**
