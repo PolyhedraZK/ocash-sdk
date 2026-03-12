@@ -7,8 +7,8 @@ import type { WalletService } from '../wallet/walletService';
 import type { ProofBridge } from '../types';
 import { MemoKit } from '../memo/memoKit';
 import { calcTransferProofBinding, calcWithdrawProofBinding } from '../utils/ocashBindings';
-import { isHexStrict } from '../utils/hex';
 import { fetchRelayerConfigFromRelayerUrl } from '../ledger/relayerConfig';
+import { requireHex } from '../utils/validators';
 
 type PlanTransferInput = {
   action: 'transfer';
@@ -33,14 +33,6 @@ type PlanWithdrawInput = {
 };
 
 type PlanInput = PlanTransferInput | PlanWithdrawInput;
-
-/**
- * Require a valid hex string with 0x prefix.
- */
-const requireHex = (value: unknown, name: string): `0x${string}` => {
-  if (isHexStrict(value, { minBytes: 1 })) return value;
-  throw new SdkError('CONFIG', `${name} must be a hex string starting with 0x`);
-};
 
 /**
  * Parse and validate Planner.plan input from an untyped object.
