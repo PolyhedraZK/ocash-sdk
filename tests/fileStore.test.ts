@@ -90,17 +90,20 @@ describe('FileStore', () => {
       const store = new FileStore({ baseDir: dir });
       await store.init({ walletId: 'wallet_sep' });
 
-      await store.setMerkleTree?.(1, { chainId: 1, root: '0x01', totalElements: 0, lastUpdated: 1 });
+      // Trigger a shared-scope write via upsertEntryMemos
+      await store.upsertEntryMemos?.([{ chainId: 1, cid: 0, commitment: '0xaa', memo: '0xbb' }]);
       const sharedPath = path.join(dir, 'shared.store.json');
       const walletPath = path.join(dir, 'wallet_sep.store.json');
       const sharedBeforeWalletWrite = await readFile(sharedPath, 'utf8');
 
+      // Wallet-scope write should not touch shared file
       await store.setSyncCursor(1, { memo: 11, nullifier: 12, merkle: 13 });
       const sharedAfterWalletWrite = await readFile(sharedPath, 'utf8');
       expect(sharedAfterWalletWrite).toBe(sharedBeforeWalletWrite);
 
+      // Shared-scope write should not touch wallet file
       const walletBeforeSharedWrite = await readFile(walletPath, 'utf8');
-      await store.setMerkleTree?.(1, { chainId: 1, root: '0x02', totalElements: 1, lastUpdated: 2 });
+      await store.upsertEntryMemos?.([{ chainId: 1, cid: 1, commitment: '0xcc', memo: '0xdd' }]);
       const walletAfterSharedWrite = await readFile(walletPath, 'utf8');
       expect(walletAfterSharedWrite).toBe(walletBeforeSharedWrite);
     } finally {
