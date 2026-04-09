@@ -119,7 +119,21 @@ export class FileStore implements StorageAdapter {
         }
       }
       out.sort((a, b) => a.cid - b.cid);
-      return out.length ? out : undefined;
+      // Deduplicate: the JSONL file may contain duplicate cid entries after a process
+      // restart re-syncs an overlapping range. Since getMerkleLeaf uses cid as an array
+      // index, duplicates shift all subsequent lookups and cause wrong leaf retrieval.
+      if (out.length > 0) {
+        const deduped: typeof out = [out[0]!];
+        for (let i = 1; i < out.length; i++) {
+          if (out[i]!.cid === deduped[deduped.length - 1]!.cid) {
+            deduped[deduped.length - 1] = out[i]!;
+          } else {
+            deduped.push(out[i]!);
+          }
+        }
+        return deduped;
+      }
+      return undefined;
     } catch {
       return undefined;
     }
