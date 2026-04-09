@@ -143,9 +143,12 @@ export class FileStore implements StorageAdapter {
       const next = Number.isFinite(cid) ? Math.max(0, Math.floor(cid) + 1) : 0;
       this.merkleNextCid.set(chainId, next);
       return next;
-    } catch {
-      this.merkleNextCid.set(chainId, 0);
-      return 0;
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'ENOENT') {
+        this.merkleNextCid.set(chainId, 0);
+        return 0;
+      }
+      throw err;
     }
   }
 
