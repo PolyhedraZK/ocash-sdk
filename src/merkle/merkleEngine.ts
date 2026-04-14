@@ -453,53 +453,81 @@ export class MerkleEngine implements MerkleApi {
 
     const canUseLocal = this.mode !== 'remote';
     if (canUseLocal) {
-      // Find the version matching contractTreeElements
-      const version = contractTreeElements > 0
-        ? await this.storage?.getChairmanMerkleVersion?.(input.chainId, contractTreeElements)
-        : undefined;
-      const hasDb = typeof this.storage?.getMerkleLeaf === 'function'
-        && typeof this.storage?.getChairmanMerkleNode === 'function'
-        && (contractTreeElements === 0 || !!version);
+      const hasMerkleLeaf = typeof this.storage?.getMerkleLeaf === 'function';
+      const hasChairmanNode = typeof this.storage?.getChairmanMerkleNode === 'function';
 
-      if (hasDb) {
+      if (hasMerkleLeaf && hasChairmanNode) {
         const state = this.ensureChainState(input.chainId);
-        if (contractTreeElements > 0 && state.mergedElements < contractTreeElements) {
-          if (this.mode === 'local') {
-            throw new SdkError('MERKLE', 'Local merkle db is behind contract', {
-              chainId: input.chainId, cids, localMergedElements: state.mergedElements, contractTreeElements,
-            });
-          }
-          // hybrid fallback
-        } else {
-          try {
-            const proof = [];
-            for (const cid of cids) {
-              if (cid >= contractTreeElements) {
-                proof.push({ leaf_index: cid, path: new Array(this.treeDepth + 1).fill('0') });
-                continue;
-              }
-              const path = await this.buildLocalProofPath(input.chainId, cid, version!);
-              proof.push({ leaf_index: cid, path });
+
+        // Try exact version first; fall back to latest version that covers all requested CIDs.
+        let version = contractTreeElements > 0
+          ? await this.storage?.getChairmanMerkleVersion?.(input.chainId, contractTreeElements)
+          : undefined;
+        let effectiveTreeElements = contractTreeElements;
+
+        if (!version && contractTreeElements > 0 && state.mergedElements > 0) {
+          // Exact version unavailable — local tree is behind contract. Use latest version if
+          // it still covers every requested CID. pickMerkleRootIndex handles the root-index
+          // offset on the caller side, so the proof remains valid.
+          const latest = await this.storage?.getLatestChairmanMerkleVersion?.(input.chainId);
+          if (latest && latest.version > 0) {
+            const allCovered = needsTreeProof.every((cid) => cid < latest.version);
+            if (allCovered) {
+              version = latest;
+              effectiveTreeElements = latest.version;
             }
+          }
+        }
 
-            const effectiveRoot = contractTreeElements > 0
-              ? MerkleEngine.normalizeHex32(version!.rootHash, 'version.rootHash')
-              : getZeroHash(this.treeDepth);
+        const hasDb = contractTreeElements === 0 || !!version;
 
-            return {
-              proof,
-              merkle_root: effectiveRoot,
-              latest_cid: totalElements > 0n ? Number(totalElements - 1n) : -1,
-            };
-          } catch (error) {
+        if (hasDb) {
+          if (effectiveTreeElements > 0 && state.mergedElements < effectiveTreeElements) {
             if (this.mode === 'local') {
-              throw new SdkError('MERKLE', 'Local merkle proof build failed', { chainId: input.chainId, cids }, error);
+              throw new SdkError('MERKLE', 'Local merkle db is behind contract', {
+                chainId: input.chainId, cids, localMergedElements: state.mergedElements, contractTreeElements: effectiveTreeElements,
+              });
             }
             // hybrid fallback
+          } else {
+            try {
+              const proof = [];
+              for (const cid of cids) {
+                if (cid >= effectiveTreeElements) {
+                  proof.push({ leaf_index: cid, path: new Array(this.treeDepth + 1).fill('0') });
+                  continue;
+                }
+                const path = await this.buildLocalProofPath(input.chainId, cid, version!);
+                proof.push({ leaf_index: cid, path });
+              }
+
+              const effectiveRoot = effectiveTreeElements > 0
+                ? MerkleEngine.normalizeHex32(version!.rootHash, 'version.rootHash')
+                : getZeroHash(this.treeDepth);
+
+              // latest_cid reflects the version used so that pickMerkleRootIndex can find the
+              // matching on-chain root even when the local tree is behind totalElements.
+              const effectiveLatestCid = effectiveTreeElements > 0 ? effectiveTreeElements - 1 : -1;
+
+              return {
+                proof,
+                merkle_root: effectiveRoot,
+                latest_cid: effectiveLatestCid,
+              };
+            } catch (error) {
+              if (this.mode === 'local') {
+                throw new SdkError('MERKLE', 'Local merkle proof build failed', { chainId: input.chainId, cids }, error);
+              }
+              // hybrid fallback
+            }
+          }
+        } else {
+          if (this.mode === 'local' && needsTreeProof.length) {
+            throw new SdkError('MERKLE', 'Local merkle db unavailable', { chainId: input.chainId, cids, reason: 'missing_adapter_or_version' });
           }
         }
       } else if (this.mode === 'local' && needsTreeProof.length) {
-        throw new SdkError('MERKLE', 'Local merkle db unavailable', { chainId: input.chainId, cids, reason: 'missing_adapter_or_version' });
+        throw new SdkError('MERKLE', 'Local merkle db unavailable', { chainId: input.chainId, cids, reason: 'missing_adapter' });
       }
     }
 
