@@ -143,9 +143,15 @@ export class FileStore implements StorageAdapter {
       const next = Number.isFinite(cid) ? Math.max(0, Math.floor(cid) + 1) : 0;
       this.merkleNextCid.set(chainId, next);
       return next;
-    } catch {
-      this.merkleNextCid.set(chainId, 0);
-      return 0;
+    } catch (err) {
+      // File missing is fine — first run. Anything else (parse error, disk
+      // I/O, permission) must surface, not silently reset to 0 and corrupt
+      // the next append.
+      if (err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'ENOENT') {
+        this.merkleNextCid.set(chainId, 0);
+        return 0;
+      }
+      throw err;
     }
   }
 
@@ -512,7 +518,8 @@ export class FileStore implements StorageAdapter {
   async getMerkleLeaf(chainId: number, cid: number) {
     const rows = await this.getMerkleLeaves(chainId);
     const row = rows?.[cid];
-    if (!row) return undefined;
+    // Positional index on the jsonl; verify the cid actually matches.
+    if (!row || row.cid !== cid) return undefined;
     return { chainId, cid: row.cid, commitment: row.commitment };
   }
 

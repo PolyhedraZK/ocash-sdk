@@ -180,7 +180,9 @@ export class MemoryStore implements StorageAdapter {
   async getMerkleLeaf(chainId: number, cid: number): Promise<MerkleLeafRecord | undefined> {
     const rows = this.merkleLeavesByChain.get(chainId);
     const row = rows?.[cid];
-    if (!row) return undefined;
+    // Positional index — a row may exist at this slot from a prior state
+    // that didn't have contiguous cids. Verify the cid before returning it.
+    if (!row || row.cid !== cid) return undefined;
     return { chainId, cid: row.cid, commitment: row.commitment };
   }
 

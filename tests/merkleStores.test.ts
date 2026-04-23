@@ -226,4 +226,57 @@ describe('Store Merkle leaves persistence', () => {
       { cid: 1, commitment: '0x02' },
     ]);
   });
+
+  // Regression: getMerkleLeaf used the cid as a positional array index
+  // without verifying row.cid === cid. If the underlying array ever holds
+  // a row whose cid doesn't match its slot (corrupted persistence, manual
+  // state injection, restore-from-snapshot), the old code returned the
+  // wrong row. The fix is a defensive cid check on the way out.
+  it('MemoryStore.getMerkleLeaf checks row.cid matches requested cid', async () => {
+    const store = new MemoryStore();
+    store.init({ walletId: 'w-leaf-mem' });
+    await store.appendMerkleLeaves?.(1, [
+      { cid: 0, commitment: '0xaa' as Hex },
+      { cid: 1, commitment: '0xbb' as Hex },
+    ]);
+    // Happy path works.
+    await expect(store.getMerkleLeaf?.(1, 0)).resolves.toEqual({
+      chainId: 1,
+      cid: 0,
+      commitment: '0xaa',
+    });
+    // Inject a mismatch: slot 2 holds a row claiming cid=99.
+    const rows = (store as unknown as { merkleLeavesByChain: Map<number, Array<{ cid: number; commitment: Hex }>> })
+      .merkleLeavesByChain.get(1)!;
+    rows[2] = { cid: 99, commitment: '0xcc' as Hex };
+    // Before the fix: asking for cid=2 returned {cid:99,commitment:0xcc}.
+    await expect(store.getMerkleLeaf?.(1, 2)).resolves.toBeUndefined();
+  });
+
+  it('KeyValueStore.getMerkleLeaf checks row.cid matches requested cid', async () => {
+    const db = new Map<string, string>();
+    const client = {
+      get: async (key: string) => db.get(key) ?? null,
+      set: async (key: string, value: string) => {
+        db.set(key, value);
+      },
+    };
+    const store = new KeyValueStore({ client });
+    await store.init({ walletId: 'w-leaf-kv' });
+    await store.appendMerkleLeaves?.(7, [{ cid: 0, commitment: '0xaa' as Hex }]);
+    await expect(store.getMerkleLeaf?.(7, 0)).resolves.toEqual({
+      chainId: 7,
+      cid: 0,
+      commitment: '0xaa',
+    });
+    // Mark cid=5 as present in the index but persist a row whose cid is
+    // something else (simulates backing-store corruption).
+    const cidSet = (store as unknown as { merkleLeafCids: Record<string, Set<number>> }).merkleLeafCids['7']!;
+    cidSet.add(5);
+    const key = (
+      store as unknown as { sharedRecordKey: (scope: string, chainId: number, cid: number) => string }
+    ).sharedRecordKey('merkleLeaves', 7, 5);
+    db.set(key, JSON.stringify({ cid: 99, commitment: '0xcc' }));
+    await expect(store.getMerkleLeaf?.(7, 5)).resolves.toBeUndefined();
+  });
 });
