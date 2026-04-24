@@ -527,7 +527,9 @@ export class KeyValueStore implements StorageAdapter {
     if (!this.merkleLeafCids[String(chainId)]?.has(cid)) return undefined;
     const raw = await this.options.client.get(this.sharedRecordKey('merkleLeaves', chainId, cid));
     const row = this.parseJson<{ cid: number; commitment: Hex } | null>(raw, null);
-    if (!row) return undefined;
+    // Defensive: key is chainId+cid so row.cid should match, but if the
+    // backing store ever returns a stale/wrong row we refuse to serve it.
+    if (!row || row.cid !== cid) return undefined;
     return { chainId, cid: row.cid, commitment: row.commitment };
   }
 

@@ -28,6 +28,15 @@ export type FileStoreOptions = {
 };
 
 /**
+ * Treat "file missing" as a legitimate fresh-start signal. Everything else
+ * (parse failure, permission, disk I/O) should surface so the caller can
+ * see the real problem instead of silently dropping into a full re-sync.
+ */
+function isEnoent(err: unknown): boolean {
+  return !!err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'ENOENT';
+}
+
+/**
  * JSON-file backed StorageAdapter for Node environments.
  * Persists wallet state and shared merkle/entry cache to disk.
  */
@@ -102,27 +111,29 @@ export class FileStore implements StorageAdapter {
   }
 
   private async readMerkleFile(filePath: string): Promise<Array<{ cid: number; commitment: Hex }> | undefined> {
+    let raw: string;
     try {
-      const raw = await readFile(filePath, 'utf8');
-      const out: Array<{ cid: number; commitment: Hex }> = [];
-      const lines = raw.split('\n').filter((l) => l.trim().length > 0);
-      for (const line of lines) {
-        try {
-          const row = JSON.parse(line);
-          const cid = Number(row?.cid);
-          const commitment = row?.commitment as Hex;
-          if (!Number.isFinite(cid) || cid < 0) continue;
-          if (typeof commitment !== 'string' || !commitment.startsWith('0x')) continue;
-          out.push({ cid: Math.floor(cid), commitment });
-        } catch {
-          // ignore bad lines
-        }
-      }
-      out.sort((a, b) => a.cid - b.cid);
-      return out.length ? out : undefined;
-    } catch {
+      raw = await readFile(filePath, 'utf8');
+    } catch (err) {
+      if (!isEnoent(err)) throw err;
       return undefined;
     }
+    const out: Array<{ cid: number; commitment: Hex }> = [];
+    const lines = raw.split('\n').filter((l) => l.trim().length > 0);
+    for (const line of lines) {
+      try {
+        const row = JSON.parse(line);
+        const cid = Number(row?.cid);
+        const commitment = row?.commitment as Hex;
+        if (!Number.isFinite(cid) || cid < 0) continue;
+        if (typeof commitment !== 'string' || !commitment.startsWith('0x')) continue;
+        out.push({ cid: Math.floor(cid), commitment });
+      } catch {
+        // ignore bad lines
+      }
+    }
+    out.sort((a, b) => a.cid - b.cid);
+    return out.length ? out : undefined;
   }
 
   /**
@@ -140,10 +151,17 @@ export class FileStore implements StorageAdapter {
       }
       const last = JSON.parse(lines[lines.length - 1]!);
       const cid = Number(last?.cid);
-      const next = Number.isFinite(cid) ? Math.max(0, Math.floor(cid) + 1) : 0;
+      if (!Number.isFinite(cid)) {
+        throw new Error(`corrupted merkle jsonl: missing or non-numeric cid in tail of ${this.merkleFilePath(chainId)}`);
+      }
+      const next = Math.max(0, Math.floor(cid) + 1);
       this.merkleNextCid.set(chainId, next);
       return next;
-    } catch {
+    } catch (err) {
+      // File missing is fine — first run. Anything else (parse error, disk
+      // I/O, permission) must surface, not silently reset to 0 and corrupt
+      // the next append.
+      if (!isEnoent(err)) throw err;
       this.merkleNextCid.set(chainId, 0);
       return 0;
     }
@@ -173,8 +191,13 @@ export class FileStore implements StorageAdapter {
 
       const operations = Array.isArray(parsed.operations) ? parsed.operations : [];
       this.operations = operations;
-    } catch {
-      // ignore missing/bad file
+    } catch (err) {
+      // Missing file is a legitimate fresh install. Any other failure
+      // (parse error, permission, I/O) must surface — silently falling
+      // through wipes the in-memory state, and the next save() then
+      // overwrites the file on disk with empty data. Worse, the user
+      // waits minutes for a full re-sync from on-chain events.
+      if (!isEnoent(err)) throw err;
     }
 
     try {
@@ -211,8 +234,8 @@ export class FileStore implements StorageAdapter {
       if (entryNullifiersRaw && typeof entryNullifiersRaw === 'object') {
         this.entryNullifiers = entryNullifiersRaw;
       }
-    } catch {
-      // ignore missing/bad shared file
+    } catch (err) {
+      if (!isEnoent(err)) throw err;
     }
 
     const pruned = this.pruneOperations();
@@ -512,7 +535,8 @@ export class FileStore implements StorageAdapter {
   async getMerkleLeaf(chainId: number, cid: number) {
     const rows = await this.getMerkleLeaves(chainId);
     const row = rows?.[cid];
-    if (!row) return undefined;
+    // Positional index on the jsonl; verify the cid actually matches.
+    if (!row || row.cid !== cid) return undefined;
     return { chainId, cid: row.cid, commitment: row.commitment };
   }
 

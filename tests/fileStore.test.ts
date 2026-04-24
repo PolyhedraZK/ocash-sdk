@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { FileStore } from '../src/store/fileStore';
+import type { Hex } from '../src/types';
 
 describe('FileStore', () => {
   it('persists wallet state and operations across instances', async () => {
@@ -106,6 +107,138 @@ describe('FileStore', () => {
       await store.upsertEntryMemos?.([{ chainId: 1, cid: 1, commitment: '0xcc', memo: '0xdd' }]);
       const walletAfterSharedWrite = await readFile(walletPath, 'utf8');
       expect(walletAfterSharedWrite).toBe(walletBeforeSharedWrite);
+    } finally {
+      await rm(await Promise.resolve(dir), { recursive: true, force: true });
+    }
+  });
+
+  // Regression: getMerkleLeaf used cid as positional index on the jsonl
+  // without verifying row.cid matches. Ask for cid=N, get row[N], return
+  // it even if row.cid !== N.
+  it('getMerkleLeaf rejects slot/cid mismatch', async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'ocash-sdk-filestore-'));
+    try {
+      const store = new FileStore({ baseDir: dir });
+      await store.init({ walletId: 'wallet_leaf' });
+      await store.appendMerkleLeaves?.(1, [
+        { cid: 0, commitment: '0xaa' as Hex },
+        { cid: 1, commitment: '0xbb' as Hex },
+      ]);
+      await expect(store.getMerkleLeaf?.(1, 0)).resolves.toEqual({
+        chainId: 1,
+        cid: 0,
+        commitment: '0xaa',
+      });
+      // Inject a gap-filled jsonl by hand. Slot 2 claims cid=99.
+      const jsonlPath = path.join(dir, 'shared.merkle.1.jsonl');
+      const original = await readFile(jsonlPath, 'utf8');
+      await writeFile(jsonlPath, original + JSON.stringify({ cid: 99, commitment: '0xcc' }) + '\n');
+      // Force reload so the in-memory cache re-reads the file.
+      await store.close();
+      const reopened = new FileStore({ baseDir: dir });
+      await reopened.init({ walletId: 'wallet_leaf' });
+      // Before the fix: returned {cid:99,commitment:0xcc}.
+      await expect(reopened.getMerkleLeaf?.(1, 2)).resolves.toBeUndefined();
+      await expect(reopened.getMerkleLeaf?.(1, 99)).resolves.toBeUndefined();
+    } finally {
+      await rm(await Promise.resolve(dir), { recursive: true, force: true });
+    }
+  });
+
+  // Regression: load() wallet state silently swallowed parse/read errors
+  // and reset in-memory state to empty, which the next save() would then
+  // overwrite on disk — destroying the still-parseable portion. Even
+  // without disk corruption, the user then waits minutes for a full
+  // re-sync of utxos and operations from on-chain events.
+  it('init surfaces corrupted wallet state file instead of silently resetting', async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'ocash-sdk-filestore-'));
+    try {
+      const store = new FileStore({ baseDir: dir });
+      await store.init({ walletId: 'wallet_corrupt' });
+      await store.setSyncCursor(1, { memo: 5, nullifier: 5, merkle: 5 });
+      await store.close();
+
+      // Truncate mid-file so JSON.parse fails.
+      const walletPath = path.join(dir, 'wallet_corrupt.store.json');
+      const full = await readFile(walletPath, 'utf8');
+      await writeFile(walletPath, full.slice(0, Math.floor(full.length / 2)));
+
+      const reopened = new FileStore({ baseDir: dir });
+      await expect(reopened.init({ walletId: 'wallet_corrupt' })).rejects.toThrow();
+    } finally {
+      await rm(await Promise.resolve(dir), { recursive: true, force: true });
+    }
+  });
+
+  it('init surfaces corrupted shared state file instead of silently resetting', async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'ocash-sdk-filestore-'));
+    try {
+      const store = new FileStore({ baseDir: dir });
+      await store.init({ walletId: 'wallet_shared' });
+      await store.upsertEntryMemos?.([{ chainId: 1, cid: 0, commitment: '0xaa' as Hex, memo: '0xbb' as Hex }]);
+      await store.close();
+
+      const sharedPath = path.join(dir, 'shared.store.json');
+      await writeFile(sharedPath, '{ not valid json');
+
+      const reopened = new FileStore({ baseDir: dir });
+      await expect(reopened.init({ walletId: 'wallet_shared' })).rejects.toThrow();
+    } finally {
+      await rm(await Promise.resolve(dir), { recursive: true, force: true });
+    }
+  });
+
+  // Regression: getMerkleNextCid swallowed any error as "fresh start" and
+  // reset the cached next cid to 0. A permission/parse error would then
+  // cause the next append to overwrite from 0 instead of failing loudly.
+  it('getMerkleNextCid does not reset on non-ENOENT errors', async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'ocash-sdk-filestore-'));
+    try {
+      const store = new FileStore({ baseDir: dir });
+      await store.init({ walletId: 'wallet_nextcid' });
+      await store.appendMerkleLeaves?.(1, [{ cid: 0, commitment: '0xaa' as Hex }]);
+      await store.close();
+
+      // Corrupt the last line of the jsonl so JSON.parse throws.
+      const jsonlPath = path.join(dir, 'shared.merkle.1.jsonl');
+      await writeFile(jsonlPath, '{"cid":0,"commitment":"0xaa"}\nnot json\n');
+
+      const reopened = new FileStore({ baseDir: dir });
+      await reopened.init({ walletId: 'wallet_nextcid' });
+      // Before the fix: appendMerkleLeaves with cid:0 silently succeeded,
+      // corrupting state. Now the corrupted file should either propagate
+      // the parse error or refuse the append (rejecting cid=0 as
+      // non-contiguous because it read the good line's cid first). Either
+      // outcome is acceptable — silence is not.
+      await expect(
+        reopened.appendMerkleLeaves?.(1, [{ cid: 0, commitment: '0xbb' as Hex }]),
+      ).rejects.toThrow();
+    } finally {
+      await rm(await Promise.resolve(dir), { recursive: true, force: true });
+    }
+  });
+
+  // Regression: getMerkleNextCid parsed the tail line successfully but
+  // treated a missing/non-numeric cid as "fresh start" and reset to 0. The
+  // next append then silently overwrote from cid=0. The fix surfaces the
+  // malformed tail loudly instead of the silent reset path.
+  it('getMerkleNextCid rejects tail with missing or non-numeric cid', async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'ocash-sdk-filestore-'));
+    try {
+      const store = new FileStore({ baseDir: dir });
+      await store.init({ walletId: 'wallet_nancid' });
+      await store.appendMerkleLeaves?.(1, [{ cid: 0, commitment: '0xaa' as Hex }]);
+      await store.close();
+
+      // Tail line parses as JSON but has no cid field.
+      const jsonlPath = path.join(dir, 'shared.merkle.1.jsonl');
+      await writeFile(jsonlPath, '{"cid":0,"commitment":"0xaa"}\n{"commitment":"0xcc"}\n');
+
+      const reopened = new FileStore({ baseDir: dir });
+      await reopened.init({ walletId: 'wallet_nancid' });
+      await expect(
+        reopened.appendMerkleLeaves?.(1, [{ cid: 0, commitment: '0xbb' as Hex }]),
+      ).rejects.toThrow(/cid/i);
     } finally {
       await rm(await Promise.resolve(dir), { recursive: true, force: true });
     }
