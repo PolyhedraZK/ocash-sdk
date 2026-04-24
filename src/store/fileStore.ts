@@ -151,7 +151,10 @@ export class FileStore implements StorageAdapter {
       }
       const last = JSON.parse(lines[lines.length - 1]!);
       const cid = Number(last?.cid);
-      const next = Number.isFinite(cid) ? Math.max(0, Math.floor(cid) + 1) : 0;
+      if (!Number.isFinite(cid)) {
+        throw new Error(`corrupted merkle jsonl: missing or non-numeric cid in tail of ${this.merkleFilePath(chainId)}`);
+      }
+      const next = Math.max(0, Math.floor(cid) + 1);
       this.merkleNextCid.set(chainId, next);
       return next;
     } catch (err) {

@@ -217,4 +217,30 @@ describe('FileStore', () => {
       await rm(await Promise.resolve(dir), { recursive: true, force: true });
     }
   });
+
+  // Regression: getMerkleNextCid parsed the tail line successfully but
+  // treated a missing/non-numeric cid as "fresh start" and reset to 0. The
+  // next append then silently overwrote from cid=0. The fix surfaces the
+  // malformed tail loudly instead of the silent reset path.
+  it('getMerkleNextCid rejects tail with missing or non-numeric cid', async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'ocash-sdk-filestore-'));
+    try {
+      const store = new FileStore({ baseDir: dir });
+      await store.init({ walletId: 'wallet_nancid' });
+      await store.appendMerkleLeaves?.(1, [{ cid: 0, commitment: '0xaa' as Hex }]);
+      await store.close();
+
+      // Tail line parses as JSON but has no cid field.
+      const jsonlPath = path.join(dir, 'shared.merkle.1.jsonl');
+      await writeFile(jsonlPath, '{"cid":0,"commitment":"0xaa"}\n{"commitment":"0xcc"}\n');
+
+      const reopened = new FileStore({ baseDir: dir });
+      await reopened.init({ walletId: 'wallet_nancid' });
+      await expect(
+        reopened.appendMerkleLeaves?.(1, [{ cid: 0, commitment: '0xbb' as Hex }]),
+      ).rejects.toThrow(/cid/i);
+    } finally {
+      await rm(await Promise.resolve(dir), { recursive: true, force: true });
+    }
+  });
 });
