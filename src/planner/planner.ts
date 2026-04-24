@@ -142,9 +142,12 @@ const recordsFee = (
         }
       } else {
         cost = expectedIsWithFee ? expectedOutput : expectedOutput + fee;
+        outputAmount = expectedIsWithFee ? expectedOutput - fee : expectedOutput;
+        if (outputAmount < 0n) outputAmount = 0n;
       }
       if (total < cost) {
         cost = 0n;
+        outputAmount = 0n;
       }
       break;
     }
