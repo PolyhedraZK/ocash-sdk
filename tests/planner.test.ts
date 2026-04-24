@@ -123,6 +123,49 @@ describe('Planner.plan', () => {
     expect(plan.selectedInputs.length).toBeGreaterThan(0);
   });
 
+  // Regression: for a specified-amount transfer, recordsFee in the non-max
+  // branch forgot to assign outputAmount, leaving it at the 0n initializer.
+  // estimateRecords then kept pushing every UTXO into payRecords because
+  // `outputAmount >= pay` was always false, so feeCount inflated to the
+  // cascade-merge count. 32 × 0.1 transferring 0.01 → feeCount=16 instead of 1.
+  it('estimate transfer does not cascade-merge when a single utxo covers required', async () => {
+    const chainId = 1;
+    const token = {
+      id: '1',
+      symbol: 'T',
+      decimals: 18,
+      wrappedErc20: '0x0000000000000000000000000000000000000002' as const,
+      viewerPk: ['1', '2'] as [string, string],
+      freezerPk: ['3', '4'] as [string, string],
+    };
+    const relayerFee = 10n ** 14n; // 0.0001 units, << each UTXO
+    const assets = makeAssets({ chainId, token, relayerFee });
+    const store = new MemoryStore();
+    const wallet = new WalletService(assets as any, store as any, () => undefined);
+    await wallet.open({ seed: 'planner-spiral-seed' });
+
+    const utxos = Array.from({ length: 32 }, (_, i) => ({
+      chainId,
+      assetId: token.id,
+      amount: 10n ** 17n, // 0.1 units each
+      commitment: `0x${(i + 1).toString(16).padStart(64, '0')}` as any,
+      nullifier: `0xbb${(i + 1).toString(16).padStart(62, '0')}` as any,
+      mkIndex: i,
+      isFrozen: false,
+      isSpent: false,
+      memo: '0x03' as any,
+    }));
+    await store.upsertUtxos(utxos);
+
+    const planner = new Planner(assets as any, wallet as any, {} as any);
+    const est = (await planner.estimate({ action: 'transfer', chainId, assetId: token.id, amount: 10n ** 16n })) as any;
+
+    expect(est.ok).toBe(true);
+    expect(est.feeSummary.feeCount).toBe(1);
+    expect(est.feeSummary.mergeCount).toBe(0);
+    expect(est.feeSummary.outputAmount).toBe(10n ** 16n);
+  });
+
   it('rejects withdraw when no single utxo can cover burn amount', async () => {
     const chainId = 1;
     const token = {
