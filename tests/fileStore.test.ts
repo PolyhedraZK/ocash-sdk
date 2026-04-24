@@ -145,6 +145,49 @@ describe('FileStore', () => {
     }
   });
 
+  // Regression: load() wallet state silently swallowed parse/read errors
+  // and reset in-memory state to empty, which the next save() would then
+  // overwrite on disk — destroying the still-parseable portion. Even
+  // without disk corruption, the user then waits minutes for a full
+  // re-sync of utxos and operations from on-chain events.
+  it('init surfaces corrupted wallet state file instead of silently resetting', async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'ocash-sdk-filestore-'));
+    try {
+      const store = new FileStore({ baseDir: dir });
+      await store.init({ walletId: 'wallet_corrupt' });
+      await store.setSyncCursor(1, { memo: 5, nullifier: 5, merkle: 5 });
+      await store.close();
+
+      // Truncate mid-file so JSON.parse fails.
+      const walletPath = path.join(dir, 'wallet_corrupt.store.json');
+      const full = await readFile(walletPath, 'utf8');
+      await writeFile(walletPath, full.slice(0, Math.floor(full.length / 2)));
+
+      const reopened = new FileStore({ baseDir: dir });
+      await expect(reopened.init({ walletId: 'wallet_corrupt' })).rejects.toThrow();
+    } finally {
+      await rm(await Promise.resolve(dir), { recursive: true, force: true });
+    }
+  });
+
+  it('init surfaces corrupted shared state file instead of silently resetting', async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'ocash-sdk-filestore-'));
+    try {
+      const store = new FileStore({ baseDir: dir });
+      await store.init({ walletId: 'wallet_shared' });
+      await store.upsertEntryMemos?.([{ chainId: 1, cid: 0, commitment: '0xaa' as Hex, memo: '0xbb' as Hex }]);
+      await store.close();
+
+      const sharedPath = path.join(dir, 'shared.store.json');
+      await writeFile(sharedPath, '{ not valid json');
+
+      const reopened = new FileStore({ baseDir: dir });
+      await expect(reopened.init({ walletId: 'wallet_shared' })).rejects.toThrow();
+    } finally {
+      await rm(await Promise.resolve(dir), { recursive: true, force: true });
+    }
+  });
+
   // Regression: getMerkleNextCid swallowed any error as "fresh start" and
   // reset the cached next cid to 0. A permission/parse error would then
   // cause the next append to overwrite from 0 instead of failing loudly.
