@@ -74,4 +74,35 @@ describe('MerkleClient.getProofByCids', () => {
       message: 'Merkle proof request failed',
     });
   });
+
+  // Regression: server uses serde_qs which expects `cid[N]=...`,
+  // not repeated bare `cid=...&cid=...`. The latter produces a 400
+  // "Multiple values for one key: cid". Verify the URL we send.
+  it('builds query in rails-style bracket notation, not repeated bare keys', async () => {
+    let capturedUrl = '';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        capturedUrl = url;
+        return new Response(
+          JSON.stringify({
+            proof: [
+              { path: [], leaf_index: '0' },
+              { path: [], leaf_index: '1' },
+              { path: [], leaf_index: '2' },
+            ],
+            merkle_root: '0x1',
+            latest_cid: 0,
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }),
+    );
+    const client = new MerkleClient('https://merkle.example');
+    await client.getProofByCids([6067, 5055, 7792]);
+    expect(capturedUrl).toContain('cid%5B0%5D=6067');
+    expect(capturedUrl).toContain('cid%5B1%5D=5055');
+    expect(capturedUrl).toContain('cid%5B2%5D=7792');
+    expect(capturedUrl).not.toMatch(/[?&]cid=\d+&cid=\d+/);
+  });
 });

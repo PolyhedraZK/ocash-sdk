@@ -7,11 +7,17 @@ import { joinUrl } from '../utils/url';
 const DEFAULT_MERKLE_REQUEST_TIMEOUT_MS = 15_000;
 
 /**
- * Build query string with repeated keys (cid=1&cid=2...).
+ * Build query string in rails-style bracket notation:
+ *   cid[0]=1&cid[1]=2&cid[2]=3
+ *
+ * The freezer service uses `serde_qs` on the server side, which by
+ * default expects this format, NOT the rack-style repeated bare keys
+ * (cid=1&cid=2&cid=3). Repeated bare keys produce
+ * "Multiple values for one key: cid" 400 errors.
  */
-const withRepeatedQuery = (url: string, key: string, values: Array<string | number>) => {
+const withIndexedQuery = (url: string, key: string, values: Array<string | number>) => {
   const search = new URLSearchParams();
-  for (const v of values) search.append(key, String(v));
+  values.forEach((v, i) => search.append(`${key}[${i}]`, String(v)));
   const qs = search.toString();
   return qs ? `${url}?${qs}` : url;
 };
@@ -116,7 +122,7 @@ export class MerkleClient {
     if (!Array.isArray(cids) || cids.length === 0) {
       throw new SdkError('MERKLE', 'Merkle proof requires at least one cid', { cids });
     }
-    const url = withRepeatedQuery(joinUrl(this.baseUrl, '/api/v1/merkle'), 'cid', cids);
+    const url = withIndexedQuery(joinUrl(this.baseUrl, '/api/v1/merkle'), 'cid', cids);
     this.debugEmit?.({ type: 'debug', payload: { scope: 'http:merkle', message: 'request', detail: { method: 'GET', url } } });
     let response: Response;
     const requestTimeoutMs =

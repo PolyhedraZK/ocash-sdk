@@ -32,7 +32,7 @@ describe('MerkleEngine', () => {
     expect(engine.currentMerkleRootIndex(33)).toBe(1);
   });
 
-  it('fetches remote proof with repeated cid query', async () => {
+  it('fetches remote proof using rails-style cid[N] query (server uses serde_qs)', async () => {
     const engine = new MerkleEngine(() => ({ merkleProofUrl: 'https://merkle.invalid' }), bridge);
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -46,7 +46,7 @@ describe('MerkleEngine', () => {
 
     const res = await engine.getProofByCids({ chainId: 1, cids: [7], totalElements: 33n });
     expect(res.latest_cid).toBe(0);
-    expect(fetchMock).toHaveBeenCalledWith('https://merkle.invalid/api/v1/merkle?cid=7', expect.objectContaining({ signal: expect.anything() }));
+    expect(fetchMock).toHaveBeenCalledWith('https://merkle.invalid/api/v1/merkle?cid%5B0%5D=7', expect.objectContaining({ signal: expect.anything() }));
   });
 
   it('throws SdkError(MERKLE) when all utxos lack memos', async () => {
