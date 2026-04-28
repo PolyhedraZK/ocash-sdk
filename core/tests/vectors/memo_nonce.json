@@ -1,0 +1,26 @@
+[
+  {
+    "name": "case_1",
+    "ephemeral_pk_x": "0x2af7ecceb69bf0a0abc9aa8a6e0a5cd8c4a57f4e5e6f0ac577bd8bcf12163fee",
+    "ephemeral_pk_y": "0x244a710118db92636e46e3f97bd80093ba7026ff97ca32d387145337e250549c",
+    "user_pk_x": "0x1e6731eff27e9670eddb1c7dbfba41374c326e6e9c300651ea5b790d4b54f830",
+    "user_pk_y": "0x24688aa3fbb63442bf0e71bafeff5619c900cd8a417b3d793f26cd7df1932b79",
+    "expected_nonce": "0x6c7a60a8007813df693635e752fdc096fad548792b922ba5"
+  },
+  {
+    "name": "case_2",
+    "ephemeral_pk_x": "0x1c342ac6b8fe748479bc1c555064cd5ae2585f417b283d02004111b5f8ae8af4",
+    "ephemeral_pk_y": "0x27c02c7d4f92f23eace1bff2af8be2817fe794a1324d8ccd23eb6329c7c79f1c",
+    "user_pk_x": "0x1e6731eff27e9670eddb1c7dbfba41374c326e6e9c300651ea5b790d4b54f830",
+    "user_pk_y": "0x24688aa3fbb63442bf0e71bafeff5619c900cd8a417b3d793f26cd7df1932b79",
+    "expected_nonce": "0x111f6f443c62590307a18bdd59228ab9b37c4e07947f3b4a"
+  },
+  {
+    "name": "case_3",
+    "ephemeral_pk_x": "0x2af7ecceb69bf0a0abc9aa8a6e0a5cd8c4a57f4e5e6f0ac577bd8bcf12163fee",
+    "ephemeral_pk_y": "0x244a710118db92636e46e3f97bd80093ba7026ff97ca32d387145337e250549c",
+    "user_pk_x": "0x245823034c6d54db5308420ca021482cca255c1a6cafe54d5050877a5346e519",
+    "user_pk_y": "0x2a3eca9f7e028267cc88f47f77002455273eec4e3c32c69a924d1aeb5e9f08e8",
+    "expected_nonce": "0xe8fbbe4ba6e45bc0be1eee3dd3531b9becec56e67c12b6a4"
+  }
+]

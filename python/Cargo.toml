@@ -1,0 +1,19 @@
+[package]
+name = "ocash-python"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "ocash_native"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.23", features = ["extension-module"] }
+ark-bn254 = "0.5"
+ark-ff = "0.5"
+serde_json = "1"
+hex = "0.4"
+
+ocash-types = { path = "../core/crates/ocash-types" }
+ocash-crypto = { path = "../core/crates/ocash-crypto" }
+ocash-merkle = { path = "../core/crates/ocash-merkle" }
